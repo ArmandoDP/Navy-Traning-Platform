@@ -21,7 +21,8 @@ export default function ModalCrearSucursal({ isOpen, onClose, onSuccess, sucursa
     telefono:  sucursal?.telefono  || '',
     email:     sucursal?.email     || '',
     capacidad: sucursal?.capacidad || 100,
-    estatus:   sucursal?.estatus   || 'Activa',
+    estatus: sucursal?.estatus || 'Activa',
+    color: sucursal?.color || '',
   })
 
   const set = (field: string, value: any) =>
