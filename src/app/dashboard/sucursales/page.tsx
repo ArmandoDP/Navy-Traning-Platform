@@ -17,6 +17,7 @@ interface Sucursal {
   capacidad: number
   estatus: string
   created_at: string
+  color: string
 }
 
 interface SucursalStats extends Sucursal {
@@ -50,6 +51,7 @@ export default function SucursalesPage() {
 
     // Para cada sucursal, traemos sus clientes y pagos
     const stats = await Promise.all(suc.map(async (s) => {
+      
       const { data: clientes } = await supabase
         .from('clientes')
         .select('id, estatus')
@@ -132,6 +134,7 @@ export default function SucursalesPage() {
               ciudad={s.ciudad}
               ingresos={s.ingresos}
               crecimiento={s.crecimiento}
+              color={s.color}
             />
           ))}
         </div>
@@ -162,6 +165,7 @@ export default function SucursalesPage() {
               failed={s.failed}
               expired={s.expired}
               onEditar={() => handleEditar(s)}
+              color={s.color}
             />
           ))}
         </div>

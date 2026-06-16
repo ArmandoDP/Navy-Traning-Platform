@@ -6,7 +6,7 @@ interface Props {
   ciudad:      string
   ingresos:    number
   crecimiento: number
-  color:       string
+  color?:       string
 }
 
 export default function SucursalCardTop({ nombre, ciudad, ingresos, crecimiento, color }: Props) {
