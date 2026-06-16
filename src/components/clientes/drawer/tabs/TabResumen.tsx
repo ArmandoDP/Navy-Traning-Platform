@@ -17,8 +17,10 @@ interface Cliente {
 }
 
 interface Props {
-  cliente:    Cliente
-  onEditar:   () => void
+  cliente: Cliente
+  reservas: any[]
+  onRefresh: () => Promise<void> 
+  onEditar: (cliente: any) => void
   noShows:    number
 }
 
@@ -32,7 +34,7 @@ function getSucursalColor(nombre: string) {
   return key ? SUCURSAL_COLORS[key] : '#6366f1'
 }
 
-export default function DrawerClienteHeader({ cliente, onEditar, noShows }: Props) {
+export default function DrawerClienteHeader({ cliente, onEditar, noShows, onRefresh, reservas }: Props) {
   const sucNombre = cliente.sucursales?.nombre || ''
   const sucColor  = getSucursalColor(sucNombre)
 
