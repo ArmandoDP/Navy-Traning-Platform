@@ -17,6 +17,7 @@ interface Clase {
   estado: string
   descripcion: string
   coaches?: { nombre_completo: string; especialidad: string }
+  staff?: { nombre: string; primer_apellido: string }
 }
 
 interface Reserva {
