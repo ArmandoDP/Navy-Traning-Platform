@@ -41,6 +41,11 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
   const [modalBonoOpen,    setModalBonoOpen]     = useState(false)
   const [reglaEditando,    setReglaEditando]     = useState<any>(null)
   const [toast, setToast] = useState(false)
+  const [docs, setDocs] = useState<{ tipo: string; file: File | null }[]>([
+    { tipo: 'INE',                      file: null },
+    { tipo: 'Contrato firmado',         file: null },
+    { tipo: 'Comprobante de domicilio', file: null },
+  ])
 
   // reglas temporales (antes de crear el staff)
   const [reglasTemp, setReglasTemp] = useState<any[]>([])
@@ -70,6 +75,10 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     cuenta_bancaria:  '',
     // Bio
     bio:              '',
+    // Contactos de emergencia
+    contacto_emergencia_nombre:   '',
+    contacto_emergencia_relacion: '',
+    contacto_emergencia_telefono: '',
   })
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
@@ -123,6 +132,9 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
         banco:                   form.banco,
         cuenta_bancaria:         form.cuenta_bancaria,
         bio:                     form.bio,
+        contacto_emergencia_nombre:   form.contacto_emergencia_nombre,
+        contacto_emergencia_relacion: form.contacto_emergencia_relacion,
+        contacto_emergencia_telefono: form.contacto_emergencia_telefono,
       })
       .select()
       .single()
@@ -156,6 +168,24 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
       )
     }
 
+    // 5. Subir documentos
+    for (const doc of docs) {
+      if (!doc.file) continue
+      const ext  = doc.file.name.split('.').pop()
+      const path = `${staffId}/${doc.tipo.replace(/ /g, '_')}_${Date.now()}.${ext}`
+      const { data: storageData } = await supabase.storage
+        .from('staff-documentos')
+        .upload(path, doc.file, { upsert: true })
+      const { data: urlData } = supabase.storage
+        .from('staff-documentos').getPublicUrl(path)
+      await supabase.from('staff_documentos').insert({
+        staff_id:       staffId,
+        tipo:           doc.tipo,
+        url:            urlData.publicUrl,
+        nombre_archivo: doc.file.name,
+      })
+    }
+
     setLoading(false)
     onSuccess()
     handleClose()
@@ -169,6 +199,9 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
       tarifa_hora: '', sueldo_fijo: '',
       aplica_bono_puntualidad: false, pago_en_efectivo: false,
       banco: '', cuenta_bancaria: '', bio: '',
+      contacto_emergencia_nombre: '',
+      contacto_emergencia_relacion: '',
+      contacto_emergencia_telefono: '',
     })
     setReglasTemp([])
     onClose()
@@ -420,6 +453,57 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
             <Field label="Cuenta bancaria">
               <input placeholder="0000 0000 0000 0000" className={inputCls}
                 value={form.cuenta_bancaria} onChange={e => set('cuenta_bancaria', e.target.value)} />
+            </Field>
+          </div>
+
+          {/* ── Documentos ── */}
+          <SectionTitle>Documentos</SectionTitle>
+          <div className="space-y-3">
+            {docs.map((doc, i) => (
+              <div key={doc.tipo} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                <p className="text-sm font-medium text-gray-700">{doc.tipo}</p>
+                <div className="flex items-center gap-2">
+                  {doc.file
+                    ? <>
+                        <span className="text-[11px] text-emerald-500 font-bold">✓ {doc.file.name}</span>
+                        <button onClick={() => setDocs(prev => prev.map((d, j) => j === i ? { ...d, file: null } : d))}
+                          className="text-[11px] text-red-400 hover:text-red-600 font-medium">
+                          Quitar
+                        </button>
+                      </>
+                    : <label className="flex items-center gap-1 text-[11px] font-bold text-indigo-500 hover:text-indigo-700 cursor-pointer transition">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Subir
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0]
+                            if (file) setDocs(prev => prev.map((d, j) => j === i ? { ...d, file } : d))
+                            e.target.value = ''
+                          }} />
+                      </label>
+                  }
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Contacto de emergencia ── */}
+          <SectionTitle>Contacto de emergencia</SectionTitle>
+          <Field label="Nombre">
+            <input placeholder="Nombre completo" className={inputCls}
+              value={form.contacto_emergencia_nombre}
+              onChange={e => set('contacto_emergencia_nombre', e.target.value)} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Relación">
+              <input placeholder="Ej: Padre, Madre" className={inputCls}
+                value={form.contacto_emergencia_relacion}
+                onChange={e => set('contacto_emergencia_relacion', e.target.value)} />
+            </Field>
+            <Field label="Teléfono">
+              <input placeholder="Teléfono" className={inputCls}
+                value={form.contacto_emergencia_telefono}
+                onChange={e => set('contacto_emergencia_telefono', e.target.value)} />
             </Field>
           </div>
 

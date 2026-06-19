@@ -58,7 +58,7 @@ export default function DetalleClase() {
     const [{ data: claseData }, { data: reservasData }, { data: asistenciasData }] = await Promise.all([
       supabase
         .from('clases')
-        .select('*, coaches(nombre_completo, especialidad)')
+        .select('*, staff(nombre, primer_apellido)')
         .eq('id', id)
         .single(),
       supabase
@@ -170,7 +170,7 @@ export default function DetalleClase() {
                 {new Date(clase.horario).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
               </span>
               <span className="flex items-center gap-1"><MapPin size={14} />{clase.salon}</span>
-              <span className="flex items-center gap-1"><Users size={14} />Coach: {clase.coaches?.nombre_completo || clase.instructor || '—'}</span>
+              <span className="flex items-center gap-1"><Users size={14} />Coach: {clase.staff ? `${clase.staff.nombre} ${clase.staff.primer_apellido}`.trim() : clase.instructor || '—'}</span>
             </div>
             {clase.descripcion && <p className="text-zinc-600 text-sm mt-2 max-w-xl">{clase.descripcion}</p>}
           </div>

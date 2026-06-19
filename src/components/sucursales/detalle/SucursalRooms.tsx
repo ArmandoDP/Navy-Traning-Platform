@@ -7,7 +7,7 @@ interface Clase {
   nombre_clase: string
   tipo_clase:   string
   capacidad_max: number
-  coaches?:     { nombre_completo: string }
+  staff?: { nombre: string; primer_apellido: string }
 }
 
 interface Props {
@@ -44,8 +44,10 @@ export default function SucursalRooms({ clases, onCrearRoom }: Props) {
                 </Link>
               </div>
               <p className="text-xs text-gray-400">{c.tipo_clase || 'Hybrid'}</p>
-              {c.coaches?.nombre_completo && (
-                <p className="text-xs text-gray-400 mt-0.5">{c.coaches.nombre_completo}</p>
+              {c.staff && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {`${c.staff.nombre} ${c.staff.primer_apellido}`.trim()}
+                </p>
               )}
               <p className="text-xs text-gray-400 mt-1">
                 Capacidad <span className="font-bold text-gray-700">{c.capacidad_max} pax</span>

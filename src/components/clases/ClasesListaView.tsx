@@ -16,7 +16,7 @@ interface Clase {
   salon:        string
   estado:       string
   duracion_minutos: number
-  coaches?:     { nombre_completo: string }
+  staff?: { nombre: string; primer_apellido: string }
   reservas?:    any[]
 }
 
@@ -65,7 +65,7 @@ export default function ClasesListaView({ clases, fechaActiva }: Props) {
 
   const filtradas = clasesDia.filter(c => {
     const hora  = new Date(c.horario).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false })
-    const coach = c.coaches?.nombre_completo?.toLowerCase() || ''
+    const coach = `${c.staff?.nombre || ''} ${c.staff?.primer_apellido || ''}`.trim().toLowerCase()
     const tipo  = (c.tipo_display || c.tipo_clase || '').toLowerCase()
     return (
       (!filtros.hora   || hora.startsWith(filtros.hora))                         &&
@@ -78,7 +78,9 @@ export default function ClasesListaView({ clases, fechaActiva }: Props) {
   })
 
   const tiposUnicos   = [...new Set(clases.map(c => c.tipo_display || c.tipo_clase).filter(Boolean))] as string[]
-  const coachesUnicos = [...new Set(clases.map(c => c.coaches?.nombre_completo).filter(Boolean))] as string[]
+  const coachesUnicos = [...new Set(clases.map(c =>
+    c.staff ? `${c.staff.nombre} ${c.staff.primer_apellido}`.trim() : null
+  ).filter(Boolean))] as string[]
   const roomsUnicos   = [...new Set(clases.map(c => c.salon).filter(Boolean))] as string[]
 
   return (
@@ -144,7 +146,7 @@ export default function ClasesListaView({ clases, fechaActiva }: Props) {
 
                 {/* Coach */}
                 <td className="px-5 py-3.5 text-sm text-gray-600">
-                  {c.coaches?.nombre_completo || '—'}
+                  {c.staff ? `${c.staff.nombre} ${c.staff.primer_apellido}`.trim() : '—'}
                 </td>
 
                 {/* Tipo badge */}

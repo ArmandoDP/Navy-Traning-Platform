@@ -38,7 +38,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
     const [{ data: cli }, { data: res }, { data: pgs }, { data: nts }, { data: coms }] = await Promise.all([
       supabase.from('clientes').select('*, sucursales(nombre, color), paquetes(nombre, numero_clases, precio)')
         .eq('id', clienteId).single(),
-      supabase.from('reservas').select('*, clases(nombre_clase, horario, tipo_clase, coaches(nombre_completo), sucursales(nombre))')
+      supabase.from('reservas').select('*, clases(nombre_clase, horario, tipo_clase, staff(nombre, primer_apellido), sucursales(nombre))')
         .eq('cliente_id', clienteId).order('created_at', { ascending: false }),
       supabase.from('pagos').select('*, sucursales(nombre)')
         .eq('cliente_id', clienteId).order('fecha_pago', { ascending: false }),

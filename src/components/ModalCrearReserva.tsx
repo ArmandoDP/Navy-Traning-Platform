@@ -13,7 +13,7 @@ interface Clase {
   id: string; nombre_clase: string; horario: string
   capacidad_max: number; tipo_clase: string; salon: string
   sucursal_id?: string; total_reservas?: number
-  coaches?: { nombre_completo: string }
+  staff?: { nombre: string; primer_apellido: string }
   sucursales?: { id: string; nombre: string; color: string }
 }
 interface Spot {
@@ -72,7 +72,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     Promise.all([
       supabase.from('clientes').select('id, nombre_completo, email, telefono, plan, nombre_plan, clases_restantes, estatus')
         .eq('estatus', 'Activo').order('nombre_completo'),
-      supabase.from('clases').select('*, coaches(nombre_completo), reservas(id, estatus), sucursales(id, nombre, color)')
+      supabase.from('clases').select('*, staff(nombre, primer_apellido), reservas(id, estatus), sucursales(id, nombre, color)')
         .eq('estado', 'Activa').gte('horario', new Date().toISOString()).order('horario'),
       supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa').order('nombre'),
     ]).then(([{ data: clis }, { data: cls }, { data: sucs }]) => {

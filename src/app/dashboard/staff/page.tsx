@@ -8,6 +8,7 @@ import StaffMetricas      from '../../../components/staff/StaffMetricas'
 import StaffTabla         from '../../../components/staff/StaffTabla'
 import DrawerNuevoEmpleado from '../../../components/staff/DrawerNuevoEmpleado'
 import DrawerEditarEmpleado from '@/components/staff/DrawerEditarEmpleado'
+import DrawerStaff from '@/components/staff/drawer/DrawerStaff'
 
 export default function StaffPage() {
   const { sucursalId, sucursalActiva } = useSucursal()
@@ -16,7 +17,9 @@ export default function StaffPage() {
   const [loading,    setLoading]    = useState(true)
   const [nuevoOpen,  setNuevoOpen]  = useState(false)
   const [editarEmpleado, setEditarEmpleado] = useState<any | null>(null)
-  const [editarOpen,     setEditarOpen]     = useState(false)
+  const [editarOpen, setEditarOpen] = useState(false)
+  const [drawerStaffId, setDrawerStaffId] = useState<string | null>(null)
+  const [drawerOpen,    setDrawerOpen]    = useState(false)
 
 
 const coaches        = staff.filter(s => s.tipo === 'Coach' && s.estatus === 'Activo').length
@@ -120,7 +123,7 @@ const bonos = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
           setEditarEmpleado(s)
           setEditarOpen(true)
         }}
-        onVer={(s) => console.log('ver', s)}
+        onVer={(s) => { setDrawerStaffId(s.id); setDrawerOpen(true) }}
       />
 
       {/* Drawer nuevo */}
@@ -135,7 +138,18 @@ const bonos = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
         empleado={editarEmpleado}
         onClose={() => { setEditarOpen(false); setEditarEmpleado(null) }}
         onSuccess={() => { fetchStaff(); setEditarOpen(false); setEditarEmpleado(null) }}
-       />
+      />
+      
+      <DrawerStaff
+        staffId={drawerStaffId}
+        isOpen={drawerOpen}
+        onClose={() => { setDrawerOpen(false); setDrawerStaffId(null) }}
+        onEditar={(empleado) => {
+          setDrawerOpen(false)
+          setEditarEmpleado(empleado)
+          setEditarOpen(true)
+        }}
+      />
     </div>
   )
 }

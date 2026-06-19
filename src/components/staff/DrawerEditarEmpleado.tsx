@@ -41,7 +41,12 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
   const [sucursales,    setSucursales]    = useState<Sucursal[]>([])
   const [modalBonoOpen, setModalBonoOpen] = useState(false)
   const [reglaEditando, setReglaEditando] = useState<any>(null)
-  const [reglas,        setReglas]        = useState<any[]>([])
+  const [reglas, setReglas] = useState<any[]>([])
+  const [docs, setDocs] = useState<{ tipo: string; file: File | null; url?: string; docId?: string }[]>([
+  { tipo: 'INE',                      file: null },
+  { tipo: 'Contrato firmado',         file: null },
+  { tipo: 'Comprobante de domicilio', file: null },
+])
 
   const [form, setForm] = useState({
     nombre:                  '',
@@ -63,6 +68,9 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
     banco:                   '',
     cuenta_bancaria:         '',
     bio:                     '',
+    contacto_emergencia_nombre:   '',
+    contacto_emergencia_relacion: '',
+    contacto_emergencia_telefono: '',
   })
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
@@ -102,7 +110,18 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       banco:                   empleado.banco || '',
       cuenta_bancaria:         empleado.cuenta_bancaria || '',
       bio:                     empleado.bio || '',
+      contacto_emergencia_nombre:   empleado.contacto_emergencia_nombre || '',
+      contacto_emergencia_relacion: empleado.contacto_emergencia_relacion || '',
+      contacto_emergencia_telefono: empleado.contacto_emergencia_telefono || '',
     })
+
+    // Cargar docs existentes
+    if (empleado.staff_documentos?.length > 0) {
+      setDocs(prev => prev.map(d => {
+        const found = empleado.staff_documentos.find((sd: any) => sd.tipo === d.tipo)
+        return found ? { ...d, url: found.url, docId: found.id } : d
+      }))
+    }
 
     // Cargar sucursales asignadas, categorías y reglas
     Promise.all([
@@ -147,6 +166,9 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       banco:                   form.banco,
       cuenta_bancaria:         form.cuenta_bancaria,
       bio:                     form.bio,
+      contacto_emergencia_nombre:   form.contacto_emergencia_nombre,
+      contacto_emergencia_relacion: form.contacto_emergencia_relacion,
+      contacto_emergencia_telefono: form.contacto_emergencia_telefono,
     }).eq('id', empleado.id)
 
     if (error) { alert('Error: ' + error.message); setLoading(false); return }
@@ -165,6 +187,20 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       await supabase.from('staff_categorias').insert(
         form.categorias.map(cat => ({ staff_id: empleado.id, categoria: cat }))
       )
+    }
+
+    for (const doc of docs) {
+      if (!doc.file) continue
+      const ext  = doc.file.name.split('.').pop()
+      const path = `${empleado.id}/${doc.tipo.replace(/ /g, '_')}_${Date.now()}.${ext}`
+      await supabase.storage.from('staff-documentos').upload(path, doc.file, { upsert: true })
+      const { data: urlData } = supabase.storage.from('staff-documentos').getPublicUrl(path)
+      // Borrar el anterior si existe
+      if (doc.docId) await supabase.from('staff_documentos').delete().eq('id', doc.docId)
+      await supabase.from('staff_documentos').insert({
+        staff_id: empleado.id, tipo: doc.tipo,
+        url: urlData.publicUrl, nombre_archivo: doc.file.name,
+      })
     }
 
     setLoading(false)
@@ -418,6 +454,70 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
             </Field>
           </div>
 
+          {/* ── Documentos ── */}
+          <SectionTitle>Documentos</SectionTitle>
+          <div className="space-y-3">
+            {docs.map((doc, i) => (
+              <div key={doc.tipo} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                <p className="text-sm font-medium text-gray-700">{doc.tipo}</p>
+                <div className="flex items-center gap-2">
+                  {doc.file
+                    ? <>
+                        <span className="text-[11px] text-emerald-500 font-bold">✓ {doc.file.name}</span>
+                        <button onClick={() => setDocs(prev => prev.map((d, j) => j === i ? { ...d, file: null } : d))}
+                          className="text-[11px] text-red-400 hover:text-red-600 font-medium">Quitar</button>
+                      </>
+                    : doc.url
+                      ? <>
+                          <span className="text-[11px] text-emerald-500 font-bold">✓ Entregado</span>
+                          <a href={doc.url} target="_blank" rel="noreferrer"
+                            className="text-[11px] text-gray-400 hover:text-gray-600 font-medium">Ver</a>
+                          <label className="text-[11px] font-bold text-indigo-500 hover:text-indigo-700 cursor-pointer transition">
+                            Reemplazar
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) setDocs(prev => prev.map((d, j) => j === i ? { ...d, file } : d))
+                                e.target.value = ''
+                              }} />
+                          </label>
+                        </>
+                      : <label className="flex items-center gap-1 text-[11px] font-bold text-indigo-500 hover:text-indigo-700 cursor-pointer transition">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                          Subir
+                          <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden"
+                            onChange={e => {
+                              const file = e.target.files?.[0]
+                              if (file) setDocs(prev => prev.map((d, j) => j === i ? { ...d, file } : d))
+                              e.target.value = ''
+                            }} />
+                        </label>
+                  }
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Contacto de emergencia ── */}
+          <SectionTitle>Contacto de emergencia</SectionTitle>
+          <Field label="Nombre">
+            <input placeholder="Nombre completo" className={inputCls}
+              value={form.contacto_emergencia_nombre}
+              onChange={e => set('contacto_emergencia_nombre', e.target.value)} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Relación">
+              <input placeholder="Ej: Padre, Madre" className={inputCls}
+                value={form.contacto_emergencia_relacion}
+                onChange={e => set('contacto_emergencia_relacion', e.target.value)} />
+            </Field>
+            <Field label="Teléfono">
+              <input placeholder="Teléfono" className={inputCls}
+                value={form.contacto_emergencia_telefono}
+                onChange={e => set('contacto_emergencia_telefono', e.target.value)} />
+            </Field>
+          </div>
+          
           {/* Bio */}
           <SectionTitle>Bio (Opcional)</SectionTitle>
           <textarea rows={3} placeholder="Breve descripción del trayectoria"

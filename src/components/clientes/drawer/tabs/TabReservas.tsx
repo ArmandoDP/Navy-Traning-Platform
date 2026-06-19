@@ -30,7 +30,7 @@ export default function TabReservas({ reservas }: Props) {
         const mes      = horario?.toLocaleDateString('es-MX', { month: 'short' }).toUpperCase()
         const hora     = horario?.toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false })
         const clase    = r.clases?.nombre_clase || '—'
-        const coach    = r.clases?.coaches?.nombre_completo || ''
+        const coach = r.clases?.staff ? `${r.clases.staff.nombre} ${r.clases.staff.primer_apellido}`.trim() : ''
         const sucursal = r.clases?.sucursales?.nombre || ''
 
         return (

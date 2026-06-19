@@ -9,7 +9,7 @@ import ModalCrearClase from '@/components/ModalCrearClase'
 interface Clase {
   id: string; nombre_clase: string; instructor: string; horario: string
   capacidad_max: number; tipo_clase: string; salon: string; estado: string
-  coach_id: string | null; coaches?: { nombre_completo: string }
+  coach_id: string | null; staff?: { nombre: string; primer_apellido: string }
 }
 
 const DIAS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
@@ -39,7 +39,7 @@ export default function ClasesPage() {
 
   const fetchClases = async () => {
     setLoading(true)
-    let q = supabase.from('clases').select('*, coaches(nombre_completo)').order('horario')
+    let q = supabase.from('clases').select('*, staff(nombre, primer_apellido)').order('horario')
     if (sucursalId) q = q.eq('sucursal_id', sucursalId)
     const { data, error } = await q
     if (!error && data) setClases(data)
@@ -151,7 +151,7 @@ export default function ClasesPage() {
                       {c.tipo_clase || 'General'}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-gray-500 text-sm">{c.coaches?.nombre_completo || c.instructor || '—'}</td>
+                  <td className="px-5 py-3 text-gray-500 text-sm">{c.staff ? `${c.staff.nombre} ${c.staff.primer_apellido}`.trim() : c.instructor || '—'}</td>
                   <td className="px-5 py-3 text-gray-500 text-sm">
                     <div className="flex items-center gap-1">
                       <Clock size={12}/>

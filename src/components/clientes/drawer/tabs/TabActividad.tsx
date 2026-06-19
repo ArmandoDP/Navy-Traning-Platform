@@ -30,8 +30,13 @@ export default function TabActividad({ reservas, pagos, comunicaciones }: Props)
       titulo:    r.estatus === 'Confirmada'
         ? `Asistió a clase`
         : `Reserva de clase ${r.clases?.nombre_clase || ''}`,
-      subtitulo: [r.clases?.nombre_clase, r.clases?.coaches?.nombre_completo, r.clases?.sucursales?.nombre]
-        .filter(Boolean).join(' · '),
+      subtitulo: [
+        r.clases?.nombre_clase,
+        r.clases?.staff
+          ? `${r.clases.staff.nombre} ${r.clases.staff.primer_apellido}`.trim()
+          : null,
+        r.clases?.sucursales?.nombre
+      ].filter(Boolean).join(' · '),
     })),
     ...pagos.map(p => ({
       fecha:     new Date(p.fecha_pago),

@@ -26,7 +26,7 @@ export default function DetalleSucursal() {
     setLoading(true)
 
     const { data: suc }  = await supabase.from('sucursales').select('*').eq('id', id).single()
-    const { data: cls }  = await supabase.from('clases').select('*, coaches(nombre_completo)').eq('sucursal_id', id).order('horario')
+    const { data: cls }  = await supabase.from('clases').select('*, staff(nombre, primer_apellido)').eq('sucursal_id', id).order('horario')
     const { data: clis } = await supabase.from('clientes').select('id, estatus').eq('sucursal_id', id)
 
     const clienteIds = (clis || []).map((c: any) => c.id)

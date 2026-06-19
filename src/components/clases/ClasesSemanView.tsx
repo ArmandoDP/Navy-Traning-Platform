@@ -4,7 +4,7 @@ import Link from 'next/link'
 interface Clase {
   id: string; nombre_clase: string; tipo_clase: string; tipo_display: string
   color: string; horario: string; capacidad_max: number
-  coaches?: { nombre_completo: string }
+  staff?: { nombre: string; primer_apellido: string }
   reservas?: any[]
 }
 

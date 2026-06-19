@@ -5,7 +5,7 @@ interface Clase {
   id: string; nombre_clase: string; tipo_clase: string; tipo_display: string
   color: string; horario: string; capacidad_max: number; salon: string
   estado: string; duracion_minutos: number
-  coaches?: { nombre_completo: string }
+  staff?: { nombre: string; primer_apellido: string }
   reservas?: any[]
 }
 
@@ -61,7 +61,7 @@ export default function ClasesDiaView({ clases, fechaActiva }: Props) {
                         </p>
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <span className="text-[11px] text-gray-500">{c.coaches?.nombre_completo || '—'}</span>
+                        <span className="text-[11px] text-gray-500">{c.staff ? `${c.staff.nombre} ${c.staff.primer_apellido}`.trim() : '—'}</span>
                         <span className="text-[11px] font-bold" style={{ color }}>{reservas}/{c.capacidad_max}</span>
                       </div>
                     </Link>

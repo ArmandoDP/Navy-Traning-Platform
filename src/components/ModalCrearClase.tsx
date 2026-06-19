@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Minus, Plus } from 'lucide-react'
 
-interface Coach     { id: string; nombre_completo: string }
+interface Coach { id: string; nombre: string; primer_apellido: string }
 interface Sucursal  { id: string; nombre: string }
 
 interface Props {
@@ -35,7 +35,11 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
     setForm(p => ({ ...p, sucursal_id: sucursalId || '' }))
 
     Promise.all([
-      supabase.from('coaches').select('id, nombre_completo').eq('estatus', 'Activo').order('nombre_completo'),
+      supabase.from('staff')
+        .select('id, nombre, primer_apellido')
+        .eq('tipo', 'Coach')
+        .eq('estatus', 'Activo')
+        .order('nombre'),
       supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre'),
     ]).then(([{ data: c }, { data: s }]) => {
       if (c) setCoaches(c)
@@ -47,6 +51,7 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('coach_id que se manda:', form.coach_id)  // ← agrega esto
     setLoading(true)
 
     const horario = form.fecha && form.hora
@@ -59,7 +64,7 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
       nombre_clase:     form.nombre_clase,
       coach_id:         form.coach_id    || null,
       sucursal_id:      form.sucursal_id || null,
-      instructor:       coach?.nombre_completo || '',
+      instructor: coach ? `${coach.nombre} ${coach.primer_apellido}` : '',
       horario,
       duracion_minutos: form.duracion_minutos,
       capacidad_max:    form.capacidad_max,
@@ -152,7 +157,11 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
                 onChange={e => set('coach_id', e.target.value)}
               >
                 <option value="">Seleccionar</option>
-                {coaches.map(c => <option key={c.id} value={c.id}>{c.nombre_completo}</option>)}
+                {coaches.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre} {c.primer_apellido}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
