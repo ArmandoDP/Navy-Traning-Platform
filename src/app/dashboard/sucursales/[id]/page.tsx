@@ -8,7 +8,7 @@ import SucursalHeader  from '@/components/sucursales/detalle/SucursalHeader'
 import SucursalMetricas from '@/components/sucursales/detalle/SucursalMetricas'
 import SucursalClientes from '@/components/sucursales/detalle/SucursalClientes'
 import SucursalRooms   from '@/components/sucursales/detalle/SucursalRooms'
-import ModalCrearSucursal from '@/components/sucursales/ModalCrearSucursal'
+import DrawerSucursal from '@/components/sucursales/DrawerSucursal'
 import ModalCrearClase    from '@/components/ModalCrearClase'
 
 export default function DetalleSucursal() {
@@ -115,7 +115,7 @@ export default function DetalleSucursal() {
         onCrearRoom={() => setModalClase(true)}
       />
 
-      <ModalCrearSucursal
+      <DrawerSucursal
         isOpen={modalEdit}
         onClose={() => setModalEdit(false)}
         onSuccess={() => { setModalEdit(false); fetchData() }}

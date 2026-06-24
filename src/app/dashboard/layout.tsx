@@ -10,6 +10,7 @@ import { LayoutDashboard, Package, Bell, BarChart2, Settings, LogOut, ChevronLef
   Users, CreditCard, Star, Activity, ChevronDown,
   DollarSign,
   MapPin,
+  Puzzle,
 } from 'lucide-react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ const NAV: NavItem[] = [
   { href: '/dashboard/finanzas',      label: 'Finanzas',      icon: DollarSign   },
   { href: '/dashboard/alertas',       label: 'Alertas',       icon: Bell         },
   { href: '/dashboard/reportes',      label: 'Reportes',      icon: BarChart2    },
+  { href: '/dashboard/integraciones', label: 'Integraciones', icon: Puzzle },
   { href: '/dashboard/configuracion', label: 'Configuración', icon: Settings     },
 ]
 

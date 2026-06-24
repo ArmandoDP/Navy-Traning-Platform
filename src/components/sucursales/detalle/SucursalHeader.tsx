@@ -1,32 +1,25 @@
 'use client'
 import Link from 'next/link'
 import { ArrowLeft, Pencil, TrendingUp, TrendingDown, MapPin, Phone, Clock } from 'lucide-react'
+import SucursalMapa from '@/components/sucursales/detalle/SucursalMapa'
+import { parseHorario } from '@/lib/parseHorario'
 
 interface Sucursal {
   id: string; nombre: string; ciudad: string; direccion: string
-  gerente: string; telefono: string; capacidad: number; estatus: string; color: string
+  gerente: string; telefono: string; capacidad: number
+  estatus: string; color: string; horario?: string
 }
 
 interface Props {
-  sucursal:      Sucursal
-  delta:         number
-  onEditar:      () => void
+  sucursal: Sucursal
+  delta:    number
+  onEditar: () => void
 }
 
-const HORARIOS = [
-  { dia: 'Domingo',   m: '10–11 a.m.',   t: ''            },
-  { dia: 'Lunes',     m: '5:45–11 a.m.', t: '5–9:30 p.m.' },
-  { dia: 'Martes',    m: '5:45–11 a.m.', t: '5–9:30 p.m.' },
-  { dia: 'Miércoles', m: '5:45–11 a.m.', t: '5–9:30 p.m.' },
-  { dia: 'Jueves',    m: '5:45–11 a.m.', t: '5–9:30 p.m.' },
-  { dia: 'Viernes',   m: '5:45–11 a.m.', t: '5–9:30 p.m.' },
-  { dia: 'Sábado',    m: '7:50–11 a.m.', t: ''            },
-]
-
 export default function SucursalHeader({ sucursal, delta, onEditar }: Props) {
-  const pos   = delta >= 0
-  const color = sucursal.color || '#6366f1'
-  const nombreCiudad = sucursal.ciudad === 'QRO' ? 'Querétaro' : sucursal.ciudad
+  const pos    = delta >= 0
+  const color  = sucursal.color || '#6366f1'
+  const horarios = parseHorario(sucursal.horario || '')
 
   return (
     <>
@@ -36,7 +29,7 @@ export default function SucursalHeader({ sucursal, delta, onEditar }: Props) {
           <ArrowLeft size={14} /> Sucursales
         </Link>
         <span>›</span>
-        <span className="text-gray-900 font-semibold">{sucursal.nombre}, {nombreCiudad}</span>
+        <span className="text-gray-900 font-semibold">{sucursal.nombre}, {sucursal.ciudad}</span>
       </div>
 
       {/* Toolbar */}
@@ -55,13 +48,12 @@ export default function SucursalHeader({ sucursal, delta, onEditar }: Props) {
       {/* Mapa + Info */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Mapa placeholder */}
-        <div className="bg-gray-100 border border-gray-200 rounded-2xl overflow-hidden h-64 flex items-center justify-center text-gray-400 text-sm">
-          🗺️ {sucursal.direccion || 'Sin dirección registrada'}
-        </div>
+        {/* Mapa */}
+        <SucursalMapa direccion={sucursal.direccion} />
 
         {/* Info */}
         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm space-y-4">
+
           {/* Nombre + estatus + crecimiento */}
           <div className="flex items-start justify-between">
             <div>
@@ -100,15 +92,22 @@ export default function SucursalHeader({ sucursal, delta, onEditar }: Props) {
           {/* Horarios */}
           <div className="flex items-start gap-2">
             <Clock size={14} className="mt-0.5 flex-shrink-0" style={{ color }} />
-            <div className="space-y-0.5 text-xs">
-              {HORARIOS.map(h => (
-                <div key={h.dia} className="flex gap-3">
-                  <span className="w-20 font-semibold text-gray-700">{h.dia}:</span>
-                  <span className="text-gray-500">{h.m}{h.t ? ` › ${h.t}` : ''}</span>
-                </div>
-              ))}
-            </div>
+            {horarios.length > 0 ? (
+              <div className="space-y-0.5 text-xs">
+                {horarios.map(h => (
+                  <div key={h.dia} className="flex gap-3">
+                    <span className="w-20 font-semibold text-gray-700">{h.dia}:</span>
+                    <span className="text-gray-500">
+                      {h.manana}{h.tarde ? ` › ${h.tarde}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400 italic">Sin horario registrado</span>
+            )}
           </div>
+
         </div>
       </div>
     </>

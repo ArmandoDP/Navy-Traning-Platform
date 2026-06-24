@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import SucursalCardTop from '@/components/sucursales/SucursalCardTop'
 import SucursalCardDetalle from '@/components/sucursales/SucursalCardDetalle'
-import ModalCrearSucursal from '@/components/sucursales/ModalCrearSucursal'
+import DrawerSucursal from '@/components/sucursales/DrawerSucursal'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Sucursal {
@@ -172,7 +172,7 @@ export default function SucursalesPage() {
       )}
 
       {/* Modal crear / editar */}
-      <ModalCrearSucursal
+      <DrawerSucursal
         isOpen={modalOpen}
         onClose={handleCerrarModal}
         onSuccess={() => { handleCerrarModal(); fetchSucursales() }}
