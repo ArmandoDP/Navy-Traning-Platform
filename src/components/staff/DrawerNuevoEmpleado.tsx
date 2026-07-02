@@ -14,7 +14,7 @@ interface Props {
 interface Sucursal { id: string; nombre: string; color: string }
 
 const TIPOS      = ['Coach', 'Manager', 'Submanager', 'Regional', 'Front', 'Staff general']
-const NIVELES    = ['Lead', 'Junior', 'Marine', 'Semi-senior', 'Senior', 'Elite']
+const NIVELES    = ['Marine', 'Seal', 'Elite']
 const CATEGORIAS = ['HYROX', 'Hybrid', 'Calistenia', 'Force', 'Open Gym', 'Movement', 'Recovery', 'Nutrición']
 
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 bg-gray-50 transition placeholder:text-gray-400"

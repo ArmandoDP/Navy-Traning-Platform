@@ -62,6 +62,20 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
   const editando = !!sucursal
   const [loading,  setLoading]  = useState(false)
   const [form,     setForm]     = useState({ ...EMPTY })
+  const [popup, setPopup] = useState<{ tipo: 'error' | 'exito'; mensaje: string } | null>(null)
+  const [managers, setManagers] = useState<{ id: string; nombre: string; primer_apellido: string }[]>([])
+
+  const validarHorario = (horario: string) => {
+    if (!horario) return false
+    // Acepta formatos como "L-V: 05:45-21:30 | S: 07:00-11:00"
+    const regex = /^[A-Za-záéíóúÁÉÍÓÚüÜñÑ\s,\-:|\d]+$/
+    return regex.test(horario) && horario.length >= 5
+  }
+
+  const validarCuenta = (cuenta: string) => {
+    const raw = cuenta.replace(/\s/g, '')
+    return raw.length === 16 && /^\d+$/.test(raw)
+  }
 
   // Sincroniza form cuando se abre en modo editar
   useEffect(() => {
@@ -87,7 +101,44 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.nombre || !form.ciudad) return
+    // Validar campos requeridos
+    if (!form.nombre) {
+      setPopup({ tipo: 'error', mensaje: 'El nombre de la sucursal es obligatorio.' })
+      return
+    }
+    if (!form.ciudad) {
+      setPopup({ tipo: 'error', mensaje: 'La ciudad es obligatoria.' })
+      return
+    }
+    if (!form.codigo) {
+      setPopup({ tipo: 'error', mensaje: 'El código de la sucursal es obligatorio.' })
+      return
+    }
+    if (!form.direccion) {
+      setPopup({ tipo: 'error', mensaje: 'La dirección es obligatoria.' })
+      return
+    }
+    if (!form.telefono) {
+      setPopup({ tipo: 'error', mensaje: 'El teléfono es obligatorio.' })
+      return
+    }
+    if (!form.gerente) {
+      setPopup({ tipo: 'error', mensaje: 'El gerente es obligatorio.' })
+      return
+    }
+    if (!form.banco) {
+      setPopup({ tipo: 'error', mensaje: 'Selecciona un banco.' })
+      return
+    }
+    if (!form.cuenta_bancaria || !validarCuenta(form.cuenta_bancaria)) {
+      setPopup({ tipo: 'error', mensaje: 'La cuenta bancaria debe tener 16 dígitos. Formato: 0000 0000 0000 0000' })
+      return
+    }
+    if (!validarHorario(form.horario)) {
+      setPopup({ tipo: 'error', mensaje: 'El horario tiene un formato inválido. Ejemplo: L-V: 05:45-21:30 | S: 07:00-11:00' })
+      return
+    }
+
     setLoading(true)
 
     const payload = {
@@ -109,13 +160,27 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
     const { error } = editando
       ? await supabase.from('sucursales').update(payload).eq('id', sucursal.id)
       : await supabase.from('sucursales').insert([payload])
+    
+    supabase.from('staff')
+      .select('id, nombre, primer_apellido')
+      .eq('tipo', 'Manager')
+      .eq('estatus', 'Activo')
+      .order('nombre')
+      .then(({ data }) => { if (data) setManagers(data) })
 
     if (error) {
-      alert('Error: ' + error.message)
-    } else {
+      setPopup({ tipo: 'error', mensaje: 'Error al guardar: ' + error.message })
+      setLoading(false)
+      return
+    }
+
+    setPopup({ tipo: 'exito', mensaje: editando ? 'Sucursal actualizada correctamente.' : 'Sucursal creada correctamente.' })
+    setTimeout(() => {
+      setPopup(null)
       onSuccess()
       onClose()
-    }
+    }, 1500)
+
     setLoading(false)
   }
 
@@ -129,7 +194,7 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
     setLoading(false)
   }
 
-  const canSubmit = form.nombre && form.ciudad && !loading
+  const canSubmit = !loading
 
   return (
     <>
@@ -145,6 +210,33 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
       <div className={`fixed top-0 right-0 z-50 h-full w-full max-w-lg bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       }`}>
+        {/* Popup DENTRO del drawer */}
+        {popup && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center p-6 bg-black/20 rounded-2xl">
+            <div className={`bg-white rounded-2xl shadow-2xl border px-6 py-5 w-full flex flex-col gap-3 ${
+              popup.tipo === 'error' ? 'border-red-100' : 'border-emerald-100'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0 ${
+                  popup.tipo === 'error' ? 'bg-red-50' : 'bg-emerald-50'
+                }`}>
+                  {popup.tipo === 'error' ? '⚠️' : '✅'}
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">
+                    {popup.tipo === 'error' ? 'Revisa los datos' : '¡Listo!'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">{popup.mensaje}</p>
+                </div>
+              </div>
+              <button onClick={() => setPopup(null)}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition"
+                style={{ backgroundColor: popup.tipo === 'error' ? '#ef4444' : '#171B24' }}>
+                {popup.tipo === 'error' ? 'Corregir' : 'Cerrar'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
@@ -250,12 +342,14 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
               />
             </Field>
             <Field label="Gerente de la sucursal" required>
-              <input
-                className={inputCls}
-                placeholder="Nombre completo"
-                value={form.gerente}
-                onChange={e => set('gerente', e.target.value)}
-              />
+              <select className={selectCls} value={form.gerente} onChange={e => set('gerente', e.target.value)}>
+                <option value="">Seleccionar gerente</option>
+                {managers.map(m => (
+                  <option key={m.id} value={`${m.nombre} ${m.primer_apellido}`.trim()}>
+                    {m.nombre} {m.primer_apellido}
+                  </option>
+                ))}
+              </select>
             </Field>
           </div>
 
