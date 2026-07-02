@@ -5,33 +5,39 @@ import { X, Minus, Plus } from 'lucide-react'
 
 interface Coach { id: string; nombre: string; primer_apellido: string }
 interface Sucursal  { id: string; nombre: string }
+interface Categoria { id: string; nombre: string; color: string }
 
 interface Props {
   isOpen:       boolean
   onClose:      () => void
   onSuccess:    () => void
-  sucursalId?:  string   // opcional — si viene, fija la sucursal
+  sucursalId?:  string
 }
 
 export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId }: Props) {
   const [loading,    setLoading]    = useState(false)
   const [coaches,    setCoaches]    = useState<Coach[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [nuevaCategoria, setNuevaCategoria] = useState('')
+  const [addingCat, setAddingCat] = useState(false)
+  
   const [form, setForm] = useState({
     nombre_clase:     '',
     sucursal_id:      sucursalId || '',
     coach_id:         '',
+    categoria_id:     '',
     fecha:            '',
     hora:             '',
     duracion_minutos: 60,
     capacidad_max:    0,
     descripcion:      '',
     es_recurrente:    false,
+    publicar_wellhub: false,
   })
 
   useEffect(() => {
     if (!isOpen) return
-    // Resetear sucursal_id si viene fija
     setForm(p => ({ ...p, sucursal_id: sucursalId || '' }))
 
     Promise.all([
@@ -41,9 +47,11 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
         .eq('estatus', 'Activo')
         .order('nombre'),
       supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre'),
-    ]).then(([{ data: c }, { data: s }]) => {
+      supabase.from('categorias_clase').select('id, nombre, color').order('nombre'),
+    ]).then(([{ data: c }, { data: s }, { data: cats }]) => {
       if (c) setCoaches(c)
       if (s) setSucursales(s)
+      if (cats) setCategorias(cats)
     })
   }, [isOpen, sucursalId])
 
@@ -51,7 +59,6 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('coach_id que se manda:', form.coach_id)  // ← agrega esto
     setLoading(true)
 
     const horario = form.fecha && form.hora
@@ -60,11 +67,12 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
 
     const coach = coaches.find(c => c.id === form.coach_id)
 
-    const { error } = await supabase.from('clases').insert([{
+    // 1. Crear la clase en Supabase
+    const { data: claseCreada, error } = await supabase.from('clases').insert([{
       nombre_clase:     form.nombre_clase,
       coach_id:         form.coach_id    || null,
       sucursal_id:      form.sucursal_id || null,
-      instructor: coach ? `${coach.nombre} ${coach.primer_apellido}` : '',
+      instructor:       coach ? `${coach.nombre} ${coach.primer_apellido}` : '',
       horario,
       duracion_minutos: form.duracion_minutos,
       capacidad_max:    form.capacidad_max,
@@ -73,23 +81,63 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
       estado:           'Activa',
       tipo_clase:       'General',
       salon:            'Sala Principal',
-    }])
+      publicar_wellhub: form.publicar_wellhub,
+      categoria_id: form.categoria_id || null,
+    }]).select().single()
 
     if (error) {
       alert('Error: ' + error.message)
-    } else {
-      onSuccess()
-      onClose()
-      setForm({
-        nombre_clase: '', sucursal_id: sucursalId || '', coach_id: '',
-        fecha: '', hora: '', duracion_minutos: 60, capacidad_max: 0,
-        descripcion: '', es_recurrente: false,
-      })
+      setLoading(false)
+      return
     }
+
+    // 2. Si se marcó publicar en Wellhub, crear clase + slot allá
+    if (form.publicar_wellhub && claseCreada) {
+      try {
+        const res = await fetch('/api/wellhub/publicar-clase', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            claseId:          claseCreada.id,
+            nombre:           form.nombre_clase,
+            descripcion:      form.descripcion,
+            horario,
+            duracionMinutos:  form.duracion_minutos,
+            capacidadMax:     form.capacidad_max,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          alert('Clase creada en Navy, pero hubo un error publicándola en Wellhub: ' + data.error)
+        }
+      } catch (err: any) {
+        alert('Clase creada en Navy, pero no se pudo conectar con Wellhub: ' + err.message)
+      }
+    }
+
+    onSuccess()
+    onClose()
+    setForm({
+      nombre_clase: '', sucursal_id: sucursalId || '', coach_id: '',
+      fecha: '', hora: '', duracion_minutos: 60, capacidad_max: 0,
+      descripcion: '', es_recurrente: false, publicar_wellhub: false,
+      categoria_id: '',
+    })
     setLoading(false)
   }
 
-  // Label de la sucursal fija
+  const handleAgregarCategoria = async () => {
+    if (!nuevaCategoria.trim()) return
+    const COLORS = ['#6366f1','#f59e0b','#22c55e','#3b82f6','#ec4899','#8b5cf6','#14b8a6','#f97316']
+    const color  = COLORS[categorias.length % COLORS.length]
+    const { data } = await supabase.from('categorias_clase')
+      .insert({ nombre: nuevaCategoria.trim(), color })
+      .select().single()
+    if (data) setCategorias(prev => [...prev, data])
+    setNuevaCategoria('')
+    setAddingCat(false)
+  }
+
   const sucursalFija = sucursalId
     ? sucursales.find(s => s.id === sucursalId)?.nombre || '...'
     : null
@@ -100,7 +148,6 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl">
 
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <h2 className="text-lg font-black text-gray-900">Crear nueva clase</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition">
@@ -110,7 +157,6 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
 
-          {/* Nombre */}
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-gray-700">
               Nombre de la clase <span className="text-red-500">*</span>
@@ -124,14 +170,12 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
             />
           </div>
 
-          {/* Sucursal + Coach */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-gray-700">
                 Sucursal <span className="text-red-500">*</span>
               </label>
               {sucursalFija ? (
-                // Si viene sucursalId fija, mostrar como label no editable
                 <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 bg-gray-100 flex items-center justify-between">
                   <span>{sucursalFija}</span>
                 </div>
@@ -166,7 +210,6 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
             </div>
           </div>
 
-          {/* Fecha + Hora */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-gray-700">
@@ -192,7 +235,6 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
             </div>
           </div>
 
-          {/* Duración + Capacidad */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-gray-700">
@@ -232,7 +274,48 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
             </div>
           </div>
 
-          {/* Descripción */}
+          {/* Categoría */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">Categoría</label>
+            <div className="flex flex-wrap gap-2">
+              {categorias.map(cat => {
+                const r = parseInt(cat.color.slice(1,3),16)
+                const g = parseInt(cat.color.slice(3,5),16)
+                const b = parseInt(cat.color.slice(5,7),16)
+                const isSelected = form.categoria_id === cat.id
+                return (
+                  <button key={cat.id} type="button"
+                    onClick={() => set('categoria_id', isSelected ? '' : cat.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-semibold border transition"
+                    style={isSelected
+                      ? { backgroundColor: cat.color, color: '#fff', borderColor: cat.color }
+                      : { backgroundColor: `rgba(${r},${g},${b},0.1)`, color: cat.color, borderColor: 'transparent' }
+                    }>
+                    {isSelected && '✓ '}{cat.nombre}
+                  </button>
+                )
+              })}
+              {addingCat ? (
+                <div className="flex items-center gap-1">
+                  <input autoFocus value={nuevaCategoria}
+                    onChange={e => setNuevaCategoria(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAgregarCategoria(); if (e.key === 'Escape') setAddingCat(false) }}
+                    placeholder="Nueva categoría"
+                    className="border border-gray-200 rounded-xl px-3 py-1 text-xs outline-none focus:border-gray-400 w-32" />
+                  <button type="button" onClick={handleAgregarCategoria}
+                    className="text-xs font-bold text-emerald-500 hover:text-emerald-700">✓</button>
+                  <button type="button" onClick={() => setAddingCat(false)}
+                    className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setAddingCat(true)}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition flex items-center gap-1">
+                  + Nueva categoría
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-gray-700">Descripción:</label>
             <textarea
@@ -244,7 +327,6 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
             />
           </div>
 
-          {/* Clase recurrente */}
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -255,7 +337,19 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
             <span className="text-sm text-gray-700">Clase recurrente</span>
           </label>
 
-          {/* Botones */}
+          {/* Publicar en Wellhub */}
+          <label className="flex items-center gap-2 cursor-pointer bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
+            <input
+              type="checkbox"
+              checked={form.publicar_wellhub}
+              onChange={e => set('publicar_wellhub', e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            />
+            <span className="text-sm text-gray-700">
+              🏃 Publicar también en Wellhub <span className="text-gray-400 text-xs">(visible para usuarios de Wellhub)</span>
+            </span>
+          </label>
+
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose}
               className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">

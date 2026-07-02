@@ -48,7 +48,7 @@ export default function ClasesPage() {
     setLoading(true)
     let q = supabase
       .from('clases')
-      .select('*, staff(nombre, primer_apellido), reservas(id, estatus)')
+      .select('*, staff(nombre, primer_apellido), reservas(id, estatus), categorias_clase(nombre, color)')
       .order('horario')
     if (sucursalId) q = q.eq('sucursal_id', sucursalId)
     const { data, error } = await q

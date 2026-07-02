@@ -4,30 +4,41 @@ import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 
-import SucursalHeader  from '@/components/sucursales/detalle/SucursalHeader'
+import SucursalHeader   from '@/components/sucursales/detalle/SucursalHeader'
 import SucursalMetricas from '@/components/sucursales/detalle/SucursalMetricas'
 import SucursalClientes from '@/components/sucursales/detalle/SucursalClientes'
-import SucursalRooms   from '@/components/sucursales/detalle/SucursalRooms'
-import DrawerSucursal from '@/components/sucursales/DrawerSucursal'
-import ModalCrearClase    from '@/components/ModalCrearClase'
+import SucursalRooms    from '@/components/sucursales/detalle/SucursalRooms'
+import DrawerSucursal   from '@/components/sucursales/DrawerSucursal'
+import ModalCrearClase  from '@/components/ModalCrearClase'
+import DrawerNuevoRoom  from '@/components/sucursales/rooms/DrawerNuevoRoom'
 
 export default function DetalleSucursal() {
   const { id } = useParams()
 
-  const [sucursal,   setSucursal]   = useState<any>(null)
-  const [clases,     setClases]     = useState<any[]>([])
-  const [clientes,   setClientes]   = useState<any[]>([])
-  const [pagos,      setPagos]      = useState<any[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [modalEdit,  setModalEdit]  = useState(false)
-  const [modalClase, setModalClase] = useState(false)
+  const [sucursal,    setSucursal]    = useState<any>(null)
+  const [clases,      setClases]      = useState<any[]>([])
+  const [clientes,    setClientes]    = useState<any[]>([])
+  const [pagos,       setPagos]       = useState<any[]>([])
+  const [rooms,       setRooms]       = useState<any[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [modalEdit,   setModalEdit]   = useState(false)
+  const [modalClase,  setModalClase]  = useState(false)
+  const [drawerRoom,  setDrawerRoom]  = useState(false)
 
   const fetchData = async () => {
     setLoading(true)
 
-    const { data: suc }  = await supabase.from('sucursales').select('*').eq('id', id).single()
-    const { data: cls }  = await supabase.from('clases').select('*, staff(nombre, primer_apellido)').eq('sucursal_id', id).order('horario')
-    const { data: clis } = await supabase.from('clientes').select('id, estatus').eq('sucursal_id', id)
+    const [
+      { data: suc },
+      { data: cls },
+      { data: clis },
+      { data: rms },
+    ] = await Promise.all([
+      supabase.from('sucursales').select('*').eq('id', id).single(),
+      supabase.from('clases').select('*, staff(nombre, primer_apellido)').eq('sucursal_id', id).order('horario'),
+      supabase.from('clientes').select('id, estatus').eq('sucursal_id', id),
+      supabase.from('rooms').select('*, room_spots(*)').eq('sucursal_id', id).eq('estatus', 'Activo'),
+    ])
 
     const clienteIds = (clis || []).map((c: any) => c.id)
     const { data: pgs } = clienteIds.length > 0
@@ -38,20 +49,19 @@ export default function DetalleSucursal() {
     setClases(cls   || [])
     setClientes(clis || [])
     setPagos(pgs    || [])
+    setRooms(rms    || [])
     setLoading(false)
   }
 
   useEffect(() => { fetchData() }, [id])
 
-  // ── Cálculos ───────────────────────────────────────────────────────────────
-  const total   = clientes.length
-  const activos = clientes.filter((c: any) => c.estatus === 'Activo').length
-  const lost    = clientes.filter((c: any) => c.estatus === 'Inactivo').length
-  const failed  = clientes.filter((c: any) => c.estatus === 'Vencido').length
-  const expired = Math.max(total - activos - lost - failed, 0)
-  const retencion = total > 0 ? Math.round((activos / total) * 100) : 0
+  const total      = clientes.length
+  const activos    = clientes.filter((c: any) => c.estatus === 'Activo').length
+  const lost       = clientes.filter((c: any) => c.estatus === 'Inactivo').length
+  const failed     = clientes.filter((c: any) => c.estatus === 'Vencido').length
+  const expired    = Math.max(total - activos - lost - failed, 0)
+  const retencion  = total > 0 ? Math.round((activos / total) * 100) : 0
 
-  // Ingresos últimos 6 meses
   const ahora = new Date()
   const meses6 = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(ahora.getFullYear(), ahora.getMonth() - (5 - i), 1)
@@ -64,13 +74,10 @@ export default function DetalleSucursal() {
       .reduce((a: number, p: any) => a + Number(p.monto), 0)
   })
 
-  const ingresosMes = ingresosSerie[5] || 0
-  const ingresosAnt = ingresosSerie[4] || 0
-  const deltaIngresos = ingresosAnt > 0
-    ? Math.round(((ingresosMes - ingresosAnt) / ingresosAnt) * 100)
-    : 0
-
-  // Retención serie simulada (requeriría snapshots históricos)
+  const ingresosMes    = ingresosSerie[5] || 0
+  const ingresosAnt    = ingresosSerie[4] || 0
+  const deltaIngresos  = ingresosAnt > 0
+    ? Math.round(((ingresosMes - ingresosAnt) / ingresosAnt) * 100) : 0
   const retencionSerie = meses6.map((_, i) =>
     Math.max(retencion + (i - 3) * 1.5 + (Math.random() * 2 - 1), 0)
   )
@@ -110,9 +117,11 @@ export default function DetalleSucursal() {
         expired={expired}
       />
 
+      {/* Rooms — ahora con datos reales */}
       <SucursalRooms
         clases={clases}
-        onCrearRoom={() => setModalClase(true)}
+        rooms={rooms}
+        onCrearRoom={() => setDrawerRoom(true)}
       />
 
       <DrawerSucursal
@@ -129,6 +138,13 @@ export default function DetalleSucursal() {
         sucursalId={sucursal.id}
       />
 
+      <DrawerNuevoRoom
+        isOpen={drawerRoom}
+        sucursalId={sucursal.id}
+        sucursalNombre={sucursal.nombre}
+        onClose={() => setDrawerRoom(false)}
+        onSuccess={() => { setDrawerRoom(false); fetchData() }}
+      />
     </div>
   )
 }

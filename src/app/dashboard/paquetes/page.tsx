@@ -28,7 +28,8 @@ export default function PaquetesPage() {
         paquete_verticales(vertical_id, verticales(nombre, color)),
         paquete_categorias(categoria_id),
         paquete_precios(activo, precio_app, activo_desde, sucursal_id, sucursales(nombre, color)),
-        paquete_splits(*)
+        paquete_splits(*),
+        paquete_rooms(room_id)
       `)
       .order('created_at', { ascending: false })
 

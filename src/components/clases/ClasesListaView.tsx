@@ -16,8 +16,9 @@ interface Clase {
   salon:        string
   estado:       string
   duracion_minutos: number
-  staff?: { nombre: string; primer_apellido: string }
+  staff?:       { nombre: string; primer_apellido: string }
   reservas?:    any[]
+  categorias_clase?: { nombre: string; color: string } // ← nuevo
 }
 
 interface Props {
@@ -32,6 +33,19 @@ function TipoBadge({ tipo, color }: { tipo: string; color: string }) {
       style={{ borderColor: color, color, backgroundColor: `${color}12` }}>
       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
       {tipo || 'General'}
+    </span>
+  )
+}
+
+function CategoriaBadge({ categoria }: { categoria?: { nombre: string; color: string } }) {
+  if (!categoria) return <span className="text-xs text-gray-300">—</span>
+  const r = parseInt(categoria.color.slice(1,3),16)
+  const g = parseInt(categoria.color.slice(3,5),16)
+  const b = parseInt(categoria.color.slice(5,7),16)
+  return (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
+      style={{ color: categoria.color, backgroundColor: `rgba(${r},${g},${b},0.12)` }}>
+      {categoria.nombre}
     </span>
   )
 }
@@ -106,6 +120,7 @@ export default function ClasesListaView({ clases, fechaActiva }: Props) {
             <th className="px-5 py-3">Clase / Room</th>
             <th className="px-5 py-3">Coach</th>
             <th className="px-5 py-3">Tipo</th>
+            <th className="px-5 py-3">Categoría</th>
             <th className="px-5 py-3">Capacidad</th>
             <th className="px-5 py-3">Duración</th>
             <th className="px-5 py-3">Estado</th>
@@ -115,7 +130,7 @@ export default function ClasesListaView({ clases, fechaActiva }: Props) {
         <tbody className="divide-y divide-gray-50">
           {filtradas.length === 0 ? (
             <tr>
-              <td colSpan={8} className="px-5 py-12 text-center text-gray-400 italic text-sm">
+              <td colSpan={9} className="px-5 py-12 text-center text-gray-400 italic text-sm">
                 No hay clases para este día
               </td>
             </tr>
@@ -154,6 +169,11 @@ export default function ClasesListaView({ clases, fechaActiva }: Props) {
                   <TipoBadge tipo={tipo} color={color} />
                 </td>
 
+                {/* Categoría */}
+                <td className="px-5 py-3.5">
+                  <CategoriaBadge categoria={c.categorias_clase} />
+                </td>
+                
                 {/* Capacidad */}
                 <td className="px-5 py-3.5">
                   <ClasesCapacidadBar reservas={totalReservas} capacidad={c.capacidad_max} />

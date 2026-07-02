@@ -33,6 +33,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
   const [series,     setSeries]     = useState<any[]>([])
   const [verticales, setVerticales] = useState<any[]>([])
   const [categorias, setCategorias] = useState<any[]>([])
+  const [roomsSelected, setRoomsSelected] = useState<string[]>([])
 
   const [form, setForm] = useState({
     nombre:                   '',
@@ -107,6 +108,11 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
             : p
         }))
       }
+
+      // Cargar rooms seleccionados
+      if (paquete.paquete_rooms?.length > 0) {
+        setRoomsSelected(paquete.paquete_rooms.map((pr: any) => pr.room_id))
+      }
       // Cargar splits
       if (paquete.paquete_splits?.length > 0) {
         setSplits(paquete.paquete_splits.map((s: any) => ({
@@ -122,6 +128,12 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
     setPrecios(prev => prev.map(p =>
       p.sucursal_id === sucursalId ? { ...p, [campo]: valor } : p
     ))
+  }
+
+  const handleRoomToggle = (roomId: string) => {
+    setRoomsSelected(prev =>
+      prev.includes(roomId) ? prev.filter(id => id !== roomId) : [...prev, roomId]
+    )
   }
 
   const sucursalesActivas = sucursales.filter(s =>
@@ -189,6 +201,14 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
       )
     }
 
+    // Rooms — borrar y reinsertar
+    await supabase.from('paquete_rooms').delete().eq('paquete_id', paqueteId)
+    if (roomsSelected.length > 0) {
+      await supabase.from('paquete_rooms').insert(
+        roomsSelected.map(roomId => ({ paquete_id: paqueteId, room_id: roomId }))
+      )
+    }
+
     // Splits — borrar y reinsertar
     await supabase.from('paquete_splits').delete().eq('paquete_id', paqueteId)
     if (splits.length > 0) {
@@ -226,12 +246,12 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
     handleClose()
     }
 
-    const handleEliminar = async () => {
+  const handleEliminar = async () => {
     if (!paquete?.id || !confirm('¿Eliminar este paquete? Esta acción no se puede deshacer.')) return
     await supabase.from('paquetes').delete().eq('id', paquete.id)
     onSuccess()
     handleClose()
-    }
+  }
   if (!isOpen) return null
 
   return (
@@ -316,7 +336,9 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
             <TabSucursalesYPrecio
               sucursales={sucursales}
               precios={precios}
+              roomsSelected={roomsSelected}
               onChange={handlePrecioChange}
+              onRoomToggle={handleRoomToggle}
             />
           )}
           {activeTab === 'splits' && (

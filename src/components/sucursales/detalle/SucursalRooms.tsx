@@ -1,59 +1,117 @@
 'use client'
-import Link from 'next/link'
-import { Plus, Pencil } from 'lucide-react'
+import { useState }   from 'react'
+import { Plus, Eye }  from 'lucide-react'
+import RoomViewer     from '@/components/sucursales/rooms/RoomViewer'
 
-interface Clase {
-  id:           string
-  nombre_clase: string
-  tipo_clase:   string
-  capacidad_max: number
-  staff?: { nombre: string; primer_apellido: string }
+interface Room {
+  id:         string
+  nombre:     string
+  descripcion:string
+  capacidad:  number
+  ancho:      number
+  alto:       number
+  layout:     any[]
+  room_spots: any[]
 }
 
 interface Props {
-  clases:          Clase[]
-  onCrearRoom:     () => void
+  clases:      any[]
+  rooms:       Room[]
+  onCrearRoom: () => void
 }
 
-export default function SucursalRooms({ clases, onCrearRoom }: Props) {
+export default function SucursalRooms({ clases, rooms, onCrearRoom }: Props) {
+  const [roomViewing, setRoomViewing] = useState<Room | null>(null)
+
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-        <h3 className="font-bold text-gray-900">Rooms</h3>
-        <button
-          onClick={onCrearRoom}
-          className="flex items-center gap-1 text-indigo-500 hover:text-indigo-700 text-sm font-bold transition"
-        >
+        <div className="flex items-center gap-2">
+          <h3 className="font-bold text-gray-900">Rooms</h3>
+          {rooms.length > 0 && (
+            <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+              {rooms.length}
+            </span>
+          )}
+        </div>
+        <button onClick={onCrearRoom}
+          className="flex items-center gap-1 text-indigo-500 hover:text-indigo-700 text-sm font-bold transition">
           <Plus size={14} /> Crear nuevo room
         </button>
       </div>
 
-      {clases.length === 0 ? (
+      {rooms.length === 0 ? (
         <div className="p-10 text-center text-gray-400 italic text-sm">
           No hay rooms en esta sucursal
         </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-px bg-gray-100">
-          {clases.map(c => (
-            <div key={c.id} className="bg-white p-4 hover:bg-gray-50 transition">
-              <div className="flex items-start justify-between mb-1">
-                <p className="text-sm font-bold text-gray-900 leading-tight">{c.nombre_clase}</p>
-                <Link href={`/dashboard/clases/${c.id}`}>
-                  <Pencil size={12} className="text-gray-300 hover:text-indigo-500 transition mt-0.5" />
-                </Link>
-              </div>
-              <p className="text-xs text-gray-400">{c.tipo_clase || 'Hybrid'}</p>
-              {c.staff && (
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {`${c.staff.nombre} ${c.staff.primer_apellido}`.trim()}
-                </p>
-              )}
-              <p className="text-xs text-gray-400 mt-1">
-                Capacidad <span className="font-bold text-gray-700">{c.capacidad_max} pax</span>
+      ) : roomViewing ? (
+        // Vista detalle del room
+        <div className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setRoomViewing(null)}
+              className="text-xs font-bold text-gray-400 hover:text-gray-700 transition flex items-center gap-1">
+              ← Volver
+            </button>
+            <div className="text-right">
+              <p className="text-xs text-gray-400">
+                {roomViewing.room_spots.filter((s: any) => !s.bloqueado).length} spots disponibles
+                · {roomViewing.capacidad} capacidad max
               </p>
             </div>
-          ))}
+          </div>
+          <RoomViewer
+            nombre={roomViewing.nombre}
+            ancho={roomViewing.ancho}
+            alto={roomViewing.alto}
+            layout={roomViewing.layout}
+            spots={roomViewing.room_spots}
+            readonly={true}
+          />
+        </div>
+      ) : (
+        // Grid de rooms
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-px bg-gray-100">
+          {rooms.map(r => {
+            const spotsTotal     = r.room_spots.length
+            const spotsBloqueados = r.room_spots.filter((s: any) => s.bloqueado).length
+            const spotsLibres    = spotsTotal - spotsBloqueados
+
+            return (
+              <div key={r.id} className="bg-white p-4 hover:bg-gray-50 transition">
+                <div className="flex items-start justify-between mb-1">
+                  <p className="text-sm font-bold text-gray-900 leading-tight">{r.nombre}</p>
+                  <button onClick={() => setRoomViewing(r)}
+                    className="p-1 hover:bg-gray-100 rounded-lg text-gray-300 hover:text-indigo-500 transition">
+                    <Eye size={13} />
+                  </button>
+                </div>
+
+                {r.descripcion && (
+                  <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{r.descripcion}</p>
+                )}
+
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-gray-400">
+                    Capacidad <span className="font-bold text-gray-700">{r.capacidad} spots</span>
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Grid <span className="font-bold text-gray-700">{r.ancho}×{r.alto}</span>
+                  </p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-400 rounded-full"
+                        style={{ width: `${spotsTotal > 0 ? (spotsLibres / spotsTotal) * 100 : 0}%` }} />
+                    </div>
+                    <span className="text-[10px] text-gray-400 font-medium">
+                      {spotsLibres}/{spotsTotal}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
