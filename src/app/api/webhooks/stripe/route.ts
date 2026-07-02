@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe }                    from '@/lib/stripe'
 import { supabase }                  from '@/lib/supabase'
 
-export const config = { api: { bodyParser: false } }
-
 // Helper para buscar cliente por stripe_customer_id
 async function findCliente(stripeCustomerId: string) {
   if (!stripeCustomerId) return null
