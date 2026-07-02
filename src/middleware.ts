@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-// Rutas públicas que no requieren auth
 const PUBLIC_ROUTES = [
   '/login',
   '/login/recuperar',
@@ -10,11 +9,6 @@ const PUBLIC_ROUTES = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-
-  // Permitir rutas públicas
-  if (PUBLIC_ROUTES.some(r => pathname.startsWith(r))) {
-    return NextResponse.next()
-  }
 
   // Permitir assets y api
   if (
@@ -27,14 +21,33 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Verificar sesión via cookie (sin llamar a Supabase en edge)
-  const token = request.cookies.get('sb-access-token')?.value ||
-                request.cookies.get('supabase-auth-token')?.value ||
-                // Supabase v2 usa este formato
-                [...request.cookies.getAll()].find(c => c.name.includes('auth-token'))?.value
+  // Permitir rutas públicas
+  if (PUBLIC_ROUTES.some(r => pathname.startsWith(r))) {
+    return NextResponse.next()
+  }
 
+  // Verificar sesión — Supabase v2 guarda el token así
+  const allCookies = [...request.cookies.getAll()]
+  const token = allCookies.find(c =>
+    c.name.includes('auth-token') ||
+    c.name.includes('access-token') ||
+    c.name.startsWith('sb-')
+  )?.value
+
+  // Si está en raíz y tiene sesión → dashboard
+  if (pathname === '/') {
+    if (token) return NextResponse.redirect(new URL('/dashboard/ejecutivo', request.url))
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Si intenta entrar al dashboard sin sesión → login
   if (!token && pathname.startsWith('/dashboard')) {
     return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  // Si ya tiene sesión e intenta ir al login → dashboard
+  if (token && PUBLIC_ROUTES.some(r => pathname.startsWith(r))) {
+    return NextResponse.redirect(new URL('/dashboard/ejecutivo', request.url))
   }
 
   return NextResponse.next()
