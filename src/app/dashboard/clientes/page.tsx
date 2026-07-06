@@ -24,7 +24,7 @@ export default function ClientesPage() {
     setLoading(true)
     let q = supabase
       .from('clientes')
-      .select('*, sucursales(nombre, color), pagos(monto, estatus)')
+      .select('*, sucursales(nombre, color), pagos(monto, estatus), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))')
       .order('created_at', { ascending: false })
     if (sucursalId) q = q.eq('sucursal_id', sucursalId)
     const { data, error } = await q

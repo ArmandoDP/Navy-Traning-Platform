@@ -12,7 +12,13 @@ interface Cliente {
   valor_cliente?: number; asistencia_pct?: number
   created_at: string; perdido?: boolean
   sucursales?: { nombre: string; color: string }
-  pagos?:      any[]
+  pagos?: any[]
+  origen?:           string
+  password_temporal?: string
+  debe_cambiar_password?: boolean
+  supabase_user_id?: string
+  fecha_alta_original?: string
+  membresias?:       any[]
 }
 
 interface Props {
@@ -193,10 +199,18 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
                       {c.nombre_completo?.charAt(0) || '?'}
                     </div>
                     <div className="min-w-0">
-                      <button onClick={() => onVerCliente(c)}
-                        className="text-sm font-semibold text-gray-900 hover:text-indigo-600 transition truncate block text-left">
-                        {c.nombre_completo}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => onVerCliente(c)}
+                          className="text-sm font-semibold text-gray-900 hover:text-indigo-600 transition truncate block text-left">
+                          {c.nombre_completo}
+                        </button>
+                        {/* Badge migración */}
+                        {c.origen === 'Migración' && (
+                          <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-100 text-amber-600 uppercase tracking-wide">
+                            MIG
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-gray-400 truncate">{c.email}</p>
                     </div>
                   </div>
@@ -240,7 +254,7 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
                 <td className="px-4 py-3">
                   <AsistenciaBar pct={c.asistencia_pct || 0} />
                 </td>
-
+                
                 {/* Valor */}
                 <td className="px-4 py-3 text-sm font-bold text-gray-900">
                   {c.valor_cliente ? `$${Number(c.valor_cliente).toLocaleString()}` : '—'}
@@ -253,10 +267,15 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
 
                 {/* Membresía */}
                 <td className="px-4 py-3">
-                  <BadgeMembresia
-                    fecha={c.fecha_vencimiento_memb || c.fecha_venc_plan}
-                    estatus={c.perdido ? 'Perdido' : c.estatus}
-                  />
+                  {(() => {
+                    const membActiva = c.membresias?.find((m: any) => m.estatus === 'Activa')
+                    return (
+                      <BadgeMembresia
+                        fecha={membActiva?.fecha_fin || c.fecha_vencimiento_memb || c.fecha_venc_plan}
+                        estatus={c.perdido ? 'Perdido' : c.estatus}
+                      />
+                    )
+                  })()}
                 </td>
 
                 {/* Flecha */}
