@@ -32,7 +32,7 @@ function Card({ icon, label, value, delta, sub }: {
         <Delta value={delta} />
       </div>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{label}</p>
-      <p className="text-2xl font-black text-gray-900">{value}</p>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
       {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
     </div>
   )
@@ -41,11 +41,11 @@ function Card({ icon, label, value, delta, sub }: {
 export default function DashboardMetricas({ ingresos, clientesActivos, totalClientes, ocupacion, retencion, nominaTotal }: Props) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      <Card icon={<DollarSign size={15}/>} label="Ingresos totales"   value={`$${ingresos > 0 ? ingresos.toLocaleString() : '489,600'}`}           delta={18.5} />
-      <Card icon={<Users size={15}/>}      label="Clientes activos"   value={clientesActivos > 0 ? clientesActivos.toLocaleString() : '2,400'}       delta={8.2}  sub="+50 vs mes anterior" />
-      <Card icon={<Activity size={15}/>}   label="Ocupación promedio" value={`${ocupacion || 78}%`}                                                   delta={-2.1} />
-      <Card icon={<Users size={15}/>}      label="Retención"          value={`${retencion || 92}%`}                                                   delta={1.5}  />
-      <Card icon={<DollarSign size={15}/>} label="Nómina total"       value={`$${nominaTotal > 0 ? nominaTotal.toLocaleString() : '420,000'}`}        delta={5}    />
+      <Card icon={<DollarSign size={15}/>} label="Ingresos totales"   value={`$${ingresos.toLocaleString()}`}      delta={18.5} />
+      <Card icon={<Users size={15}/>}      label="Clientes activos"   value={clientesActivos.toLocaleString()}     delta={8.2}  sub="+50 vs mes anterior" />
+      <Card icon={<Activity size={15}/>}   label="Ocupación promedio" value={`${ocupacion}%`}                       delta={-2.1} />
+      <Card icon={<Users size={15}/>}      label="Retención"          value={`${retencion}%`}                       delta={1.5}  />
+      <Card icon={<DollarSign size={15}/>} label="Nómina total"       value={`$${nominaTotal.toLocaleString()}`}    delta={5}    />
     </div>
   )
 }

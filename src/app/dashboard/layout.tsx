@@ -32,16 +32,12 @@ interface Integration {
 
 // ─── Config nav ───────────────────────────────────────────────────────────────
 const NAV: NavItem[] = [
-  { href: '/dashboard/ejecutivo', label: 'Dashboard',     icon: LayoutDashboard },
-  {
-    label: 'Sucursales', icon: MapPin,
-    children: [
-      { href: '/dashboard/reservas',  label: 'Reservas'  },
-      { href: '/dashboard/clases',    label: 'Clases'    },
-      { href: '/dashboard/coaches',   label: 'Coaches'   },
-      { href: '/dashboard/clientes',  label: 'Clientes'  },
-    ],
-  },
+  { href: '/dashboard/ejecutivo', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/reservas',  label: 'Reservas', icon: Calendar },
+  { href: '/dashboard/clases',    label: 'Clases', icon: BookOpen },
+  // { href: '/dashboard/coaches', label: 'Coaches', icon: UserCircle },
+  { href: '/dashboard/sucursales', label: 'Sucursales', icon: MapPin },
+  { href: '/dashboard/clientes',  label: 'Clientes', icon: Users },
   { href: '/dashboard/staff', label: 'Staff', icon: Users },
   { href: '/dashboard/paquetes',      label: 'Paquetes',      icon: Package      },
   { href: '/dashboard/finanzas',      label: 'Finanzas',      icon: DollarSign   },
@@ -220,6 +216,31 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
 function Topbar() {
+  const [usuario, setUsuario] = useState<{ nombre: string; iniciales: string } | null>(null)
+
+  useEffect(() => {
+    const fetchUsuario = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) return
+
+      const { data: staff } = await supabase
+        .from('staff')
+        .select('nombre, primer_apellido')
+        .eq('email', user.email)
+        .single()
+
+      if (staff) {
+        const nombreCompleto = `${staff.nombre} ${staff.primer_apellido || ''}`.trim()
+        const iniciales = (staff.nombre?.[0] || '') + (staff.primer_apellido?.[0] || '')
+        setUsuario({ nombre: nombreCompleto, iniciales: iniciales.toUpperCase() || 'U' })
+      } else {
+        // fallback si no hay fila en staff todavía
+        setUsuario({ nombre: user.email, iniciales: user.email[0].toUpperCase() })
+      }
+    }
+    fetchUsuario()
+  }, [])
+
   return (
     <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 flex-shrink-0">
       {/* Buscador */}
@@ -242,9 +263,9 @@ function Topbar() {
         </button>
         <div className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded-xl px-2 py-1.5 transition">
           <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-black">
-            SA
+            {usuario?.iniciales || '...'}
           </div>
-          <span className="text-sm font-medium text-gray-700">Sebastián Alcazar</span>
+          <span className="text-sm font-medium text-gray-700">{usuario?.nombre || 'Cargando...'}</span>
           <ChevronDown size={14} className="text-gray-400" />
         </div>
       </div>

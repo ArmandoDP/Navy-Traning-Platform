@@ -57,7 +57,7 @@ export default function DashboardEjecutivo() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-400 text-sm mt-0.5">
             Visión general del negocio ·{' '}
             <span className="text-indigo-500 font-medium cursor-pointer">Vista Global</span>
