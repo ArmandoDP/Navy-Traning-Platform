@@ -135,14 +135,6 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
       setPopup({ tipo: 'error', mensaje: 'El gerente es obligatorio.' })
       return
     }
-    if (!form.banco) {
-      setPopup({ tipo: 'error', mensaje: 'Selecciona un banco.' })
-      return
-    }
-    if (!form.cuenta_bancaria || !validarCuenta(form.cuenta_bancaria)) {
-      setPopup({ tipo: 'error', mensaje: 'La cuenta bancaria debe tener 16 dígitos. Formato: 0000 0000 0000 0000' })
-      return
-    }
     if (!validarHorario(form.horario)) {
       setPopup({ tipo: 'error', mensaje: 'El horario tiene un formato inválido. Ejemplo: L-V: 05:45-21:30 | S: 07:00-11:00' })
       return
@@ -380,12 +372,7 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
                 placeholder="0000 0000 0000 0000"
                 maxLength={19}
                 value={form.cuenta_bancaria}
-                onChange={e => {
-                  // Formato automático XXXX XXXX XXXX XXXX
-                  const raw = e.target.value.replace(/\s/g, '').slice(0, 16)
-                  const formatted = raw.match(/.{1,4}/g)?.join(' ') || raw
-                  set('cuenta_bancaria', formatted)
-                }}
+                onChange={e => set('cuenta_bancaria', e.target.value)}
               />
             </Field>
           </div>
