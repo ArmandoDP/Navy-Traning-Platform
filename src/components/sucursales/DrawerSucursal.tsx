@@ -95,6 +95,15 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
         estatus:         sucursal.estatus         || 'Activa',
         capacidad:       sucursal.capacidad       || 100,
       } : { ...EMPTY })
+
+      // Fetch managers
+      supabase
+        .from('staff')
+        .select('id, nombre, primer_apellido')
+        .eq('tipo', 'Manager')
+        .eq('estatus', 'Activo')
+        .order('nombre')
+        .then(({ data }) => { if (data) setManagers(data) })
     }
   }, [isOpen, sucursal])
 
@@ -355,7 +364,7 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
 
           {/* Banco + Cuenta */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Banco" required>
+            <Field label="Banco">
               <select
                 className={selectCls}
                 value={form.banco}
@@ -365,7 +374,7 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
                 {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </Field>
-            <Field label="Cuenta bancaria" required>
+            <Field label="Cuenta bancaria">
               <input
                 className={inputCls}
                 placeholder="0000 0000 0000 0000"
