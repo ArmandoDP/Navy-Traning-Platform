@@ -247,6 +247,7 @@ export async function POST(req: NextRequest) {
         break
       }
 
+      
       // ── Cliente eliminado en Stripe ───────────────────────────────────────
       case 'customer.deleted': {
         const customer = event.data.object
@@ -263,6 +264,46 @@ export async function POST(req: NextRequest) {
       case 'payment_method.attached': {
         const pm = event.data.object
         console.log(`Método de pago agregado: ${pm.id} — ${pm.type} para customer ${pm.customer}`)
+        break
+      }
+        
+      case 'checkout.session.completed': {
+        const session = event.data.object
+
+        if (session.metadata?.plan_type === 'founding_member') {
+          const customer = await stripe.customers.retrieve(session.customer as string)
+
+          // upsert por email: si ya existe el cliente lo actualiza, si no, lo crea
+          const { data: cliente } = await supabase
+            .from('clientes')
+            .upsert({
+              email:                        (customer as any).email,
+              nombre_completo:              (customer as any).name,
+              stripe_customer_id:           session.customer,
+              stripe_subscription_id:       session.subscription,
+              sucursal_origen:              session.metadata.sucursal,
+              is_founding_member:           true,
+              precio_bloqueado:             12000,
+              precio_bloqueado_de_por_vida: true,
+              fecha_inscripcion:            new Date().toISOString(),
+              estatus:                      'Activo',
+            }, { onConflict: 'email' })
+            .select('id, nombre_completo')
+            .single()
+
+          await supabase.from('pagos').insert({
+            stripe_subscription_id: session.subscription,
+            stripe_customer_id:     session.customer,
+            cliente_id:             cliente?.id || null,
+            monto:                  (session.amount_total || 0) / 100,
+            moneda:                 session.currency?.toUpperCase() || 'MXN',
+            estatus:                'Exitoso',
+            metodo_pago:            'Tarjeta',
+            concepto:               'Founding Member — inscripción',
+            fecha_pago:             new Date().toISOString(),
+            metadata:               session.metadata || {},
+          })
+        }
         break
       }
 
