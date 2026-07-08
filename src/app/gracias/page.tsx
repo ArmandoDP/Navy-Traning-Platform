@@ -44,8 +44,8 @@ export default async function GraciasPage({
   const customer = session.customer as Stripe.Customer;
   const nombreCliente = customer?.deleted ? null : customer?.name;
 
-  const nextBilling = subscription?.current_period_end
-    ? new Date(subscription.current_period_end * 1000).toLocaleDateString('es-MX', {
+  const nextBilling = subscription?.items?.data?.[0]?.current_period_end
+    ? new Date(subscription.items.data[0].current_period_end * 1000).toLocaleDateString('es-MX', {
         day: 'numeric', month: 'long', year: 'numeric',
       })
     : null;
