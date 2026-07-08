@@ -14,7 +14,7 @@ const allowedOrigins = [
 // sucursales válidas para evitar que alguien mande cualquier string por el body
 const sucursalesValidas = ['condesa', 'juriquilla'];
 
-function getCorsHeaders(origin: string | null) {
+function getCorsHeaders(origin: string | null): Record<string, string> {
   if (origin && allowedOrigins.includes(origin)) {
     return { 'Access-Control-Allow-Origin': origin };
   }
