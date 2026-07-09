@@ -11,7 +11,11 @@ export default async function GraciasPage({
   const { session_id: sessionId } = await searchParams;
 
   if (!sessionId) {
-    return <div className="p-10 text-center">Sesión no encontrada.</div>;
+    return (
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
+        <p className="text-white/60">Sesión no encontrada.</p>
+      </div>
+    );
   }
 
   let session;
@@ -21,17 +25,21 @@ export default async function GraciasPage({
     });
   } catch (err) {
     return (
-      <div className="p-10 text-center">
-        No pudimos verificar tu pago. Si acabas de pagar, revisa tu correo
-        para la confirmación, o contáctanos.
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 text-center">
+        <p className="text-white/60 max-w-sm">
+          No pudimos verificar tu pago. Si acabas de pagar, revisa tu correo
+          para la confirmación, o contáctanos.
+        </p>
       </div>
     );
   }
 
   if (session.payment_status !== 'paid') {
     return (
-      <div className="p-10 text-center">
-        Tu pago aún no se ha confirmado. Si el problema persiste, contáctanos.
+      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 text-center">
+        <p className="text-white/60 max-w-sm">
+          Tu pago aún no se ha confirmado. Si el problema persiste, contáctanos.
+        </p>
       </div>
     );
   }
@@ -42,8 +50,8 @@ export default async function GraciasPage({
 
   const nextBilling = subscription?.items?.data?.[0]?.current_period_end
     ? new Date(subscription.items.data[0].current_period_end * 1000).toLocaleDateString('es-MX', {
-        day: 'numeric', month: 'long', year: 'numeric',
-      })
+      day: 'numeric', month: 'long', year: 'numeric',
+    })
     : null;
 
   const beneficios = [
@@ -55,52 +63,91 @@ export default async function GraciasPage({
   ];
 
   return (
-    <div className="max-w-lg mx-auto py-16 px-6">
-      <div className="text-center mb-8">
-        <div className="text-5xl mb-4">✅</div>
-        <h1 className="text-2xl font-bold">
-          ¡Bienvenido a Navy{nombreCliente ? `, ${nombreCliente.split(' ')[0]}` : ''}!
-        </h1>
-        <p className="text-gray-600 mt-2">Tu lugar como Founding Member está asegurado.</p>
-      </div>
+    <div className="min-h-screen bg-black text-white">
+      {/* Fondo con textura sutil */}
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.08),transparent_60%)] pointer-events-none" />
 
-      <div className="bg-gray-50 rounded-xl p-6 space-y-3 mb-8">
-        <div className="flex justify-between">
-          <span className="text-gray-500">Plan</span>
-          <span className="font-medium">Founding Member — {session.metadata?.sucursal}</span>
+      <div className="relative max-w-lg mx-auto px-6 py-20">
+        {/* Logo */}
+        <div className="text-center mb-10">
+          <span className="text-2xl font-black tracking-tighter">NAVY</span>
+          <div className="text-[10px] tracking-[0.3em] text-white/40 -mt-1">TRAINING</div>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Precio bloqueado</span>
-          <span className="font-medium">
-            ${((session.amount_total || 0) / 100).toLocaleString()} MXN / 3 meses
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Correo</span>
-          <span className="font-medium">{session.customer_details?.email}</span>
-        </div>
-        {nextBilling && (
-          <div className="flex justify-between">
-            <span className="text-gray-500">Próximo cobro</span>
-            <span className="font-medium">{nextBilling}</span>
+
+        {/* Badge + título */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-bold tracking-wide uppercase px-3 py-1 rounded-full mb-6">
+            Founding Member confirmado
           </div>
-        )}
-      </div>
+          <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight leading-tight">
+            Bienvenido a Navy{nombreCliente ? `, ${nombreCliente.split(' ')[0]}` : ''}
+          </h1>
+          <p className="text-white/50 mt-3">
+            Tu lugar como Founding Member está asegurado para siempre.
+          </p>
+        </div>
 
-      <div>
-        <h2 className="font-semibold mb-3">Tus beneficios</h2>
-        <ul className="space-y-2">
-          {beneficios.map((b) => (
-            <li key={b} className="flex items-center gap-2 text-sm text-gray-700">
-              <span className="text-green-600">✓</span> {b}
-            </li>
-          ))}
-        </ul>
-      </div>
+        {/* Card de detalle */}
+        <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-6 space-y-4 mb-8 backdrop-blur">
+          <div className="flex justify-between items-baseline">
+            <span className="text-white/40 text-sm uppercase tracking-wide">Plan</span>
+            <span className="font-semibold text-right">
+              Founding Member — {session.metadata?.sucursal}
+            </span>
+          </div>
+          <div className="h-px bg-white/10" />
+          <div className="flex justify-between items-baseline">
+            <span className="text-white/40 text-sm uppercase tracking-wide">Precio bloqueado</span>
+            <span className="font-semibold text-yellow-400">
+              ${((session.amount_total || 0) / 100).toLocaleString()} MXN
+              <span className="text-white/40 font-normal"> / 3 meses</span>
+            </span>
+          </div>
+          <div className="h-px bg-white/10" />
+          <div className="flex justify-between items-baseline">
+            <span className="text-white/40 text-sm uppercase tracking-wide">Correo</span>
+            <span className="font-medium text-white/80">{session.customer_details?.email}</span>
+          </div>
+          {nextBilling && (
+            <>
+              <div className="h-px bg-white/10" />
+              <div className="flex justify-between items-baseline">
+                <span className="text-white/40 text-sm uppercase tracking-wide">Próximo cobro</span>
+                <span className="font-medium text-white/80">{nextBilling}</span>
+              </div>
+            </>
+          )}
+        </div>
 
-      <p className="text-xs text-gray-400 text-center mt-8">
-        Revisa tu correo, te enviamos la confirmación y los siguientes pasos.
-      </p>
+        {/* Beneficios */}
+        <div className="mb-10">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40 mb-4">
+            Tus beneficios
+          </h2>
+          <ul className="space-y-3">
+            {beneficios.map((b) => (
+              <li key={b} className="flex items-center gap-3 text-sm">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-yellow-400 text-black flex items-center justify-center text-xs font-bold">
+                  ✓
+                </span>
+                <span className="text-white/80">{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* CTA volver */}
+        <div className="text-center">
+          <a href="https://www.navytrainingcenter.com/gym-condesa"
+          className="inline-block w-full sm:w-auto bg-yellow-400 text-black font-bold uppercase tracking-wide text-sm px-8 py-4 rounded-lg hover:bg-yellow-300 transition-colors">
+            Volver a Navy Condesa
+          </a>
+        </div>
+
+        <p className="text-xs text-white/30 text-center mt-8">
+          Revisa tu correo, te enviamos la confirmación y los siguientes pasos.
+        </p>
+      </div>
     </div>
   );
 }

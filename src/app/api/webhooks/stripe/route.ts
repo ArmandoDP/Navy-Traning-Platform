@@ -290,6 +290,7 @@ export async function POST(req: NextRequest) {
               precio_bloqueado_de_por_vida: true,
               fecha_inscripcion:            new Date().toISOString(),
               estatus:                      'Activo',
+              plan:                         'Founding Member', // 👈 nueva línea
             }, { onConflict: 'email' })
             .select('id, nombre_completo')
             .single()
