@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Minus, Plus } from 'lucide-react'
+import RecurrenciaConfig from '@/components/clases/RecurrenciaConfig'
 
 interface Coach { id: string; nombre: string; primer_apellido: string }
 interface Sucursal  { id: string; nombre: string }
@@ -21,6 +22,8 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [nuevaCategoria, setNuevaCategoria] = useState('')
   const [addingCat, setAddingCat] = useState(false)
+  const [recurrenciaTipo, setRecurrenciaTipo] = useState('semanal')
+  const [recurrenciaFin,  setRecurrenciaFin]  = useState('')
   
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -67,13 +70,11 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
 
     const coach = coaches.find(c => c.id === form.coach_id)
 
-    // 1. Crear la clase en Supabase
-    const { data: claseCreada, error } = await supabase.from('clases').insert([{
+    const payloadBase = {
       nombre_clase:     form.nombre_clase,
       coach_id:         form.coach_id    || null,
       sucursal_id:      form.sucursal_id || null,
       instructor:       coach ? `${coach.nombre} ${coach.primer_apellido}` : '',
-      horario,
       duracion_minutos: form.duracion_minutos,
       capacidad_max:    form.capacidad_max,
       descripcion:      form.descripcion,
@@ -82,7 +83,15 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
       tipo_clase:       'General',
       salon:            'Sala Principal',
       publicar_wellhub: form.publicar_wellhub,
-      categoria_id: form.categoria_id || null,
+      categoria_id:     form.categoria_id || null,
+      recurrencia_tipo: form.es_recurrente ? recurrenciaTipo : null,
+      recurrencia_fin:  form.es_recurrente && recurrenciaFin ? recurrenciaFin : null,
+    }
+
+    // 1. Crear la clase principal
+    const { data: claseCreada, error } = await supabase.from('clases').insert([{
+      ...payloadBase,
+      horario,
     }]).select().single()
 
     if (error) {
@@ -91,27 +100,56 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
       return
     }
 
-    // 2. Si se marcó publicar en Wellhub, crear clase + slot allá
+    // 2. Si es recurrente, crear las clases hijas
+    if (form.es_recurrente && recurrenciaFin && recurrenciaTipo && claseCreada) {
+      const clasesHijas = []
+      let fechaActual   = new Date(horario)
+      const fechaLimite = new Date(recurrenciaFin)
+
+      const incrementar = (d: Date) => {
+        const nueva = new Date(d)
+        if (recurrenciaTipo === 'diario')    nueva.setDate(nueva.getDate() + 1)
+        if (recurrenciaTipo === 'semanal')   nueva.setDate(nueva.getDate() + 7)
+        if (recurrenciaTipo === 'quincenal') nueva.setDate(nueva.getDate() + 14)
+        if (recurrenciaTipo === 'mensual')   nueva.setMonth(nueva.getMonth() + 1)
+        return nueva
+      }
+
+      fechaActual = incrementar(fechaActual)
+
+      while (fechaActual <= fechaLimite) {
+        clasesHijas.push({
+          ...payloadBase,
+          horario:        fechaActual.toISOString(),
+          clase_padre_id: claseCreada.id,
+        })
+        fechaActual = incrementar(fechaActual)
+      }
+
+      if (clasesHijas.length > 0) {
+        await supabase.from('clases').insert(clasesHijas)
+      }
+    }
+
+    // 3. Publicar en Wellhub si aplica
     if (form.publicar_wellhub && claseCreada) {
       try {
         const res = await fetch('/api/wellhub/publicar-clase', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            claseId:          claseCreada.id,
-            nombre:           form.nombre_clase,
-            descripcion:      form.descripcion,
+            claseId:         claseCreada.id,
+            nombre:          form.nombre_clase,
+            descripcion:     form.descripcion,
             horario,
-            duracionMinutos:  form.duracion_minutos,
-            capacidadMax:     form.capacidad_max,
+            duracionMinutos: form.duracion_minutos,
+            capacidadMax:    form.capacidad_max,
           }),
         })
         const data = await res.json()
-        if (!res.ok) {
-          alert('Clase creada en Navy, pero hubo un error publicándola en Wellhub: ' + data.error)
-        }
+        if (!res.ok) alert('Clase creada, pero error en Wellhub: ' + data.error)
       } catch (err: any) {
-        alert('Clase creada en Navy, pero no se pudo conectar con Wellhub: ' + err.message)
+        alert('Clase creada, pero no se pudo conectar con Wellhub: ' + err.message)
       }
     }
 
@@ -123,6 +161,8 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
       descripcion: '', es_recurrente: false, publicar_wellhub: false,
       categoria_id: '',
     })
+    setRecurrenciaTipo('semanal')
+    setRecurrenciaFin('')
     setLoading(false)
   }
 
@@ -327,15 +367,26 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
             />
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.es_recurrente}
-              onChange={e => set('es_recurrente', e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          {/* Clase recurrente */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.es_recurrente}
+                onChange={e => set('es_recurrente', e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-sm text-gray-700">Clase recurrente</span>
+            </label>
+
+            <RecurrenciaConfig
+              activo={form.es_recurrente}
+              tipo={recurrenciaTipo}
+              fechaFin={recurrenciaFin}
+              onTipo={setRecurrenciaTipo}
+              onFin={setRecurrenciaFin}
             />
-            <span className="text-sm text-gray-700">Clase recurrente</span>
-          </label>
+          </div>
 
           {/* Publicar en Wellhub */}
           <label className="flex items-center gap-2 cursor-pointer bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">

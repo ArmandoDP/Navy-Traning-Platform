@@ -22,8 +22,9 @@ interface Clase {
 }
 
 interface Props {
-  clases:      Clase[]
-  fechaActiva: Date
+  clases:       Clase[]
+  fechaActiva:  Date
+  onVerClase:   (id: string) => void
 }
 
 // Badge de tipo con color dinámico
@@ -65,7 +66,7 @@ function getColor(tipo: string, colorDB?: string) {
   return TIPO_COLORS[tipo] || TIPO_COLORS['General']
 }
 
-export default function ClasesListaView({ clases, fechaActiva }: Props) {
+export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Props) {
   const [filtros, setFiltros] = useState({ hora: '', clase: '', room: '', coach: '', tipo: '', estado: '' })
 
   const setFiltro = (k: string, v: string) => setFiltros(p => ({ ...p, [k]: v }))
@@ -195,10 +196,10 @@ export default function ClasesListaView({ clases, fechaActiva }: Props) {
 
                 {/* Flecha */}
                 <td className="px-5 py-3.5">
-                  <Link href={`/dashboard/clases/${c.id}`}
+                  <button onClick={() => onVerClase(c.id)}
                     className="p-1.5 rounded-lg hover:bg-gray-100 transition text-gray-300 hover:text-indigo-600 flex items-center">
                     <ChevronRight size={16}/>
-                  </Link>
+                  </button>
                 </td>
               </tr>
             )

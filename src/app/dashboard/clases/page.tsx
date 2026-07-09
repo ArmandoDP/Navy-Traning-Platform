@@ -8,6 +8,7 @@ import ClasesListaView    from '@/components/clases/ClasesListaView'
 import ClasesDiaView      from '@/components/clases/ClasesDiaView'
 import ClasesSemanView    from '@/components/clases/ClasesSemanView'
 import ClasesMesView      from '@/components/clases/ClasesMesView'
+import DrawerDetalleClase from '@/components/clases/DrawerDetalleClase'
 
 type Vista = 'dia' | 'semana' | 'mes' | 'lista'
 
@@ -43,6 +44,7 @@ export default function ClasesPage() {
   const [vista,      setVista]      = useState<Vista>('lista')
   const [fecha,      setFecha]      = useState(new Date())
   const [modalOpen,  setModalOpen]  = useState(false)
+  const [claseActivaId, setClaseActivaId] = useState<string | null>(null)
 
   const fetchClases = async () => {
     setLoading(true)
@@ -179,7 +181,7 @@ export default function ClasesPage() {
       </div>
 
       {/* ── Vistas ── */}
-      {vista === 'lista'  && <ClasesListaView  clases={clases} fechaActiva={fecha} />}
+      {vista === 'lista'  && <ClasesListaView  clases={clases} fechaActiva={fecha} onVerClase={id => setClaseActivaId(id)} />}
       {vista === 'dia'    && <ClasesDiaView    clases={clases} fechaActiva={fecha} />}
       {vista === 'semana' && <ClasesSemanView  clases={clases} fechaActiva={fecha} />}
       {vista === 'mes'    && (
@@ -195,6 +197,13 @@ export default function ClasesPage() {
         onClose={() => setModalOpen(false)}
         onSuccess={fetchClases}
         sucursalId={sucursalId || undefined}
+      />
+
+      <DrawerDetalleClase
+        isOpen={!!claseActivaId}
+        claseId={claseActivaId}
+        onClose={() => setClaseActivaId(null)}
+        onSuccess={fetchClases}
       />
     </div>
   )

@@ -122,6 +122,7 @@ export default function DetalleSucursal() {
         clases={clases}
         rooms={rooms}
         onCrearRoom={() => setDrawerRoom(true)}
+        onRefresh={fetchData}
       />
 
       <DrawerSucursal
