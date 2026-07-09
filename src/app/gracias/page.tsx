@@ -12,8 +12,8 @@ export default async function GraciasPage({
 
   if (!sessionId) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6">
-        <p className="text-white/60">Sesión no encontrada.</p>
+      <div className="min-h-screen bg-white flex items-center justify-center px-6">
+        <p className="text-blue-900/60">Sesión no encontrada.</p>
       </div>
     );
   }
@@ -25,8 +25,8 @@ export default async function GraciasPage({
     });
   } catch (err) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 text-center">
-        <p className="text-white/60 max-w-sm">
+      <div className="min-h-screen bg-white flex items-center justify-center px-6 text-center">
+        <p className="text-blue-900/60 max-w-sm">
           No pudimos verificar tu pago. Si acabas de pagar, revisa tu correo
           para la confirmación, o contáctanos.
         </p>
@@ -36,8 +36,8 @@ export default async function GraciasPage({
 
   if (session.payment_status !== 'paid') {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center px-6 text-center">
-        <p className="text-white/60 max-w-sm">
+      <div className="min-h-screen bg-white flex items-center justify-center px-6 text-center">
+        <p className="text-blue-900/60 max-w-sm">
           Tu pago aún no se ha confirmado. Si el problema persiste, contáctanos.
         </p>
       </div>
@@ -50,8 +50,8 @@ export default async function GraciasPage({
 
   const nextBilling = subscription?.items?.data?.[0]?.current_period_end
     ? new Date(subscription.items.data[0].current_period_end * 1000).toLocaleDateString('es-MX', {
-      day: 'numeric', month: 'long', year: 'numeric',
-    })
+        day: 'numeric', month: 'long', year: 'numeric',
+      })
     : null;
 
   const beneficios = [
@@ -63,57 +63,57 @@ export default async function GraciasPage({
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Fondo con textura sutil */}
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(250,204,21,0.08),transparent_60%)] pointer-events-none" />
+    <div className="min-h-screen bg-white text-blue-950">
+      {/* Fondo con desvanecido azul rey */}
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(37,64,143,0.10),transparent_60%)] pointer-events-none" />
 
       <div className="relative max-w-lg mx-auto px-6 py-20">
         {/* Logo */}
         <div className="text-center mb-10">
-          <span className="text-2xl font-black tracking-tighter">NAVY</span>
-          <div className="text-[10px] tracking-[0.3em] text-white/40 -mt-1">TRAINING</div>
+          <span className="text-2xl font-black tracking-tighter text-blue-900">NAVY</span>
+          <div className="text-[10px] tracking-[0.3em] text-blue-900/40 -mt-1">TRAINING</div>
         </div>
 
         {/* Badge + título */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-bold tracking-wide uppercase px-3 py-1 rounded-full mb-6">
+          <div className="inline-flex items-center gap-2 bg-blue-900/5 border border-blue-900/20 text-blue-800 text-xs font-bold tracking-wide uppercase px-3 py-1 rounded-full mb-6">
             Founding Member confirmado
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tight leading-tight text-blue-950">
             Bienvenido a Navy{nombreCliente ? `, ${nombreCliente.split(' ')[0]}` : ''}
           </h1>
-          <p className="text-white/50 mt-3">
+          <p className="text-blue-900/50 mt-3">
             Tu lugar como Founding Member está asegurado para siempre.
           </p>
         </div>
 
         {/* Card de detalle */}
-        <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-6 space-y-4 mb-8 backdrop-blur">
+        <div className="bg-blue-50/60 border border-blue-900/10 rounded-2xl p-6 space-y-4 mb-8">
           <div className="flex justify-between items-baseline">
-            <span className="text-white/40 text-sm uppercase tracking-wide">Plan</span>
-            <span className="font-semibold text-right">
+            <span className="text-blue-900/40 text-sm uppercase tracking-wide">Plan</span>
+            <span className="font-semibold text-right text-blue-950">
               Founding Member — {session.metadata?.sucursal}
             </span>
           </div>
-          <div className="h-px bg-white/10" />
+          <div className="h-px bg-blue-900/10" />
           <div className="flex justify-between items-baseline">
-            <span className="text-white/40 text-sm uppercase tracking-wide">Precio bloqueado</span>
-            <span className="font-semibold text-yellow-400">
+            <span className="text-blue-900/40 text-sm uppercase tracking-wide">Precio bloqueado</span>
+            <span className="font-semibold text-blue-700">
               ${((session.amount_total || 0) / 100).toLocaleString()} MXN
-              <span className="text-white/40 font-normal"> / 3 meses</span>
+              <span className="text-blue-900/40 font-normal"> / 3 meses</span>
             </span>
           </div>
-          <div className="h-px bg-white/10" />
+          <div className="h-px bg-blue-900/10" />
           <div className="flex justify-between items-baseline">
-            <span className="text-white/40 text-sm uppercase tracking-wide">Correo</span>
-            <span className="font-medium text-white/80">{session.customer_details?.email}</span>
+            <span className="text-blue-900/40 text-sm uppercase tracking-wide">Correo</span>
+            <span className="font-medium text-blue-950/80">{session.customer_details?.email}</span>
           </div>
           {nextBilling && (
             <>
-              <div className="h-px bg-white/10" />
+              <div className="h-px bg-blue-900/10" />
               <div className="flex justify-between items-baseline">
-                <span className="text-white/40 text-sm uppercase tracking-wide">Próximo cobro</span>
-                <span className="font-medium text-white/80">{nextBilling}</span>
+                <span className="text-blue-900/40 text-sm uppercase tracking-wide">Próximo cobro</span>
+                <span className="font-medium text-blue-950/80">{nextBilling}</span>
               </div>
             </>
           )}
@@ -121,16 +121,16 @@ export default async function GraciasPage({
 
         {/* Beneficios */}
         <div className="mb-10">
-          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/40 mb-4">
+          <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-blue-900/40 mb-4">
             Tus beneficios
           </h2>
           <ul className="space-y-3">
             {beneficios.map((b) => (
               <li key={b} className="flex items-center gap-3 text-sm">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-yellow-400 text-black flex items-center justify-center text-xs font-bold">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-700 text-white flex items-center justify-center text-xs font-bold">
                   ✓
                 </span>
-                <span className="text-white/80">{b}</span>
+                <span className="text-blue-950/80">{b}</span>
               </li>
             ))}
           </ul>
@@ -138,13 +138,15 @@ export default async function GraciasPage({
 
         {/* CTA volver */}
         <div className="text-center">
-          <a href="https://www.navytrainingcenter.com/gym-condesa"
-          className="inline-block w-full sm:w-auto bg-yellow-400 text-black font-bold uppercase tracking-wide text-sm px-8 py-4 rounded-lg hover:bg-yellow-300 transition-colors">
+          
+           <a href="https://www.navytrainingcenter.com/gym-condesa"
+            className="inline-block w-full sm:w-auto bg-blue-700 text-white font-bold uppercase tracking-wide text-sm px-8 py-4 rounded-lg hover:bg-blue-800 transition-colors"
+          >
             Volver a Navy Condesa
           </a>
         </div>
 
-        <p className="text-xs text-white/30 text-center mt-8">
+        <p className="text-xs text-blue-900/30 text-center mt-8">
           Revisa tu correo, te enviamos la confirmación y los siguientes pasos.
         </p>
       </div>
