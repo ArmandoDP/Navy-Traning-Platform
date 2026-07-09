@@ -29,6 +29,9 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
   const [empleado,  setEmpleado]  = useState<any>(null)
   const [loading,   setLoading]   = useState(true)
   const [activeTab, setActiveTab] = useState('metricas')
+  const [showAcciones, setShowAcciones] = useState(false)
+  const [loadingAccion, setLoadingAccion] = useState(false)
+  const [popup, setPopup] = useState<{ tipo: 'error'|'exito'; mensaje: string } | null>(null)
 
   const isCoach = empleado?.tipo === 'Coach'
 
@@ -64,6 +67,24 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
     setLoading(false)
   }
 
+  const handleCambiarEstatus = async () => {
+    setLoadingAccion(true)
+    const nuevoEstatus = empleado.estatus === 'Activo' ? 'Inactivo' : 'Activo'
+    await supabase.from('staff').update({ estatus: nuevoEstatus }).eq('id', empleado.id)
+    await fetchEmpleado()
+    setShowAcciones(false)
+    setLoadingAccion(false)
+  }
+
+  const handleEliminar = async () => {
+    setLoadingAccion(true)
+    await supabase.from('staff_sucursales').delete().eq('staff_id', empleado.id)
+    await supabase.from('staff_categorias').delete().eq('staff_id', empleado.id)
+    await supabase.from('staff_documentos').delete().eq('staff_id', empleado.id)
+    await supabase.from('staff').delete().eq('id', empleado.id)
+    setLoadingAccion(false)
+    onClose()
+  }
   useEffect(() => {
     if (isOpen && staffId) { fetchEmpleado(); setActiveTab('metricas') }
   }, [isOpen, staffId])
@@ -135,9 +156,63 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition">
-                    ⋯ Más acciones
-                  </button>
+                  {popup && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center p-6 bg-black/20">
+                      <div className="bg-white rounded-2xl shadow-2xl border border-red-100 px-6 py-5 w-full flex flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-xl">⚠️</div>
+                          <div>
+                            <p className="text-sm font-black text-gray-900">¿Eliminar empleado?</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Esta acción no se puede deshacer.</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setPopup(null)}
+                            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
+                            Cancelar
+                          </button>
+                          <button onClick={handleEliminar} disabled={loadingAccion}
+                            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition disabled:opacity-40">
+                            {loadingAccion ? 'Eliminando...' : 'Sí, eliminar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botón más acciones */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowAcciones(p => !p)}
+                      className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-50 transition">
+                      ⋯ Más acciones
+                    </button>
+
+                    {showAcciones && (
+                      <>
+                        <div onClick={() => setShowAcciones(false)} className="fixed inset-0 z-10" />
+                        <div className="absolute right-0 top-8 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[210px]">
+                          <button
+                            onClick={() => { onEditar(empleado); setShowAcciones(false) }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition text-left">
+                            ✏️ Editar empleado
+                          </button>
+                          <button
+                            onClick={handleCambiarEstatus}
+                            disabled={loadingAccion}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 transition text-left">
+                            {empleado.estatus === 'Activo' ? '🔴 Marcar como Inactivo' : '🟢 Marcar como Activo'}
+                          </button>
+                          <div className="border-t border-gray-100 my-1" />
+                          <button
+                            onClick={() => { setPopup({ tipo: 'error', mensaje: '' }); setShowAcciones(false) }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-red-500 hover:bg-red-50 transition text-left">
+                            🗑 Eliminar empleado
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   <button onClick={onClose}
                     className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 transition">
                     <X size={16} />
