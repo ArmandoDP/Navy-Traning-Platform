@@ -6,9 +6,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 export default async function GraciasPage({
   searchParams,
 }: {
-  searchParams: { session_id?: string };
+  searchParams: Promise<{ session_id?: string }>;
 }) {
-  const sessionId = searchParams.session_id;
+  const { session_id: sessionId } = await searchParams;
 
   if (!sessionId) {
     return <div className="p-10 text-center">Sesión no encontrada.</div>;
@@ -20,7 +20,6 @@ export default async function GraciasPage({
       expand: ['subscription', 'customer'],
     });
   } catch (err) {
-    // session_id inválido, expirado, o manipulado en la URL
     return (
       <div className="p-10 text-center">
         No pudimos verificar tu pago. Si acabas de pagar, revisa tu correo
@@ -29,8 +28,6 @@ export default async function GraciasPage({
     );
   }
 
-  // Verificar que el pago realmente se completó (por si alguien pega
-  // una URL vieja o cancelada manualmente)
   if (session.payment_status !== 'paid') {
     return (
       <div className="p-10 text-center">
@@ -40,7 +37,6 @@ export default async function GraciasPage({
   }
 
   const subscription = session.subscription as Stripe.Subscription | null;
-  // customer puede venir "deleted" en teoría — Stripe.Customer | Stripe.DeletedCustomer
   const customer = session.customer as Stripe.Customer;
   const nombreCliente = customer?.deleted ? null : customer?.name;
 
