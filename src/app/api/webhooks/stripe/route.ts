@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
           // Buscar el paquete Founding Promo activo
           const { data: paquete, error: paqueteError } = await supabase
             .from('paquetes')
-            .select('id, vigencia_dias, precio')
+            .select('id, nombre, vigencia_dias, precio')
             .eq('nombre', 'Founding Promo')
             .eq('estatus', 'Activo')
             .single()
@@ -319,7 +319,7 @@ export async function POST(req: NextRequest) {
               fecha_inscripcion:            new Date().toISOString(),
               fecha_vencimiento_membresia:  fechaFin?.toISOString().split('T')[0] || null,
               estatus:                      'Activo',
-              plan:                         'Founding Member',
+              plan:                         paquete?.nombre || 'Founding Promo',
             }, { onConflict: 'email' })
             .select('id, nombre_completo')
             .single()
