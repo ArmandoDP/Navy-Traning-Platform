@@ -266,15 +266,18 @@ export async function POST(req: NextRequest) {
         console.log(`Método de pago agregado: ${pm.id} — ${pm.type} para customer ${pm.customer}`)
         break
       }
-        
+
+      // ── Checkout completado (Founding Member desde Webflow) ────────────────
       case 'checkout.session.completed': {
         const session = event.data.object
 
         if (session.metadata?.plan_type === 'founding_member') {
           const customer = await stripe.customers.retrieve(session.customer as string)
 
-          // upsert por email: si ya existe el cliente lo actualiza, si no, lo crea
-          const { data: cliente } = await supabase
+          console.log('Founding member checkout — customer:', JSON.stringify(customer))
+          console.log('Founding member checkout — metadata:', JSON.stringify(session.metadata))
+
+          const { data: cliente, error: clienteError } = await supabase
             .from('clientes')
             .upsert({
               email:                        (customer as any).email,
@@ -291,7 +294,13 @@ export async function POST(req: NextRequest) {
             .select('id, nombre_completo')
             .single()
 
-          await supabase.from('pagos').insert({
+          if (clienteError) {
+            console.error('Error en upsert de cliente founding member:', JSON.stringify(clienteError))
+          } else {
+            console.log('Cliente founding member guardado:', JSON.stringify(cliente))
+          }
+
+          const { error: pagoError } = await supabase.from('pagos').insert({
             stripe_subscription_id: session.subscription,
             stripe_customer_id:     session.customer,
             cliente_id:             cliente?.id || null,
@@ -303,6 +312,12 @@ export async function POST(req: NextRequest) {
             fecha_pago:             new Date().toISOString(),
             metadata:               session.metadata || {},
           })
+
+          if (pagoError) {
+            console.error('Error insertando pago founding member:', JSON.stringify(pagoError))
+          }
+        } else {
+          console.log('checkout.session.completed sin plan_type founding_member, metadata:', JSON.stringify(session.metadata))
         }
         break
       }
