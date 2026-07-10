@@ -325,7 +325,7 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
               <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 className={`${inputCls} pl-8`}
-                placeholder="L-V: 05:45-11:00, 17:00-21:30 | S: 07:50-11:00 | D: 10:00-11:00"
+                placeholder="L-V: 05:45-11:00, 17:00-21:30 | L-J: 05:45-22:00 | S: 07:50-11:00 | D: 10:00-11:00"
                 value={form.horario}
                 onChange={e => set('horario', e.target.value)}
               />

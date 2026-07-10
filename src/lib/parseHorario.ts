@@ -4,16 +4,19 @@
 // Resultado: array de { dia, manana, tarde }
 
 const DIAS_MAP: Record<string, string[]> = {
-  L:  ['Lunes'],
-  M:  ['Martes'],
-  X:  ['Miércoles'],
-  J:  ['Jueves'],
-  V:  ['Viernes'],
-  S:  ['Sábado'],
-  D:  ['Domingo'],
+  L:    ['Lunes'],
+  M:    ['Martes'],
+  X:    ['Miércoles'],
+  J:    ['Jueves'],
+  V:    ['Viernes'],
+  S:    ['Sábado'],
+  D:    ['Domingo'],
+  'L-J': ['Lunes', 'Martes', 'Miércoles', 'Jueves'],          // ← faltaba
   'L-V': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
   'L-S': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
   'L-D': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'],
+  'M-V': ['Martes', 'Miércoles', 'Jueves', 'Viernes'],        // ← por si acaso
+  'M-S': ['Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
 }
 
 function fmt(hora: string): string {
