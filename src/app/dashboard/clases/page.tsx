@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useSucursal } from '@/context/SucursalContext'
-import { Plus, ChevronLeft, ChevronRight, Filter, RefreshCw } from 'lucide-react'
-import ModalCrearClase    from '@/components/ModalCrearClase'
+import { Plus, ChevronLeft, ChevronRight, Filter, RefreshCw, Copy } from 'lucide-react'
+import ModalCrearClase    from '@/components/DrawerCrearClase'
 import ClasesListaView    from '@/components/clases/ClasesListaView'
 import ClasesDiaView      from '@/components/clases/ClasesDiaView'
 import ClasesSemanView    from '@/components/clases/ClasesSemanView'
 import ClasesMesView      from '@/components/clases/ClasesMesView'
 import DrawerDetalleClase from '@/components/clases/DrawerDetalleClase'
+import DrawerCopiarSemana from '@/components/clases/DrawerCopiarSemana'
 
 type Vista = 'dia' | 'semana' | 'mes' | 'lista'
 
@@ -45,6 +46,7 @@ export default function ClasesPage() {
   const [fecha,      setFecha]      = useState(new Date())
   const [modalOpen,  setModalOpen]  = useState(false)
   const [claseActivaId, setClaseActivaId] = useState<string | null>(null)
+  const [drawerCopiar, setDrawerCopiar] = useState(false)
 
   const fetchClases = async () => {
     setLoading(true)
@@ -116,6 +118,14 @@ export default function ClasesPage() {
           <button className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition text-gray-500">
             <Filter size={16}/>
           </button>
+
+          {/* Botón en el header — solo si hay sucursal seleccionada */}
+          {sucursalId && (
+            <button onClick={() => setDrawerCopiar(true)}
+              className="flex items-center gap-2 border border-gray-200 bg-white text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition">
+              <Copy size={15}/> Copiar semana
+            </button>
+          )}
 
           <button onClick={() => setModalOpen(true)}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition">
@@ -205,6 +215,17 @@ export default function ClasesPage() {
         onClose={() => setClaseActivaId(null)}
         onSuccess={fetchClases}
       />
+
+      {sucursalId && (
+        <DrawerCopiarSemana
+          isOpen={drawerCopiar}
+          onClose={() => setDrawerCopiar(false)}
+          onSuccess={() => { fetchClases(); setDrawerCopiar(false) }}
+          fechaActiva={fecha}
+          sucursalId={sucursalId}
+          sucursalNombre={sucursalActiva?.nombre || ''}
+        />
+      )}
     </div>
   )
 }

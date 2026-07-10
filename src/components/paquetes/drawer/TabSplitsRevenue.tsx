@@ -28,25 +28,50 @@ export default function TabSplitsRevenue({ sucursalesActivas, precios, splits, o
 
   // Inicializar splits con defaults cuando cambian las sucursales activas
   useEffect(() => {
-    if (sucursalesActivas.length === 0) return
-    if (splits.length > 0) return // ya tiene splits configurados
+    if (sucursalesActivas.length === 0) {
+      onChange([])
+      return
+    }
 
-    const defaults: SplitRow[] = []
+    // Recalcular splits basado en las sucursales activas actuales
+    // Filtrar splits que ya no tienen sucursales válidas
+    const idsActivos = sucursalesActivas.map(s => s.id)
+    const splitsFiltrados = splits.filter(s =>
+      idsActivos.includes(s.sucursal_origen_id) &&
+      idsActivos.includes(s.sucursal_destino_id)
+    )
+
+    // Verificar si faltan combinaciones
+    const faltanCombinaciones = sucursalesActivas.some(origen =>
+      !splitsFiltrados.some(s => s.sucursal_origen_id === origen.id && s.sucursal_destino_id === origen.id)
+    )
+
+    if (!faltanCombinaciones && splitsFiltrados.length === splits.length) return
+
+    // Crear defaults solo para combinaciones faltantes
+    const nuevos: SplitRow[] = [...splitsFiltrados]
     const pctSecundario = sucursalesActivas.length > 1
-      ? Math.floor((15 / (sucursalesActivas.length - 1)))
+      ? Math.floor(15 / (sucursalesActivas.length - 1))
       : 0
 
     sucursalesActivas.forEach(origen => {
-      // La propia sucursal se lleva el 85%
-      defaults.push({ sucursal_origen_id: origen.id, sucursal_destino_id: origen.id, porcentaje: 85 })
-      // Las demás se reparten el 15%
-      sucursalesActivas
-        .filter(d => d.id !== origen.id)
-        .forEach(destino => {
-          defaults.push({ sucursal_origen_id: origen.id, sucursal_destino_id: destino.id, porcentaje: pctSecundario })
-        })
+      const tienePropio = nuevos.some(s =>
+        s.sucursal_origen_id === origen.id && s.sucursal_destino_id === origen.id
+      )
+      if (!tienePropio) {
+        nuevos.push({ sucursal_origen_id: origen.id, sucursal_destino_id: origen.id, porcentaje: 85 })
+      }
+      sucursalesActivas.filter(d => d.id !== origen.id).forEach(destino => {
+        const tieneDestino = nuevos.some(s =>
+          s.sucursal_origen_id === origen.id && s.sucursal_destino_id === destino.id
+        )
+        if (!tieneDestino) {
+          nuevos.push({ sucursal_origen_id: origen.id, sucursal_destino_id: destino.id, porcentaje: pctSecundario })
+        }
+      })
     })
-    onChange(defaults)
+
+    onChange(nuevos)
   }, [sucursalesActivas])
 
   const getPrecioSucursal = (sucursalId: string) => {

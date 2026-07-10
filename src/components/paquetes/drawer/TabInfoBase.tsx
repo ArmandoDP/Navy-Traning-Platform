@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -48,7 +48,6 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
     const curr = form.verticales_ids || []
     const next = curr.includes(id) ? curr.filter((x: string) => x !== id) : [...curr, id]
     set('verticales_ids', next)
-    // Limpiar categorías que ya no corresponden
     const cats = form.categorias_ids || []
     const validCats = categorias.filter(c => next.includes(c.vertical_id)).map(c => c.id)
     set('categorias_ids', cats.filter((id: string) => validCats.includes(id)))
@@ -85,7 +84,12 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
     onRefreshCatalogos()
   }
   
-  
+  const bioRef = useCallback((el: HTMLTextAreaElement | null) => {
+  if (el) {
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }
+}, [form.bio])
 
   return (
     <div className="px-6 py-5 space-y-6">
@@ -97,7 +101,9 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
         </p>
         <div className="flex flex-wrap gap-2">
           {series.map(s => (
-            <button key={s.id} onClick={() => set('serie_id', form.serie_id === s.id ? '' : s.id)}
+            <button key={s.id} onClick={() => {
+    set('serie_id', form.serie_id === s.id ? '' : s.id)
+  }}
               className="px-3 py-1.5 rounded-full text-xs font-semibold border transition"
               style={form.serie_id === s.id
                 ? { backgroundColor: s.color, color: '#fff', borderColor: s.color }
@@ -144,9 +150,18 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
         <label className="text-sm font-medium text-gray-700">
           Bio <span className="text-gray-400 text-xs">(Visible en la app y en terminal)</span>
         </label>
-        <textarea rows={2} placeholder="Breve descripción del paquete"
-          className={`${inputCls} resize-none`}
-          value={form.bio} onChange={e => set('bio', e.target.value)} />
+        <textarea
+          ref={bioRef}
+          placeholder="Breve descripción del paquete"
+          className={`${inputCls} resize-none overflow-hidden`}
+          value={form.bio}
+          rows={2}
+          onChange={e => {
+            set('bio', e.target.value)
+            e.target.style.height = 'auto'
+            e.target.style.height = e.target.scrollHeight + 'px'
+          }}
+        />
       </div>
 
       <div className="border-t border-gray-100" />
@@ -161,7 +176,9 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-2">Verticales</p>
         <div className="flex flex-wrap gap-2">
           {verticales.map(v => (
-            <button key={v.id} onClick={() => toggleVertical(v.id)}
+            <button key={v.id} onClick={() => {
+    toggleVertical(v.id)
+  }}
               className="px-3 py-1.5 rounded-full text-xs font-semibold border transition"
               style={(form.verticales_ids || []).includes(v.id)
                 ? { backgroundColor: v.color, color: '#fff', borderColor: v.color }
@@ -258,9 +275,12 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-gray-700">Clases incluidas*</label>
           <select className={`${inputCls} appearance-none cursor-pointer`}
-            value={form.clases_incluidas || ''} onChange={e => set('clases_incluidas', e.target.value === 'ilimitado' ? null : Number(e.target.value))}>
+            value={form.clases_incluidas || ''} 
+            onChange={e => set('clases_incluidas', e.target.value === 'ilimitado' ? null : Number(e.target.value))}>
             <option value="ilimitado">Ilimitado</option>
-            {[1,2,4,8,10,12,16,20,24].map(n => <option key={n} value={n}>{n} clases</option>)}
+            {Array.from({ length: 30 }, (_, i) => i + 1).map(n => (
+              <option key={n} value={n}>{n} {n === 1 ? 'clase' : 'clases'}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-1.5">

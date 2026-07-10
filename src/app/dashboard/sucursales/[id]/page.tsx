@@ -9,7 +9,7 @@ import SucursalMetricas from '@/components/sucursales/detalle/SucursalMetricas'
 import SucursalClientes from '@/components/sucursales/detalle/SucursalClientes'
 import SucursalRooms    from '@/components/sucursales/detalle/SucursalRooms'
 import DrawerSucursal   from '@/components/sucursales/DrawerSucursal'
-import ModalCrearClase  from '@/components/ModalCrearClase'
+import ModalCrearClase  from '@/components/DrawerCrearClase'
 import DrawerNuevoRoom  from '@/components/sucursales/rooms/DrawerNuevoRoom'
 
 export default function DetalleSucursal() {

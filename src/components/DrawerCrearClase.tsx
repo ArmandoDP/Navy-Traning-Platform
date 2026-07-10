@@ -185,131 +185,100 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl">
+    <>
+      <div onClick={onClose}
+        className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
+          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`} />
 
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-lg font-black text-gray-900">Crear nueva clase</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition">
-            <X size={20}/>
+      <div className={`fixed top-0 right-0 z-50 h-full w-full max-w-lg bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
+        isOpen ? 'translate-x-0' : 'translate-x-full'
+      }`}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-black text-gray-900">Crear nueva clase</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Alta de clase</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition text-gray-400">
+            <X size={18}/>
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* Formulario scrolleable */}
+        <form id="drawer-crear-clase" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-gray-700">
               Nombre de la clase <span className="text-red-500">*</span>
             </label>
-            <input
-              required
-              placeholder="Nombre"
+            <input required placeholder="Nombre"
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 bg-gray-50 transition"
-              value={form.nombre_clase}
-              onChange={e => set('nombre_clase', e.target.value)}
-            />
+              value={form.nombre_clase} onChange={e => set('nombre_clase', e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700">
-                Sucursal <span className="text-red-500">*</span>
-              </label>
+              <label className="text-sm font-semibold text-gray-700">Sucursal <span className="text-red-500">*</span></label>
               {sucursalFija ? (
-                <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 bg-gray-100 flex items-center justify-between">
-                  <span>{sucursalFija}</span>
+                <div className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 bg-gray-100">
+                  {sucursalFija}
                 </div>
               ) : (
-                <select
-                  required
+                <select required
                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none appearance-none bg-gray-50 focus:border-indigo-400"
-                  value={form.sucursal_id}
-                  onChange={e => set('sucursal_id', e.target.value)}
-                >
+                  value={form.sucursal_id} onChange={e => set('sucursal_id', e.target.value)}>
                   <option value="">Seleccionar</option>
                   {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
               )}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700">
-                Coach <span className="text-red-500">*</span>
-              </label>
+              <label className="text-sm font-semibold text-gray-700">Coach</label>
               <select
                 className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none appearance-none bg-gray-50 focus:border-indigo-400"
-                value={form.coach_id}
-                onChange={e => set('coach_id', e.target.value)}
-              >
+                value={form.coach_id} onChange={e => set('coach_id', e.target.value)}>
                 <option value="">Seleccionar</option>
-                {coaches.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.nombre} {c.primer_apellido}
-                  </option>
-                ))}
+                {coaches.map(c => <option key={c.id} value={c.id}>{c.nombre} {c.primer_apellido}</option>)}
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700">
-                Fecha <span className="text-red-500">*</span>
-              </label>
-              <input
-                required type="date"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 bg-gray-50 focus:ring-2 focus:ring-indigo-100"
-                value={form.fecha}
-                onChange={e => set('fecha', e.target.value)}
-              />
+              <label className="text-sm font-semibold text-gray-700">Fecha <span className="text-red-500">*</span></label>
+              <input required type="date"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 bg-gray-50"
+                value={form.fecha} onChange={e => set('fecha', e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700">
-                Hora <span className="text-red-500">*</span>
-              </label>
-              <input
-                required type="time"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 bg-gray-50 focus:ring-2 focus:ring-indigo-100"
-                value={form.hora}
-                onChange={e => set('hora', e.target.value)}
-              />
+              <label className="text-sm font-semibold text-gray-700">Hora <span className="text-red-500">*</span></label>
+              <input required type="time"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 bg-gray-50"
+                value={form.hora} onChange={e => set('hora', e.target.value)} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700">
-                Duración (minutos) <span className="text-red-500">*</span>
-              </label>
+              <label className="text-sm font-semibold text-gray-700">Duración (minutos) <span className="text-red-500">*</span></label>
               <div className="flex items-center border border-gray-200 rounded-xl bg-gray-50 overflow-hidden">
-                <button type="button"
-                  onClick={() => set('duracion_minutos', Math.max(0, form.duracion_minutos - 5))}
-                  className="px-3 py-2.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition">
-                  <Minus size={14}/>
-                </button>
+                <button type="button" onClick={() => set('duracion_minutos', Math.max(0, form.duracion_minutos - 5))}
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-100 transition"><Minus size={14}/></button>
                 <span className="flex-1 text-center text-sm font-medium text-gray-900">{form.duracion_minutos}</span>
-                <button type="button"
-                  onClick={() => set('duracion_minutos', form.duracion_minutos + 5)}
-                  className="px-3 py-2.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition">
-                  <Plus size={14}/>
-                </button>
+                <button type="button" onClick={() => set('duracion_minutos', form.duracion_minutos + 5)}
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-100 transition"><Plus size={14}/></button>
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-gray-700">
-                Capacidad máxima <span className="text-red-500">*</span>
-              </label>
+              <label className="text-sm font-semibold text-gray-700">Capacidad máxima <span className="text-red-500">*</span></label>
               <div className="flex items-center border border-gray-200 rounded-xl bg-gray-50 overflow-hidden">
-                <button type="button"
-                  onClick={() => set('capacidad_max', Math.max(0, form.capacidad_max - 1))}
-                  className="px-3 py-2.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition">
-                  <Minus size={14}/>
-                </button>
+                <button type="button" onClick={() => set('capacidad_max', Math.max(0, form.capacidad_max - 1))}
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-100 transition"><Minus size={14}/></button>
                 <span className="flex-1 text-center text-sm font-medium text-gray-900">{form.capacidad_max}</span>
-                <button type="button"
-                  onClick={() => set('capacidad_max', form.capacidad_max + 1)}
-                  className="px-3 py-2.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition">
-                  <Plus size={14}/>
-                </button>
+                <button type="button" onClick={() => set('capacidad_max', form.capacidad_max + 1)}
+                  className="px-3 py-2.5 text-gray-400 hover:bg-gray-100 transition"><Plus size={14}/></button>
               </div>
             </div>
           </div>
@@ -343,13 +312,13 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
                     placeholder="Nueva categoría"
                     className="border border-gray-200 rounded-xl px-3 py-1 text-xs outline-none focus:border-gray-400 w-32" />
                   <button type="button" onClick={handleAgregarCategoria}
-                    className="text-xs font-bold text-emerald-500 hover:text-emerald-700">✓</button>
+                    className="text-xs font-bold text-emerald-500">✓</button>
                   <button type="button" onClick={() => setAddingCat(false)}
-                    className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                    className="text-xs text-gray-400">✕</button>
                 </div>
               ) : (
                 <button type="button" onClick={() => setAddingCat(true)}
-                  className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition flex items-center gap-1">
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition">
                   + Nueva categoría
                 </button>
               )}
@@ -357,28 +326,20 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-gray-700">Descripción:</label>
-            <textarea
-              rows={3}
-              placeholder="Descripción de la clase..."
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 bg-gray-50 resize-none focus:ring-2 focus:ring-indigo-100"
-              value={form.descripcion}
-              onChange={e => set('descripcion', e.target.value)}
-            />
+            <label className="text-sm font-semibold text-gray-700">Descripción</label>
+            <textarea rows={3} placeholder="Descripción de la clase..."
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-indigo-400 bg-gray-50 resize-none"
+              value={form.descripcion} onChange={e => set('descripcion', e.target.value)} />
           </div>
 
           {/* Clase recurrente */}
           <div className="space-y-3">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.es_recurrente}
+              <input type="checkbox" checked={form.es_recurrente}
                 onChange={e => set('es_recurrente', e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
+                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
               <span className="text-sm text-gray-700">Clase recurrente</span>
             </label>
-
             <RecurrenciaConfig
               activo={form.es_recurrente}
               tipo={recurrenciaTipo}
@@ -390,30 +351,28 @@ export default function ModalCrearClase({ isOpen, onClose, onSuccess, sucursalId
 
           {/* Publicar en Wellhub */}
           <label className="flex items-center gap-2 cursor-pointer bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
-            <input
-              type="checkbox"
-              checked={form.publicar_wellhub}
+            <input type="checkbox" checked={form.publicar_wellhub}
               onChange={e => set('publicar_wellhub', e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
-            />
+              className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
             <span className="text-sm text-gray-700">
               🏃 Publicar también en Wellhub <span className="text-gray-400 text-xs">(visible para usuarios de Wellhub)</span>
             </span>
           </label>
 
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
-              Cancelar
-            </button>
-            <button type="submit" disabled={loading}
-              className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 transition">
-              {loading ? 'Creando...' : 'Crear clase'}
-            </button>
-          </div>
-
         </form>
+
+        {/* Footer fijo */}
+        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-white">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
+            Cancelar
+          </button>
+          <button type="submit" form="drawer-crear-clase" disabled={loading}
+            className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 transition">
+            {loading ? 'Creando...' : 'Crear clase'}
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   )
 }

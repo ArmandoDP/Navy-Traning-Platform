@@ -106,6 +106,7 @@ export default function PaquetesPage() {
       <DrawerPaquete
         isOpen={drawerOpen}
         paquete={paqueteActivo}
+        verticales={verticales}  // ← agrega esto
         onClose={() => { setDrawerOpen(false); setPaqueteActivo(null) }}
         onSuccess={() => { fetchPaquetes(); setDrawerOpen(false); setPaqueteActivo(null) }}
       />

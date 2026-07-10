@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X }                   from 'lucide-react'
 import { supabase }            from '@/lib/supabase'
 import TabInfoBase             from './TabInfoBase'
@@ -11,6 +11,7 @@ interface Props {
   isOpen:    boolean
   paquete?:  any       // si viene → edición, si no → creación
   onClose:   () => void
+  verticales?: any[] 
   onSuccess: () => void
 }
 
@@ -25,13 +26,13 @@ const TABS = [
 ]
 
 
-export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: Props) {
+export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, verticales: verticalesProp = [] }: Props) {
   const [activeTab,  setActiveTab]  = useState<Tab>('info')
   const [loading,    setLoading]    = useState(false)
   const [toast,      setToast]      = useState(false)
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [series,     setSeries]     = useState<any[]>([])
-  const [verticales, setVerticales] = useState<any[]>([])
+  const [verticales, setVerticales] = useState<any[]>(verticalesProp)
   const [categorias, setCategorias] = useState<any[]>([])
   const [roomsSelected, setRoomsSelected] = useState<string[]>([])
 
@@ -60,69 +61,97 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   const fetchCatalogos = async () => {
-    const [{ data: sucs }, { data: sers }, { data: verts }, { data: cats }] = await Promise.all([
-      supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa').order('nombre'),
+    const [{ data: sers }, { data: verts }, { data: cats }] = await Promise.all([
       supabase.from('series_paquetes').select('*').order('nombre'),
       supabase.from('verticales').select('*').order('nombre'),
       supabase.from('categorias_clase').select('*').order('nombre'),
     ])
-    if (sucs)  setSucursales(sucs)
     if (sers)  setSeries(sers)
-    if (verts) setVerticales(verts)
+    if (verts && verts.length > 0) setVerticales(verts)
+    else if (verticalesProp.length > 0) setVerticales(verticalesProp)
     if (cats)  setCategorias(cats)
-
-    // Inicializar precios con todas las sucursales
-    if (sucs) {
-      setPrecios(sucs.map(s => ({
-        sucursal_id: s.id, activo: false, precio_app: '', activo_desde: ''
-      })))
-    }
   }
 
+  const inicializadoRef = useRef<string | null>(null)
   // Si es edición, cargar datos del paquete
   useEffect(() => {
-    if (!isOpen) return
-    fetchCatalogos()
-    setActiveTab('info')
+    if (!isOpen) {
+      inicializadoRef.current = null
+      return
+    }
 
-    if (paquete) {
-      setForm({
-        nombre:                  paquete.nombre || '',
-        codigo_interno:          paquete.codigo_interno || '',
-        bio:                     paquete.bio || '',
-        serie_id:                paquete.serie_id || '',
-        verticales_ids:          paquete.paquete_verticales?.map((pv: any) => pv.vertical_id) || [],
-        categorias_ids:          paquete.paquete_categorias?.map((pc: any) => pc.categoria_id) || [],
-        acceso_total:            paquete.acceso_total || false,
-        acceso_sucursal_hermana: paquete.acceso_sucursal_hermana || false,
-        vigencia_dias:           paquete.duracion || 30,
-        clases_incluidas:        paquete.clases_incluidas || null,
-        renovacion:              paquete.renovacion || 'Automatica',
-      })
-      // Cargar precios
-      if (paquete.paquete_precios?.length > 0) {
-        setPrecios(prev => prev.map(p => {
-          const found = paquete.paquete_precios.find((pp: any) => pp.sucursal_id === p.sucursal_id)
-          return found
-            ? { ...p, activo: found.activo, precio_app: found.precio_app?.toString() || '', activo_desde: found.activo_desde || '' }
-            : p
-        }))
-      }
+    // Si ya inicializamos este mismo paquete, no volver a hacerlo
+    const currentId = paquete?.id || 'nuevo'
+    if (inicializadoRef.current === currentId) return
+    inicializadoRef.current = currentId
+    
+    const init = async () => {
+      setActiveTab('info')
+      const [{ data: sucs }, { data: sers }, { data: verts }, { data: cats }] = await Promise.all([
+        supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa').order('nombre'),
+        supabase.from('series_paquetes').select('*').order('nombre'),
+        supabase.from('verticales').select('*').order('nombre'),
+        supabase.from('categorias_clase').select('*').order('nombre'),
+      ])
+      if (sucs)  setSucursales(sucs)
+      if (sers)  setSeries(sers)
+      if (verts) setVerticales(verts)
+      if (cats)  setCategorias(cats)
 
-      // Cargar rooms seleccionados
-      if (paquete.paquete_rooms?.length > 0) {
-        setRoomsSelected(paquete.paquete_rooms.map((pr: any) => pr.room_id))
-      }
-      // Cargar splits
-      if (paquete.paquete_splits?.length > 0) {
-        setSplits(paquete.paquete_splits.map((s: any) => ({
-          sucursal_origen_id:  s.sucursal_origen,
-          sucursal_destino_id: s.sucursal_destino,
-          porcentaje:          s.porcentaje,
-        })))
+      if (paquete) {
+        // Edición — cargar datos del paquete
+        setForm({
+          nombre:                  paquete.nombre || '',
+          codigo_interno:          paquete.codigo_interno || '',
+          bio:                     paquete.bio || '',
+          serie_id:                paquete.serie_id || '',
+          verticales_ids:          paquete.paquete_verticales?.map((pv: any) => pv.vertical_id) || [],
+          categorias_ids:          paquete.paquete_categorias?.map((pc: any) => pc.categoria_id) || [],
+          acceso_total:            paquete.acceso_total || false,
+          acceso_sucursal_hermana: paquete.acceso_sucursal_hermana || false,
+          vigencia_dias:           paquete.duracion || 30,
+          clases_incluidas:        paquete.clases_incluidas || null,
+          renovacion:              paquete.renovacion || 'Automatica',
+        })
+
+        // Precios — combinar sucursales con datos existentes
+        if (sucs) {
+          setPrecios(sucs.map(s => {
+            const found = paquete.paquete_precios?.find((pp: any) => pp.sucursal_id === s.id)
+            return found
+              ? { sucursal_id: s.id, activo: found.activo, precio_app: found.precio_app?.toString() || '', activo_desde: found.activo_desde || '' }
+              : { sucursal_id: s.id, activo: false, precio_app: '', activo_desde: '' }
+          }))
+        }
+
+        if (paquete.paquete_rooms?.length > 0) {
+          setRoomsSelected(paquete.paquete_rooms.map((pr: any) => pr.room_id))
+        }
+        if (paquete.paquete_splits?.length > 0) {
+          setSplits(paquete.paquete_splits.map((s: any) => ({
+            sucursal_origen_id:  s.sucursal_origen,
+            sucursal_destino_id: s.sucursal_destino,
+            porcentaje:          s.porcentaje,
+          })))
+        }
+      } else {
+        // Creación — resetear todo
+        setForm({
+          nombre: '', codigo_interno: '', bio: '', serie_id: '',
+          verticales_ids: [], categorias_ids: [],
+          acceso_total: false, acceso_sucursal_hermana: false,
+          vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
+        })
+        if (sucs) {
+          setPrecios(sucs.map(s => ({ sucursal_id: s.id, activo: false, precio_app: '', activo_desde: '' })))
+        }
+        setSplits([])
+        setRoomsSelected([])
       }
     }
-  }, [isOpen, paquete])
+
+    init()
+  }, [isOpen, paquete?.id])
 
   const handlePrecioChange = (sucursalId: string, campo: string, valor: any) => {
     setPrecios(prev => prev.map(p =>
@@ -145,15 +174,17 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
     setLoading(true)
 
     const payload = {
-      nombre:           form.nombre,
-      codigo_interno:   form.codigo_interno || null,
-      bio:              form.bio || null,
-      serie_id:         form.serie_id || null,
-      vigencia_dias:    form.vigencia_dias,
-      duracion:         form.vigencia_dias,
-      clases_incluidas: form.clases_incluidas,
-      numero_clases:    form.clases_incluidas,
-      renovacion:       form.renovacion,
+      nombre:                  form.nombre,
+      codigo_interno:          form.codigo_interno || null,
+      bio:                     form.bio || null,
+      serie_id:                form.serie_id || null,
+      vigencia_dias:           form.vigencia_dias,
+      duracion:                form.vigencia_dias,
+      clases_incluidas:        form.clases_incluidas,
+      numero_clases:           form.clases_incluidas,
+      renovacion:              form.renovacion,
+      acceso_total:            form.acceso_total,            // ← faltaba
+      acceso_sucursal_hermana: form.acceso_sucursal_hermana, // ← faltaba
       estatus,
     }
 
@@ -183,9 +214,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
         form.categorias_ids.map(cid => ({ paquete_id: paqueteId, categoria_id: cid }))
       )
     }
-    console.log('precios state:', precios)
-    console.log('precios activos:', precios.filter(p => p.activo && p.precio_app))
-
     // Precios — borrar y reinsertar
     await supabase.from('paquete_precios').delete().eq('paquete_id', paqueteId)
     const preciosActivos = precios.filter(p => p.activo && p.precio_app)
@@ -265,7 +293,11 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
       )}
 
       {/* Overlay */}
-      <div onClick={handleClose} className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" />
+      <div 
+        onClick={handleClose} 
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+        style={{ width: 'calc(100% - 560px)' }}
+      />
 
       {/* Drawer */}
       <div className="fixed top-0 right-0 z-50 h-full bg-white shadow-2xl flex flex-col" style={{ width: '560px' }}>
@@ -373,7 +405,9 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess }: P
               Siguiente →
             </button>
           ) : (
-            <button onClick={() => handleGuardar('Activo')} disabled={loading || !form.nombre}
+            <button onClick={() => {
+                handleGuardar('Activo')
+              }} disabled={loading || !form.nombre}
               className="px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition"
               style={{ backgroundColor: '#171B24' }}>
               {loading ? 'Guardando...' : paquete ? 'Guardar cambios' : 'Crear paquete'}

@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useSucursal } from '@/context/SucursalContext'
 import Link from 'next/link'
 import { Plus, ChevronLeft, ChevronRight, Calendar, List, Clock, Users, MapPin } from 'lucide-react'
-import ModalCrearClase from '@/components/ModalCrearClase'
+import ModalCrearClase from '@/components/DrawerCrearClase'
 
 interface Clase {
   id: string; nombre_clase: string; instructor: string; horario: string
