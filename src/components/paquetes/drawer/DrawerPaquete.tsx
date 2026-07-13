@@ -32,8 +32,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
   const [toast,      setToast]      = useState(false)
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [series,     setSeries]     = useState<any[]>([])
-  const [verticales, setVerticales] = useState<any[]>(verticalesProp)
-  const [categorias, setCategorias] = useState<any[]>([])
   const [roomsSelected, setRoomsSelected] = useState<string[]>([])
 
   const [form, setForm] = useState({
@@ -41,8 +39,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     codigo_interno:           '',
     bio:                      '',
     serie_id:                 '',
-    verticales_ids:           [] as string[],
-    categorias_ids:           [] as string[],
     acceso_total:             false,
     acceso_sucursal_hermana:  false,
     vigencia_dias:            30,
@@ -61,15 +57,10 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   const fetchCatalogos = async () => {
-    const [{ data: sers }, { data: verts }, { data: cats }] = await Promise.all([
+    const [{ data: sers }] = await Promise.all([
       supabase.from('series_paquetes').select('*').order('nombre'),
-      supabase.from('verticales').select('*').order('nombre'),
-      supabase.from('categorias_clase').select('*').order('nombre'),
     ])
     if (sers)  setSeries(sers)
-    if (verts && verts.length > 0) setVerticales(verts)
-    else if (verticalesProp.length > 0) setVerticales(verticalesProp)
-    if (cats)  setCategorias(cats)
   }
 
   const inicializadoRef = useRef<string | null>(null)
@@ -87,16 +78,13 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     
     const init = async () => {
       setActiveTab('info')
-      const [{ data: sucs }, { data: sers }, { data: verts }, { data: cats }] = await Promise.all([
+      const [{ data: sucs }, { data: sers }] = await Promise.all([
         supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa').order('nombre'),
         supabase.from('series_paquetes').select('*').order('nombre'),
-        supabase.from('verticales').select('*').order('nombre'),
-        supabase.from('categorias_clase').select('*').order('nombre'),
       ])
       if (sucs)  setSucursales(sucs)
       if (sers)  setSeries(sers)
-      if (verts) setVerticales(verts)
-      if (cats)  setCategorias(cats)
+      
 
       if (paquete) {
         // Edición — cargar datos del paquete
@@ -105,8 +93,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           codigo_interno:          paquete.codigo_interno || '',
           bio:                     paquete.bio || '',
           serie_id:                paquete.serie_id || '',
-          verticales_ids:          paquete.paquete_verticales?.map((pv: any) => pv.vertical_id) || [],
-          categorias_ids:          paquete.paquete_categorias?.map((pc: any) => pc.categoria_id) || [],
           acceso_total:            paquete.acceso_total || false,
           acceso_sucursal_hermana: paquete.acceso_sucursal_hermana || false,
           vigencia_dias:           paquete.duracion || 30,
@@ -138,7 +124,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
         // Creación — resetear todo
         setForm({
           nombre: '', codigo_interno: '', bio: '', serie_id: '',
-          verticales_ids: [], categorias_ids: [],
           acceso_total: false, acceso_sucursal_hermana: false,
           vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
         })
@@ -199,21 +184,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
 
     if (!paqueteId) { setLoading(false); return }
 
-    // Verticales — borrar y reinsertar
-    await supabase.from('paquete_verticales').delete().eq('paquete_id', paqueteId)
-    if (form.verticales_ids.length > 0) {
-      await supabase.from('paquete_verticales').insert(
-        form.verticales_ids.map(vid => ({ paquete_id: paqueteId, vertical_id: vid }))
-      )
-    }
-
-    // Categorías — borrar y reinsertar
-    await supabase.from('paquete_categorias').delete().eq('paquete_id', paqueteId)
-    if (form.categorias_ids.length > 0) {
-      await supabase.from('paquete_categorias').insert(
-        form.categorias_ids.map(cid => ({ paquete_id: paqueteId, categoria_id: cid }))
-      )
-    }
     // Precios — borrar y reinsertar
     await supabase.from('paquete_precios').delete().eq('paquete_id', paqueteId)
     const preciosActivos = precios.filter(p => p.activo && p.precio_app)
@@ -258,7 +228,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
   const handleClose = () => {
     setForm({
       nombre: '', codigo_interno: '', bio: '', serie_id: '',
-      verticales_ids: [], categorias_ids: [],
       acceso_total: false, acceso_sucursal_hermana: false,
       vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
     })
@@ -359,8 +328,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
               form={form}
               set={set}
               series={series}
-              verticales={verticales}
-              categorias={categorias}
               onRefreshCatalogos={fetchCatalogos}
             />
           )}

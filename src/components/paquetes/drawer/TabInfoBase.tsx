@@ -7,8 +7,6 @@ interface Props {
   form:       any
   set:        (k: string, v: any) => void
   series:     { id: string; nombre: string; color: string }[]
-  verticales: { id: string; nombre: string; color: string }[]
-  categorias: { id: string; nombre: string; vertical_id: string }[]
   onRefreshCatalogos: () => void
 }
 
@@ -22,7 +20,7 @@ function hexSoftBg(hex: string) {
   return `rgba(${r},${g},${b},0.12)`
 }
 
-export default function TabInfoBase({ form, set, series, verticales, categorias, onRefreshCatalogos }: Props) {
+export default function TabInfoBase({ form, set, series, onRefreshCatalogos }: Props) {
   const [nuevaSerie,     setNuevaSerie]     = useState('')
   const [nuevaVertical,  setNuevaVertical]  = useState('')
   const [nuevaCategoria, setNuevaCategoria] = useState('')
@@ -39,19 +37,6 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
     { label: '365 días', value: 365 },
   ]
 
-  // Categorías filtradas por verticales seleccionadas
-  const categoriasFiltradas = form.verticales_ids?.length > 0
-    ? categorias.filter(c => form.verticales_ids.includes(c.vertical_id))
-    : categorias
-
-  const toggleVertical = (id: string) => {
-    const curr = form.verticales_ids || []
-    const next = curr.includes(id) ? curr.filter((x: string) => x !== id) : [...curr, id]
-    set('verticales_ids', next)
-    const cats = form.categorias_ids || []
-    const validCats = categorias.filter(c => next.includes(c.vertical_id)).map(c => c.id)
-    set('categorias_ids', cats.filter((id: string) => validCats.includes(id)))
-  }
 
   const toggleCategoria = (id: string) => {
     const curr = form.categorias_ids || []
@@ -163,102 +148,6 @@ export default function TabInfoBase({ form, set, series, verticales, categorias,
           }}
         />
       </div>
-
-      <div className="border-t border-gray-100" />
-
-      {/* Verticales */}
-      <div className="space-y-2">
-        <p className="text-sm font-bold text-gray-800">
-          A qué da acceso este paquete* <span className="text-xs text-gray-400 font-normal">(define que configuración aplica)</span>
-        </p>
-        <p className="text-xs text-gray-400">Define las verticales y categorías de clase incluidas.</p>
-
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-2">Verticales</p>
-        <div className="flex flex-wrap gap-2">
-          {verticales.map(v => (
-            <button key={v.id} onClick={() => {
-    toggleVertical(v.id)
-  }}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold border transition"
-              style={(form.verticales_ids || []).includes(v.id)
-                ? { backgroundColor: v.color, color: '#fff', borderColor: v.color }
-                : { backgroundColor: hexSoftBg(v.color), color: v.color, borderColor: 'transparent' }
-              }>
-              {(form.verticales_ids || []).includes(v.id) && '✓ '}{v.nombre}
-            </button>
-          ))}
-          {/* Opción especial All acceso */}
-          <button onClick={() => set('acceso_total', !form.acceso_total)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-              form.acceso_total ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400'
-            }`}>
-            {form.acceso_total && '✓ '}All acceso
-          </button>
-          <button onClick={() => set('acceso_sucursal_hermana', !form.acceso_sucursal_hermana)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-              form.acceso_sucursal_hermana ? 'bg-gray-900 text-white border-gray-900' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400'
-            }`}>
-            {form.acceso_sucursal_hermana && '✓ '}Acceso a sucursal hermana
-          </button>
-          {addingVertical ? (
-            <div className="flex items-center gap-1">
-              <input autoFocus value={nuevaVertical} onChange={e => setNuevaVertical(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAgregarVertical(); if (e.key === 'Escape') setAddingVertical(false) }}
-                placeholder="Nueva vertical" className="border border-gray-200 rounded-xl px-3 py-1 text-xs outline-none focus:border-gray-400 w-28" />
-              <button onClick={handleAgregarVertical} className="text-xs font-bold text-emerald-500 hover:text-emerald-700">✓</button>
-              <button onClick={() => setAddingVertical(false)} className="text-xs text-gray-400 hover:text-gray-600"><X size={12}/></button>
-            </div>
-          ) : (
-            <button onClick={() => setAddingVertical(true)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition flex items-center gap-1">
-              <Plus size={11}/> Nueva vertical
-            </button>
-          )}
-        </div>
-
-        {/* Categorías filtradas */}
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-3">Categorías incluidas</p>
-        <div className="flex flex-wrap gap-2">
-          {/* Opción Todas */}
-          <button onClick={() => set('categorias_ids', categoriasFiltradas.map(c => c.id))}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-              form.categorias_ids?.length === categoriasFiltradas.length && categoriasFiltradas.length > 0
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-400'
-            }`}>
-            Todas
-          </button>
-          {categoriasFiltradas.map(c => {
-            const v = verticales.find(v => v.id === c.vertical_id)
-            return (
-              <button key={c.id} onClick={() => toggleCategoria(c.id)}
-                className="px-3 py-1.5 rounded-full text-xs font-semibold border transition"
-                style={(form.categorias_ids || []).includes(c.id)
-                  ? { backgroundColor: v?.color || '#171B24', color: '#fff', borderColor: v?.color || '#171B24' }
-                  : { backgroundColor: hexSoftBg(v?.color || '#6b7280'), color: v?.color || '#6b7280', borderColor: 'transparent' }
-                }>
-                {(form.categorias_ids || []).includes(c.id) && '✓ '}{c.nombre}
-              </button>
-            )
-          })}
-          {addingCat ? (
-            <div className="flex items-center gap-1">
-              <input autoFocus value={nuevaCategoria} onChange={e => setNuevaCategoria(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleAgregarCategoria(); if (e.key === 'Escape') setAddingCat(false) }}
-                placeholder="Nueva categoría" className="border border-gray-200 rounded-xl px-3 py-1 text-xs outline-none focus:border-gray-400 w-32" />
-              <button onClick={handleAgregarCategoria} className="text-xs font-bold text-emerald-500 hover:text-emerald-700">✓</button>
-              <button onClick={() => setAddingCat(false)} className="text-xs text-gray-400 hover:text-gray-600"><X size={12}/></button>
-            </div>
-          ) : (
-            <button onClick={() => setAddingCat(true)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-gray-300 text-gray-400 hover:border-gray-400 hover:text-gray-600 transition flex items-center gap-1">
-              <Plus size={11}/> Nueva categoría
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="border-t border-gray-100" />
 
       {/* Vigencia + Clases + Renovación */}
       <div className="grid grid-cols-3 gap-3">

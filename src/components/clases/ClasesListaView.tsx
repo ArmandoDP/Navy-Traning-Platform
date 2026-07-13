@@ -6,19 +6,19 @@ import ClasesFilters      from './ClasesFilters'
 import { useState } from 'react'
 
 interface Clase {
-  id:           string
-  nombre_clase: string
-  tipo_clase:   string
-  tipo_display: string
-  color:        string
-  horario:      string
-  capacidad_max: number
-  salon:        string
-  estado:       string
-  duracion_minutos: number
-  staff?:       { nombre: string; primer_apellido: string }
-  reservas?:    any[]
-  categorias_clase?: { nombre: string; color: string } // ← nuevo
+  id:              string
+  nombre_clase:    string
+  tipo_clase:      string
+  tipo_display:    string
+  color:           string
+  horario:         string
+  capacidad_max:   number
+  salon:           string
+  estado:          string
+  duracion_minutos:number
+  staff?:          { nombre: string; primer_apellido: string }
+  reservas?:       any[]
+  rooms?:          { nombre: string; capacidad: number }
 }
 
 interface Props {
@@ -121,7 +121,7 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
             <th className="px-5 py-3">Clase / Room</th>
             <th className="px-5 py-3">Coach</th>
             <th className="px-5 py-3">Tipo</th>
-            <th className="px-5 py-3">Categoría</th>
+            <th className="px-5 py-3">Room</th>
             <th className="px-5 py-3">Capacidad</th>
             <th className="px-5 py-3">Duración</th>
             <th className="px-5 py-3">Estado</th>
@@ -170,9 +170,12 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
                   <TipoBadge tipo={tipo} color={color} />
                 </td>
 
-                {/* Categoría */}
+                {/* Room */}
                 <td className="px-5 py-3.5">
-                  <CategoriaBadge categoria={c.categorias_clase} />
+                  {c.rooms
+                    ? <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-lg">{c.rooms.nombre}</span>
+                    : <span className="text-xs text-gray-300">—</span>
+                  }
                 </td>
                 
                 {/* Capacidad */}
