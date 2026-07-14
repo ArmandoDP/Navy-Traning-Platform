@@ -35,7 +35,20 @@ export async function POST(req: NextRequest) {
 
       // ── Pago exitoso ──────────────────────────────────────────────────────
       case 'payment_intent.succeeded': {
-        const pi      = event.data.object
+        const pi = event.data.object
+
+        // Si viene de un checkout session (Founding Member), no duplicar
+        if (pi.metadata?.plan_type === 'founding_member') break
+
+        // Verificar si ya existe este payment_intent
+        const { data: existe } = await supabase
+          .from('pagos')
+          .select('id')
+          .eq('stripe_payment_intent_id', pi.id)
+          .single()
+
+        if (existe) break // ya existe, no duplicar
+
         const cliente = await findCliente(pi.customer)
         await supabase.from('pagos').insert({
           stripe_payment_intent_id: pi.id,
@@ -43,7 +56,7 @@ export async function POST(req: NextRequest) {
           cliente_stripe_id:        pi.customer || null,
           monto:                    pi.amount / 100,
           moneda:                   pi.currency.toUpperCase(),
-          estatus:                  'Exitoso',
+          estatus:                  'Completado',
           metodo_pago:              pi.payment_method_types?.[0] || 'card',
           concepto:                 pi.description || 'Pago con tarjeta',
           fecha_pago:               new Date(pi.created * 1000).toISOString(),
@@ -83,19 +96,9 @@ export async function POST(req: NextRequest) {
       case 'customer.subscription.created': {
         const sub     = event.data.object
         const cliente = await findCliente(sub.customer)
-        await supabase.from('pagos').insert({
-          stripe_subscription_id: sub.id,
-          stripe_customer_id:     sub.customer,
-          cliente_id:             cliente?.id || null,
-          monto:                  sub.items.data[0]?.price?.unit_amount / 100 || 0,
-          moneda:                 sub.currency?.toUpperCase() || 'MXN',
-          estatus:                'Exitoso',
-          concepto:               'Nueva suscripción',
-          metodo_pago:            'Tarjeta',
-          fecha_pago:             new Date(sub.created * 1000).toISOString(),
-          metadata:               { stripe_subscription_id: sub.id },
-        })
-        // Actualizar estatus del cliente a Activo
+
+        // NO insertar pago — checkout.session.completed ya lo maneja
+        // Solo actualizar estatus del cliente
         if (cliente) {
           await supabase.from('clientes')
             .update({ estatus: 'Activo' })
@@ -269,40 +272,31 @@ export async function POST(req: NextRequest) {
 
       // ── Checkout completado (Founding Member desde Webflow) ────────────────
       case 'checkout.session.completed': {
-        const session = event.data.object
+        const session = event.data.object  // ← primero session
 
         if (session.metadata?.plan_type === 'founding_member') {
-          const customer = await stripe.customers.retrieve(session.customer as string)
+          const customer      = await stripe.customers.retrieve(session.customer as string)
+          const paqueteNombre = session.metadata?.paquete_nombre || 'Founding Promo'  // ← después
 
-          // Buscar el paquete Founding Promo activo
-          const { data: paquete, error: paqueteError } = await supabase
+          const { data: paquete } = await supabase
             .from('paquetes')
             .select('id, nombre, vigencia_dias, precio')
-            .eq('nombre', 'Founding Promo')
+            .eq('nombre', paqueteNombre)
             .eq('estatus', 'Activo')
             .single()
 
-          if (paqueteError) {
-            console.error('Error buscando paquete Founding Promo:', JSON.stringify(paqueteError))
-          }
-
-          // Buscar la sucursal correspondiente (metadata.sucursal viene en minúsculas, ej. "condesa")
-          const { data: sucursal, error: sucursalError } = await supabase
+          const { data: sucursal } = await supabase
             .from('sucursales')
             .select('id')
             .ilike('nombre', session.metadata.sucursal)
             .single()
 
-          if (sucursalError) {
-            console.error('Error buscando sucursal:', JSON.stringify(sucursalError))
-          }
-
-          const hoy = new Date()
+          const hoy      = new Date()
           const fechaFin = paquete?.vigencia_dias
             ? new Date(hoy.getTime() + paquete.vigencia_dias * 24 * 60 * 60 * 1000)
             : null
 
-          // upsert por email: si ya existe el cliente lo actualiza, si no, lo crea
+          // 1. Crear/actualizar cliente
           const { data: cliente, error: clienteError } = await supabase
             .from('clientes')
             .upsert({
@@ -325,47 +319,59 @@ export async function POST(req: NextRequest) {
             .single()
 
           if (clienteError) {
-            console.error('Error en upsert de cliente founding member:', JSON.stringify(clienteError))
-          } else {
-            console.log('Cliente founding member guardado:', JSON.stringify(cliente))
+            console.error('Error en upsert de cliente:', JSON.stringify(clienteError))
           }
 
-          // Registrar la membresía (igual que si se diera de alta manualmente)
+          // 2. Crear membresía
           if (cliente?.id && paquete?.id) {
-            const { error: membresiaError } = await supabase.from('membresias').insert({
-              cliente_id:     cliente.id,
-              paquete_id:     paquete.id,
-              fecha_inicio:   hoy.toISOString().split('T')[0],
-              fecha_fin:      fechaFin?.toISOString().split('T')[0] || null,
-              origen:         'Webflow',
-              estatus:        'Activa',
-              precio_pagado:  (session.amount_total || 0) / 100,
-              notas:          'Alta automática — Founding Member (Webflow)',
+            await supabase.from('membresias').insert({
+              cliente_id:    cliente.id,
+              paquete_id:    paquete.id,
+              fecha_inicio:  hoy.toISOString().split('T')[0],
+              fecha_fin:     fechaFin?.toISOString().split('T')[0] || null,
+              origen:        'Webflow',
+              estatus:       'Activa',
+              precio_pagado: (session.amount_total || 0) / 100,
+              notas:         'Alta automática — Founding Member (Webflow)',
             })
-
-            if (membresiaError) {
-              console.error('Error insertando membresía founding member:', JSON.stringify(membresiaError))
-            }
           }
 
-          const { error: pagoError } = await supabase.from('pagos').insert({
+          // 3. Registrar pago
+          await supabase.from('pagos').insert({
             stripe_subscription_id: session.subscription,
             stripe_customer_id:     session.customer,
             cliente_id:             cliente?.id || null,
             monto:                  (session.amount_total || 0) / 100,
             moneda:                 session.currency?.toUpperCase() || 'MXN',
-            estatus:                'Exitoso',
+            estatus:                'Completado',
             metodo_pago:            'Tarjeta',
-            concepto:               'Founding Member — inscripción',
+            concepto:               `${paquete?.nombre || 'Founding Member'} — inscripción`,
             fecha_pago:             new Date().toISOString(),
             metadata:               session.metadata || {},
           })
 
-          if (pagoError) {
-            console.error('Error insertando pago founding member:', JSON.stringify(pagoError))
+          // 4. Enviar email — al final cuando ya existe cliente ←
+          if (cliente?.id && (customer as any).email) {
+            try {
+              await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/email/confirmacion-orden`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email:    (customer as any).email,
+                  nombre:   (customer as any).name?.split(' ')[0] || 'Miembro',
+                  paquete:  paquete?.nombre || 'Founding Promo',
+                  monto:    (session.amount_total || 0) / 100,
+                  sucursal: session.metadata?.sucursal || 'Navy Training Center',
+                  fecha:    new Date().toISOString(),
+                }),
+              })
+            } catch (emailErr) {
+              console.error('Error enviando email:', emailErr)
+            }
           }
+
         } else {
-          console.log('checkout.session.completed sin plan_type founding_member, metadata:', JSON.stringify(session.metadata))
+          console.log('checkout.session.completed sin plan_type founding_member:', JSON.stringify(session.metadata))
         }
         break
       }

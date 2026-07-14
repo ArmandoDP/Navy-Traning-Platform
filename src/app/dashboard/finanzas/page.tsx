@@ -1,88 +1,78 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import FinanzasResumen  from '@/components/finanzas/FinanzasResumen'
-import FinanzasIngresos from '@/components/finanzas/FinanzasIngresos'
-import FinanzasPagos    from '@/components/finanzas/FinanzasPagos'
-import FinanzasNomina   from '@/components/finanzas/FinanzasNomina'
+import { useState } from 'react'
+import { Download, Calendar } from 'lucide-react'
+import FinanzasResumen       from '@/components/finanzas/FinanzasResumen'
+import FinanzasIngresos      from '@/components/finanzas/FinanzasIngresos'
+import FinanzasTransacciones from '@/components/finanzas/FinanzasTransacciones'
+import FinanzasPagosFallidos from '@/components/finanzas/FinanzasPagosFallidos'
+import FinanzasNomina        from '@/components/finanzas/FinanzasNomina'
+
+type Tab = 'resumen' | 'ingresos' | 'transacciones' | 'fallidos' | 'nomina'
+
+const TABS: { key: Tab; label: string; icon: string }[] = [
+  { key: 'resumen',        label: 'Resumen',          icon: '▦' },
+  { key: 'ingresos',       label: 'Ingresos · Detalle', icon: '↗' },
+  { key: 'transacciones',  label: 'Transacciones',    icon: '▤' },
+  { key: 'fallidos',       label: 'Pagos fallidos',   icon: '⚠' },
+  { key: 'nomina',         label: 'Nómina coaches',   icon: '▤' },
+]
+
+const MESES = [
+  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'
+]
 
 export default function FinanzasPage() {
-  const [pagos,        setPagos]        = useState<any[]>([])
-  const [pagosCoaches, setPagosCoaches] = useState<any[]>([])
-  const [costos,       setCostos]       = useState<any[]>([])
-  const [loading,      setLoading]      = useState(true)
+  const [tab,   setTab]   = useState<Tab>('resumen')
+  const [mes,   setMes]   = useState(new Date().getMonth())
+  const [anio,  setAnio]  = useState(new Date().getFullYear())
 
-  const fetchData = async () => {
-    setLoading(true)
-
-    const [{ data: pgs }, { data: pcs }, { data: cos }] = await Promise.all([
-      supabase.from('pagos').select('*, clientes(nombre_completo, plan)').order('fecha_pago', { ascending: false }),
-      supabase.from('pagos_coaches').select('*, coaches(nombre_completo, especialidad)').order('fecha_pago', { ascending: false }),
-      supabase.from('costos').select('*').order('fecha', { ascending: false }),
-    ])
-
-    if (pgs)  setPagos(pgs)
-    if (pcs)  setPagosCoaches(pcs)
-    if (cos)  setCostos(cos)
-    setLoading(false)
-  }
-
-  useEffect(() => { fetchData() }, [])
-
-  // ── Métricas del mes actual ────────────────────────────────────────────────
-  const ahora          = new Date()
-  const inicioMes      = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString()
-  const inicioAnterior = new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1).toISOString()
-  const finAnterior    = new Date(ahora.getFullYear(), ahora.getMonth(), 0).toISOString()
-
-  const ingresosMes      = pagos.filter(p => p.fecha_pago >= inicioMes && p.estatus !== 'Fallido').reduce((a, p) => a + Number(p.monto), 0)
-  const ingresosMesAnt   = pagos.filter(p => p.fecha_pago >= inicioAnterior && p.fecha_pago <= finAnterior && p.estatus !== 'Fallido').reduce((a, p) => a + Number(p.monto), 0)
-
-  const costosMes        = [
-    ...costos.filter(c => c.fecha >= inicioMes),
-    ...pagosCoaches.filter(p => p.fecha_pago >= inicioMes)
-  ].reduce((a, c) => a + Number(c.monto), 0)
-
-  const costosMesAnt     = [
-    ...costos.filter(c => c.fecha >= inicioAnterior && c.fecha <= finAnterior),
-    ...pagosCoaches.filter(p => p.fecha_pago >= inicioAnterior && p.fecha_pago <= finAnterior)
-  ].reduce((a, c) => a + Number(c.monto), 0)
-
-  const margen = ingresosMes > 0 ? Math.round(((ingresosMes - costosMes) / ingresosMes) * 100) : 0
-
-  if (loading) return <div className="p-10 text-zinc-500 italic">Cargando finanzas Navy...</div>
+  const fechaInicio = new Date(anio, mes, 1).toISOString().split('T')[0]
+  const fechaFin    = new Date(anio, mes + 1, 0).toISOString().split('T')[0]
 
   return (
-    <div className="p-6 space-y-5 bg-zinc-50 min-h-screen">
+    <div className="space-y-5">
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-black text-zinc-900">Finanzas</h1>
-        <p className="text-zinc-400 text-sm mt-0.5">Resumen financiero del negocio</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900">Finanzas</h1>
+          <p className="text-gray-400 text-sm mt-0.5">Gestión de membresías y precios</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Selector mes */}
+          <div className="flex items-center gap-2 border border-gray-200 bg-white rounded-xl px-3 py-2">
+            <Calendar size={14} className="text-gray-400" />
+            <select className="text-sm font-medium text-gray-700 outline-none bg-transparent"
+              value={mes} onChange={e => setMes(Number(e.target.value))}>
+              {MESES.map((m, i) => <option key={i} value={i}>{m} {anio}</option>)}
+            </select>
+          </div>
+          <button className="flex items-center gap-2 bg-gray-900 text-white font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-800 transition">
+            <Download size={15} /> Exportar
+          </button>
+        </div>
       </div>
 
-      {/* Resumen */}
-      <FinanzasResumen
-        ingresos={ingresosMes}
-        costos={costosMes}
-        margen={margen}
-        ingresosMesAnterior={ingresosMesAnt}
-        costosMesAnterior={costosMesAnt}
-      />
+      {/* Tabs */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-1 flex gap-1 shadow-sm">
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition ${
+              tab === t.key ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'
+            }`}>
+            <span>{t.icon}</span>
+            <span className="hidden md:inline">{t.label}</span>
+          </button>
+        ))}
+      </div>
 
-      {/* Ingresos */}
-      <FinanzasIngresos pagos={pagos} />
-
-      {/* Transacciones */}
-      <FinanzasPagos pagos={pagos} />
-
-      {/* Nómina y costos */}
-      <FinanzasNomina
-        pagosCoaches={pagosCoaches}
-        costos={costos}
-        onRefresh={fetchData}
-      />
-
+      {/* Contenido */}
+      {tab === 'resumen'       && <FinanzasResumen       fechaInicio={fechaInicio} fechaFin={fechaFin} />}
+      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} />}
+      {tab === 'transacciones' && <FinanzasTransacciones fechaInicio={fechaInicio} fechaFin={fechaFin} />}
+      {tab === 'fallidos'      && <FinanzasPagosFallidos fechaInicio={fechaInicio} fechaFin={fechaFin} />}
+      {tab === 'nomina'        && <FinanzasNomina        fechaInicio={fechaInicio} fechaFin={fechaFin} />}
     </div>
   )
 }

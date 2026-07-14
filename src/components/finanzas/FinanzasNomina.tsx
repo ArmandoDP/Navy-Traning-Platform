@@ -1,268 +1,268 @@
 'use client'
-import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { Plus, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { supabase }            from '@/lib/supabase'
+import { ChevronRight, X }     from 'lucide-react'
 
-interface PagoCoach {
-  id: string
-  monto: number
-  concepto: string
-  fecha_pago: string
-  coaches: { nombre_completo: string; especialidad: string }
+interface Props { fechaInicio: string; fechaFin: string }
+
+const NIVEL_TARIFA: Record<string, number> = {
+  Marine: 300, Seal: 420, Elite: 600, Junior: 200, 'Semi-senior': 350, Senior: 500, Lead: 400,
 }
 
-interface Costo {
-  id: string
-  concepto: string
-  monto: number
-  categoria: string
-  fecha: string
+const NIVEL_COLORS: Record<string, string> = {
+  Marine: '#06b6d4', Seal: '#3b82f6', Elite: '#f59e0b',
+  Junior: '#9ca3af', 'Semi-senior': '#3b82f6', Senior: '#22c55e', Lead: '#9ca3af',
 }
 
-interface Props {
-  pagosCoaches: PagoCoach[]
-  costos: Costo[]
-  onRefresh: () => void
+const TIPO_COLORS: Record<string, string> = {
+  Coach: '#6366f1', Front: '#22c55e', Manager: '#f59e0b',
+  Limpieza: '#9ca3af', Regional: '#ec4899', Mantto: '#f97316',
 }
 
-export default function FinanzasNomina({ pagosCoaches, costos, onRefresh }: Props) {
-  const [tab, setTab] = useState<'coaches' | 'costos'>('coaches')
-  const [modalPago,  setModalPago]  = useState(false)
-  const [modalCosto, setModalCosto] = useState(false)
-  const [loading, setLoading] = useState(false)
+export default function FinanzasNomina({ fechaInicio, fechaFin }: Props) {
+  const [loading,     setLoading]     = useState(true)
+  const [staff,       setStaff]       = useState<any[]>([])
+  const [nomina,      setNomina]      = useState<any[]>([])
+  const [empleadoAct, setEmpleadoAct] = useState<any | null>(null)
+  const [filtros,     setFiltros]     = useState({ sucursal: '', tipo: '', nivel: '' })
+  const [sucursales,  setSucursales]  = useState<any[]>([])
 
-  const [formPago,  setFormPago]  = useState({ coach_id: '', monto: '', concepto: '', fecha_pago: '' })
-  const [formCosto, setFormCosto] = useState({ concepto: '', monto: '', categoria: 'Operativo', fecha: '' })
-  const [coaches,   setCoaches]   = useState<any[]>([])
+  useEffect(() => {
+    const fetch = async () => {
+      setLoading(true)
+      const [{ data: s }, { data: n }, { data: sucs }] = await Promise.all([
+        supabase.from('staff')
+          .select('*, staff_sucursales(sucursales(id, nombre, color))')
+          .eq('estatus', 'Activo')
+          .order('nombre'),
+        supabase.from('nomina_empleados')
+          .select('*')
+          .gte('created_at', fechaInicio)
+          .lte('created_at', fechaFin + 'T23:59:59'),
+        supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
+      ])
 
-  const totalCoaches = pagosCoaches.reduce((a, p) => a + Number(p.monto), 0)
-  const totalCostos  = costos.reduce((a, c) => a + Number(c.monto), 0)
+      if (s) setStaff(s)
+      if (sucs) setSucursales(sucs)
 
-  const loadCoaches = async () => {
-    const { data } = await supabase.from('coaches').select('id, nombre_completo').eq('estatus', 'Activo')
-    if (data) setCoaches(data)
-  }
+      // Si no hay nómina para este período, usar datos base del staff
+      if (!n || n.length === 0) {
+        setNomina([]) // Vacío — el cálculo se hace con staffConNomina
+      } else {
+        setNomina(n)
+      }
 
-  const handlePagoCoach = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true)
-    const { error } = await supabase.from('pagos_coaches').insert([{
-      coach_id:  formPago.coach_id,
-      monto:     Number(formPago.monto),
-      concepto:  formPago.concepto,
-      fecha_pago: formPago.fecha_pago || new Date().toISOString(),
-    }])
-    if (error) alert('Error: ' + error.message)
-    else { onRefresh(); setModalPago(false); setFormPago({ coach_id: '', monto: '', concepto: '', fecha_pago: '' }) }
-    setLoading(false)
-  }
+      setLoading(false)
+    }
+    fetch()
+  }, [fechaInicio, fechaFin])
 
-  const handleCosto = async (e: React.FormEvent) => {
-    e.preventDefault(); setLoading(true)
-    const { error } = await supabase.from('costos').insert([{
-      concepto:  formCosto.concepto,
-      monto:     Number(formCosto.monto),
-      categoria: formCosto.categoria,
-      fecha:     formCosto.fecha || new Date().toISOString(),
-    }])
-    if (error) alert('Error: ' + error.message)
-    else { onRefresh(); setModalCosto(false); setFormCosto({ concepto: '', monto: '', categoria: 'Operativo', fecha: '' }) }
-    setLoading(false)
-  }
+  // Cálculo automático por staff
+  const staffConNomina = staff.map(emp => {
+    const nominaEmp = nomina.find(n => n.staff_id === emp.id)
+    const tarifa    = NIVEL_TARIFA[emp.nivel] || emp.tarifa_hora || 0
+    const horas     = nominaEmp?.horas             || 0
+    const clases    = nominaEmp?.clases_impartidas || 0
+    const bono      = nominaEmp?.bono              || 0
+    const ajuste    = nominaEmp?.ajuste            || 0
+    const pagoBase  = emp.tipo === 'Coach'
+      ? clases * tarifa
+      : emp.sueldo_fijo || (horas * (emp.tarifa_hora || 0))
+    const total = pagoBase + bono + ajuste
+
+    return { ...emp, horas, clases, bono, ajuste, pagoBase, total, nominaEmp }
+  })
+
+  const filtrados = staffConNomina.filter(e =>
+    (!filtros.tipo   || e.tipo === filtros.tipo) &&
+    (!filtros.nivel  || e.nivel === filtros.nivel) &&
+    (!filtros.sucursal || e.staff_sucursales?.some((ss: any) => ss.sucursales?.id === filtros.sucursal))
+  )
+
+  const totalCoaches   = filtrados.filter(e => e.tipo === 'Coach').length
+  const pagoBaseTotal  = filtrados.reduce((a, e) => a + e.pagoBase, 0)
+  const bonosTotal     = filtrados.reduce((a, e) => a + e.bono, 0)
+  const totalAPagar    = filtrados.reduce((a, e) => a + e.total, 0)
+
+  const selectCls = "border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none bg-white focus:border-gray-400 appearance-none cursor-pointer"
+
+  if (loading) return <div className="p-10 text-center text-gray-400 italic text-sm">Cargando...</div>
 
   return (
-    <>
-      <div className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="relative space-y-5">
 
-        {/* Header */}
-        <div className="p-5 border-b border-zinc-100">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-zinc-900">Nómina y Costos</h3>
-            <div className="flex gap-2">
-              <button onClick={() => { setModalPago(true); loadCoaches() }}
-                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl text-xs font-bold transition">
-                <Plus size={12} /> Pago coach
+      {/* Drawer detalle empleado */}
+      {empleadoAct && (
+        <>
+          <div onClick={() => setEmpleadoAct(null)} className="fixed inset-0 z-40 bg-black/20" />
+          <div className="fixed top-0 right-0 z-50 h-full w-96 bg-white shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <div>
+                <p className="text-sm font-black text-gray-900">{empleadoAct.nombre} {empleadoAct.primer_apellido}</p>
+                <p className="text-xs text-gray-400">{empleadoAct.tipo} · {empleadoAct.nivel || 'Sin nivel'}</p>
+              </div>
+              <button onClick={() => setEmpleadoAct(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
+                <X size={16}/>
               </button>
-              <button onClick={() => setModalCosto(true)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold transition">
-                <Plus size={12} /> Costo
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {[
+                { label: 'Pago base',     val: `$${empleadoAct.pagoBase.toLocaleString()}` },
+                { label: 'Bono',          val: empleadoAct.bono > 0 ? `+$${empleadoAct.bono.toLocaleString()}` : '—' },
+                { label: 'Ajuste',        val: empleadoAct.ajuste !== 0 ? `${empleadoAct.ajuste > 0 ? '+' : ''}$${empleadoAct.ajuste.toLocaleString()}` : '—' },
+                { label: 'Clases',        val: empleadoAct.clases || '—' },
+                { label: 'Horas',         val: empleadoAct.horas ? `${empleadoAct.horas}h` : '—' },
+                { label: 'Total período', val: `$${empleadoAct.total.toLocaleString()}`, bold: true },
+              ].map(r => (
+                <div key={r.label} className="flex items-center justify-between border-b border-gray-50 pb-3">
+                  <span className="text-sm text-gray-500">{r.label}</span>
+                  <span className={`text-sm ${r.bold ? 'font-black text-gray-900' : 'font-medium text-gray-700'}`}>{r.val}</span>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button className="w-full py-3 rounded-xl text-sm font-bold text-white transition"
+                style={{ backgroundColor: '#171B24' }}>
+                Aprobar nómina
               </button>
             </div>
           </div>
-          <div className="flex gap-4 text-xs text-zinc-500 mb-3">
-            <span>Coaches: <strong className="text-zinc-900">${totalCoaches.toLocaleString()}</strong></span>
-            <span>Operativos: <strong className="text-zinc-900">${totalCostos.toLocaleString()}</strong></span>
-            <span>Total: <strong className="text-red-500">${(totalCoaches + totalCostos).toLocaleString()}</strong></span>
-          </div>
-          <div className="flex gap-2">
-            {(['coaches', 'costos'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`px-3 py-1 rounded-full text-xs font-bold border transition capitalize ${
-                  tab === t ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-500 hover:border-zinc-400'
-                }`}>
-                {t === 'coaches' ? 'Pagos Coaches' : 'Costos Operativos'}
-              </button>
-            ))}
-          </div>
-        </div>
+        </>
+      )}
 
-        {/* Tabla coaches */}
-        {tab === 'coaches' && (
-          <table className="w-full text-left">
-            <thead className="bg-zinc-50 text-zinc-400 text-xs font-bold uppercase">
-              <tr>
-                <th className="px-4 py-3">Coach</th>
-                <th className="px-4 py-3">Especialidad</th>
-                <th className="px-4 py-3">Concepto</th>
-                <th className="px-4 py-3">Monto</th>
-                <th className="px-4 py-3">Fecha</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {pagosCoaches.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-zinc-400 italic text-sm">Sin pagos registrados</td></tr>
-              ) : pagosCoaches.map(p => (
-                <tr key={p.id} className="hover:bg-zinc-50 transition">
-                  <td className="px-4 py-3 text-sm font-medium text-zinc-900">{p.coaches?.nombre_completo || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-zinc-500">{p.coaches?.especialidad || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-zinc-500">{p.concepto || '—'}</td>
-                  <td className="px-4 py-3 text-sm font-black text-red-500">${Number(p.monto).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm text-zinc-400">
-                    {new Date(p.fecha_pago).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        {/* Tabla costos */}
-        {tab === 'costos' && (
-          <table className="w-full text-left">
-            <thead className="bg-zinc-50 text-zinc-400 text-xs font-bold uppercase">
-              <tr>
-                <th className="px-4 py-3">Concepto</th>
-                <th className="px-4 py-3">Categoría</th>
-                <th className="px-4 py-3">Monto</th>
-                <th className="px-4 py-3">Fecha</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-50">
-              {costos.length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-zinc-400 italic text-sm">Sin costos registrados</td></tr>
-              ) : costos.map(c => (
-                <tr key={c.id} className="hover:bg-zinc-50 transition">
-                  <td className="px-4 py-3 text-sm font-medium text-zinc-900">{c.concepto}</td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded-full text-xs font-bold">{c.categoria}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-black text-red-500">${Number(c.monto).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-sm text-zinc-400">
-                    {new Date(c.fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* Métricas */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: 'Coaches activos',    val: totalCoaches,                          sub: `${filtrados.reduce((a, e) => a + e.clases, 0)} clases impartidas`, color: 'text-gray-900' },
+          { label: 'Pago base clases',   val: `$${(pagoBaseTotal/1000).toFixed(1)}k`, sub: 'Tarifa por nivel y clases', color: 'text-gray-900' },
+          { label: 'Bonos y ajustes',    val: `$${(bonosTotal/1000).toFixed(1)}k`,    sub: 'Asistencia + manual', color: 'text-emerald-600' },
+          { label: 'Total a pagar',      val: `$${(totalAPagar).toLocaleString()}`,   sub: `${new Date(fechaFin).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}`, color: 'text-gray-900' },
+        ].map(m => (
+          <div key={m.label} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+            <p className="text-xs text-gray-400 font-medium">{m.label}</p>
+            <p className={`text-2xl font-black mt-1 ${m.color}`}>{m.val}</p>
+            <p className="text-xs text-gray-400 mt-1">{m.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Modal pago coach */}
-      {modalPago && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
-            <div className="flex justify-between items-center p-5 border-b border-zinc-100">
-              <h3 className="font-black text-zinc-900">Registrar Pago Coach</h3>
-              <button onClick={() => setModalPago(false)}><X size={18} className="text-zinc-400" /></button>
-            </div>
-            <form onSubmit={handlePagoCoach} className="p-5 space-y-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase">Coach</label>
-                <select required className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none appearance-none"
-                  value={formPago.coach_id} onChange={e => setFormPago(p => ({ ...p, coach_id: e.target.value }))}>
-                  <option value="">— Selecciona —</option>
-                  {coaches.map(c => <option key={c.id} value={c.id}>{c.nombre_completo}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase">Monto</label>
-                  <input required type="number" min={0} placeholder="0"
-                    className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none focus:border-indigo-400"
-                    value={formPago.monto} onChange={e => setFormPago(p => ({ ...p, monto: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase">Fecha</label>
-                  <input type="date" className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none focus:border-indigo-400"
-                    value={formPago.fecha_pago} onChange={e => setFormPago(p => ({ ...p, fecha_pago: e.target.value }))} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase">Concepto</label>
-                <input placeholder="Ej: Quincena Marzo"
-                  className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none focus:border-indigo-400"
-                  value={formPago.concepto} onChange={e => setFormPago(p => ({ ...p, concepto: e.target.value }))} />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModalPago(false)}
-                  className="flex-1 border border-zinc-200 text-zinc-500 py-2.5 rounded-xl text-sm font-bold hover:bg-zinc-50">Cancelar</button>
-                <button type="submit" disabled={loading}
-                  className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl text-sm font-black hover:bg-indigo-700 disabled:opacity-50">
-                  {loading ? 'Guardando...' : 'Registrar'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Info banner */}
+      <div className="bg-white border border-gray-200 rounded-2xl px-5 py-4 shadow-sm">
+        <p className="text-sm font-black text-gray-900">Nómina calculada automáticamente:</p>
+        <p className="text-xs text-gray-500 mt-1">
+          Tarifa por nivel × clases impartidas + bono de asistencia + ajustes manuales. Click en cualquier coach para revisar y editar.
+        </p>
+      </div>
 
-      {/* Modal costo */}
-      {modalCosto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
-            <div className="flex justify-between items-center p-5 border-b border-zinc-100">
-              <h3 className="font-black text-zinc-900">Registrar Costo</h3>
-              <button onClick={() => setModalCosto(false)}><X size={18} className="text-zinc-400" /></button>
-            </div>
-            <form onSubmit={handleCosto} className="p-5 space-y-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase">Concepto</label>
-                <input required placeholder="Ej: Renta local Juriquilla"
-                  className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none focus:border-indigo-400"
-                  value={formCosto.concepto} onChange={e => setFormCosto(p => ({ ...p, concepto: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase">Monto</label>
-                  <input required type="number" min={0} placeholder="0"
-                    className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none focus:border-indigo-400"
-                    value={formCosto.monto} onChange={e => setFormCosto(p => ({ ...p, monto: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase">Categoría</label>
-                  <select className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none appearance-none"
-                    value={formCosto.categoria} onChange={e => setFormCosto(p => ({ ...p, categoria: e.target.value }))}>
-                    {['Operativo','Nómina','Marketing','Mantenimiento','Otros'].map(cat =>
-                      <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase">Fecha</label>
-                <input type="date" className="w-full border border-zinc-200 rounded-xl p-3 text-sm outline-none focus:border-indigo-400"
-                  value={formCosto.fecha} onChange={e => setFormCosto(p => ({ ...p, fecha: e.target.value }))} />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setModalCosto(false)}
-                  className="flex-1 border border-zinc-200 text-zinc-500 py-2.5 rounded-xl text-sm font-bold hover:bg-zinc-50">Cancelar</button>
-                <button type="submit" disabled={loading}
-                  className="flex-1 bg-zinc-900 text-white py-2.5 rounded-xl text-sm font-black hover:bg-zinc-800 disabled:opacity-50">
-                  {loading ? 'Guardando...' : 'Registrar'}
-                </button>
-              </div>
-            </form>
+      {/* Tabla */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <p className="text-sm font-black text-gray-900">
+            {filtrados.length} Miembros del Staff
+            <span className="text-gray-400 font-normal text-xs ml-2">({selected?.length || 0} seleccionados)</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <select className={selectCls} value={filtros.sucursal}
+              onChange={e => setFiltros(p => ({ ...p, sucursal: e.target.value }))}>
+              <option value="">Sucursal</option>
+              {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+            </select>
+            <select className={selectCls} value={filtros.tipo}
+              onChange={e => setFiltros(p => ({ ...p, tipo: e.target.value }))}>
+              <option value="">Tipo de empleado</option>
+              {['Coach','Front','Manager','Limpieza','Regional','Mantto'].map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <select className={selectCls} value={filtros.nivel}
+              onChange={e => setFiltros(p => ({ ...p, nivel: e.target.value }))}>
+              <option value="">Nivel</option>
+              {['Marine','Seal','Elite','Junior','Semi-senior','Senior','Lead'].map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            {(filtros.sucursal || filtros.tipo || filtros.nivel) && (
+              <button onClick={() => setFiltros({ sucursal: '', tipo: '', nivel: '' })}
+                className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1">
+                <X size={12}/> Limpiar
+              </button>
+            )}
           </div>
         </div>
-      )}
-    </>
+
+        <table className="w-full text-left">
+          <thead className="text-xs font-bold text-gray-400 uppercase border-b border-gray-100">
+            <tr>
+              <th className="px-5 py-3">Empleado</th>
+              <th className="px-5 py-3">Tipo</th>
+              <th className="px-5 py-3">Sucursales</th>
+              <th className="px-5 py-3">Nivel</th>
+              <th className="px-5 py-3">Clases</th>
+              <th className="px-5 py-3">Bono</th>
+              <th className="px-5 py-3">Ajuste</th>
+              <th className="px-5 py-3">Horas</th>
+              <th className="px-5 py-3">Nómina</th>
+              <th className="px-5 py-3 w-8"/>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {filtrados.map(emp => (
+              <tr key={emp.id} onClick={() => setEmpleadoAct(emp)}
+                className="hover:bg-gray-50 transition cursor-pointer">
+                <td className="px-5 py-3.5">
+                  <p className="text-sm font-medium text-gray-900">{emp.nombre} {emp.primer_apellido}</p>
+                </td>
+                <td className="px-5 py-3.5">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-lg"
+                    style={{ backgroundColor: `${TIPO_COLORS[emp.tipo] || '#9ca3af'}20`, color: TIPO_COLORS[emp.tipo] || '#9ca3af' }}>
+                    {emp.tipo}
+                  </span>
+                </td>
+                <td className="px-5 py-3.5">
+                  <div className="flex flex-wrap gap-1">
+                    {emp.staff_sucursales?.slice(0, 2).map((ss: any, i: number) => (
+                      <span key={i} className="text-[11px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ backgroundColor: `${ss.sucursales?.color || '#6b7280'}20`, color: ss.sucursales?.color || '#6b7280' }}>
+                        {ss.sucursales?.nombre}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-5 py-3.5">
+                  {emp.nivel ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: NIVEL_COLORS[emp.nivel] || '#9ca3af' }} />
+                      <span className="text-xs font-semibold text-gray-700">{emp.nivel}</span>
+                    </div>
+                  ) : <span className="text-gray-300 text-xs">—</span>}
+                </td>
+                <td className="px-5 py-3.5 text-sm text-gray-700">{emp.clases || '—'}</td>
+                <td className="px-5 py-3.5 text-sm font-medium text-emerald-600">
+                  {emp.bono > 0 ? `+$${emp.bono.toLocaleString()}` : '—'}
+                </td>
+                <td className="px-5 py-3.5 text-sm font-medium">
+                  <span className={emp.ajuste < 0 ? 'text-red-500' : emp.ajuste > 0 ? 'text-emerald-600' : 'text-gray-300'}>
+                    {emp.ajuste !== 0 ? `${emp.ajuste > 0 ? '+' : ''}$${emp.ajuste.toLocaleString()}` : '—'}
+                  </span>
+                </td>
+                <td className="px-5 py-3.5">
+                  {emp.horas > 0 ? (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">{emp.horas}h</p>
+                      <p className="text-[11px] text-emerald-500 font-bold">✓ Al día</p>
+                    </div>
+                  ) : <span className="text-gray-300 text-xs">—</span>}
+                </td>
+                <td className="px-5 py-3.5">
+                  <p className="text-sm font-black text-gray-900">${emp.total.toLocaleString()}</p>
+                  <p className="text-[11px] text-gray-400">
+                    ${NIVEL_TARIFA[emp.nivel] || emp.tarifa_hora || 0}/clase
+                  </p>
+                </td>
+                <td className="px-5 py-3.5">
+                  <ChevronRight size={16} className="text-gray-300" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }

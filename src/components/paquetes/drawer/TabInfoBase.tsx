@@ -55,7 +55,7 @@ export default function TabInfoBase({ form, set, series, onRefreshCatalogos }: P
   const handleAgregarVertical = async () => {
     if (!nuevaVertical.trim()) return
     const COLORS = ['#6366f1','#f59e0b','#22c55e','#3b82f6','#ec4899','#8b5cf6']
-    const color  = COLORS[verticales.length % COLORS.length]
+    const color  = COLORS[Math.floor(Math.random() * COLORS.length)]
     await supabase.from('verticales').insert({ nombre: nuevaVertical.trim(), color })
     setNuevaVertical(''); setAddingVertical(false)
     onRefreshCatalogos()
