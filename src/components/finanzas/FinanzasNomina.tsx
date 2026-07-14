@@ -159,7 +159,7 @@ export default function FinanzasNomina({ fechaInicio, fechaFin }: Props) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <p className="text-sm font-black text-gray-900">
             {filtrados.length} Miembros del Staff
-            <span className="text-gray-400 font-normal text-xs ml-2">({selected?.length || 0} seleccionados)</span>
+            <span className="text-gray-400 font-normal text-xs ml-2">(0 seleccionados)</span>
           </p>
           <div className="flex items-center gap-2">
             <select className={selectCls} value={filtros.sucursal}
