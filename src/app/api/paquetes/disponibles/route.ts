@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('paquetes')
-    .select('*, paquete_precios(precio_app, activo, sucursal_id), paquete_rooms(rooms(nombre))')
+    .select('*, codigo_interno, paquete_precios(precio_app, activo, sucursal_id), paquete_rooms(rooms(nombre))')
     .eq('estatus', 'Activo')
     .eq('paquete_precios.sucursal_id', sucursalId)
     .eq('paquete_precios.activo', true)
