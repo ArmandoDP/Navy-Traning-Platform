@@ -22,9 +22,10 @@ export async function GET(req: NextRequest) {
     clases_incluidas: p.clases_incluidas,
     vigencia_dias:    p.vigencia_dias,
     renovacion:       p.renovacion,
+    codigo_interno:   p.codigo_interno, // ← agrega esto
     precio:           p.paquete_precios[0]?.precio_app || 0,
     rooms:            p.paquete_rooms?.map((pr: any) => pr.rooms?.nombre).filter(Boolean) || [],
-  }))
+    }))
 
   return NextResponse.json({ paquetes })
 }
