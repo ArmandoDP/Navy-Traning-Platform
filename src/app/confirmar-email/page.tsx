@@ -1,10 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase'
 
 export default function ConfirmarEmailPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
-  const supabase = createClientComponentClient()
 
   useEffect(() => {
     const handleConfirm = async () => {
