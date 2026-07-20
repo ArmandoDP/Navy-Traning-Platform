@@ -1,30 +1,51 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function ConfirmarEmailPage() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    // Supabase manda el token en el hash — procesarlo del lado del cliente
-    const hash = window.location.hash
-    if (hash.includes('access_token') || hash.includes('type=signup')) {
-      setStatus('success')
-    } else if (hash.includes('error')) {
-      setStatus('error')
-    } else {
-      // Si no hay hash, igual mostrar success porque ya confirmó
-      setStatus('success')
+    const handleConfirm = async () => {
+      const hash = window.location.hash
+      
+      // Extraer token del hash
+      const params = new URLSearchParams(hash.replace('#', ''))
+      const accessToken  = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      const type         = params.get('type')
+
+      if (accessToken && type === 'signup') {
+        // Setear la sesión para confirmar el email
+        const { error } = await supabase.auth.setSession({
+          access_token:  accessToken,
+          refresh_token: refreshToken || '',
+        })
+        if (error) {
+          setStatus('error')
+        } else {
+          setStatus('success')
+        }
+      } else if (hash.includes('error')) {
+        setStatus('error')
+      } else {
+        // Sin hash — igual mostrar success
+        setStatus('success')
+      }
     }
+
+    handleConfirm()
   }, [])
 
   if (status === 'loading') return (
     <div style={{ minHeight: '100vh', backgroundColor: '#171B24', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <p style={{ color: '#fff' }}>Verificando...</p>
+      <p style={{ color: '#fff', fontFamily: 'sans-serif' }}>Confirmando tu correo...</p>
     </div>
   )
 
   if (status === 'error') return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#171B24', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#171B24', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'sans-serif' }}>
       <div style={{ textAlign: 'center' }}>
         <p style={{ color: '#ef4444', fontSize: '24px', fontWeight: 900 }}>Link inválido</p>
         <p style={{ color: '#9ca3af' }}>El link expiró o ya fue usado.</p>
