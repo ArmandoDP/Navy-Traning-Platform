@@ -1,16 +1,36 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useSearchParams }     from 'next/navigation'
 
 export default function ConfirmarEmailPage() {
-  const searchParams = useSearchParams()
-  const [email, setEmail] = useState('')
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
 
   useEffect(() => {
-    // Supabase manda el token en la URL, solo mostramos la página de éxito
-    const emailParam = searchParams.get('email') || ''
-    setEmail(emailParam)
+    // Supabase manda el token en el hash — procesarlo del lado del cliente
+    const hash = window.location.hash
+    if (hash.includes('access_token') || hash.includes('type=signup')) {
+      setStatus('success')
+    } else if (hash.includes('error')) {
+      setStatus('error')
+    } else {
+      // Si no hay hash, igual mostrar success porque ya confirmó
+      setStatus('success')
+    }
   }, [])
+
+  if (status === 'loading') return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#171B24', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: '#fff' }}>Verificando...</p>
+    </div>
+  )
+
+  if (status === 'error') return (
+    <div style={{ minHeight: '100vh', backgroundColor: '#171B24', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div style={{ textAlign: 'center' }}>
+        <p style={{ color: '#ef4444', fontSize: '24px', fontWeight: 900 }}>Link inválido</p>
+        <p style={{ color: '#9ca3af' }}>El link expiró o ya fue usado.</p>
+      </div>
+    </div>
+  )
 
   return (
     <div style={{
@@ -30,28 +50,24 @@ export default function ConfirmarEmailPage() {
         width: '100%',
         textAlign: 'center',
       }}>
-        {/* Logo */}
-        <p style={{ color: '#fff', fontSize: '32px', fontWeight: 900, letterSpacing: '-1px', marginBottom: '4px' }}>NAVY</p>
-        <p style={{ color: '#6b7280', fontSize: '11px', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '40px' }}>Training Center</p>
+        <p style={{ color: '#fff', fontSize: '32px', fontWeight: 900, letterSpacing: '-1px', margin: '0 0 4px' }}>NAVY</p>
+        <p style={{ color: '#6b7280', fontSize: '11px', letterSpacing: '4px', textTransform: 'uppercase', margin: '0 0 40px' }}>Training Center</p>
 
-        {/* Check */}
         <div style={{
           width: '72px', height: '72px', borderRadius: '50%',
-          backgroundColor: '#22c55e', display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
+          backgroundColor: '#22c55e',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
           margin: '0 auto 24px',
-        }}>
-          <span style={{ color: '#fff', fontSize: '36px' }}>✓</span>
-        </div>
+          fontSize: '36px',
+        }}>✓</div>
 
-        <h1 style={{ color: '#fff', fontSize: '26px', fontWeight: 900, marginBottom: '12px' }}>
+        <h1 style={{ color: '#fff', fontSize: '26px', fontWeight: 900, margin: '0 0 12px' }}>
           ¡Email confirmado!
         </h1>
-        <p style={{ color: '#9ca3af', fontSize: '15px', lineHeight: '24px', marginBottom: '40px' }}>
+        <p style={{ color: '#9ca3af', fontSize: '15px', lineHeight: '24px', margin: '0 0 40px' }}>
           Tu cuenta está activa. Abre la app de Navy Training Center e inicia sesión con tu correo y contraseña.
         </p>
 
-        {/* Botón abrir app */}
         <a href="navyapp://"
           style={{
             display: 'block',
@@ -67,7 +83,7 @@ export default function ConfirmarEmailPage() {
           Abrir Navy App →
         </a>
 
-        <p style={{ color: '#6b7280', fontSize: '12px' }}>
+        <p style={{ color: '#6b7280', fontSize: '12px', margin: 0 }}>
           ¿No tienes la app? Descárgala en App Store o Google Play
         </p>
       </div>
