@@ -7,31 +7,35 @@ export default function ConfirmarEmailPage() {
 
   useEffect(() => {
     const handleConfirm = async () => {
-      const hash = window.location.hash
-      
-      // Extraer token del hash
+      const hash   = window.location.hash
       const params = new URLSearchParams(hash.replace('#', ''))
+      const type         = params.get('type')
       const accessToken  = params.get('access_token')
       const refreshToken = params.get('refresh_token')
-      const type         = params.get('type')
 
+      // Si es recovery — redirigir a la app
+      if (type === 'recovery') {
+        window.location.href = `navyapp://auth/nueva-password${hash}`
+        return
+      }
+
+      // Si es signup — confirmar email
       if (accessToken && type === 'signup') {
-        // Setear la sesión para confirmar el email
         const { error } = await supabase.auth.setSession({
           access_token:  accessToken,
           refresh_token: refreshToken || '',
         })
-        if (error) {
-          setStatus('error')
-        } else {
-          setStatus('success')
-        }
-      } else if (hash.includes('error')) {
-        setStatus('error')
-      } else {
-        // Sin hash — igual mostrar success
+        if (error) { setStatus('error'); return }
         setStatus('success')
+        return
       }
+
+      if (hash.includes('error')) {
+        setStatus('error')
+        return
+      }
+
+      setStatus('success')
     }
 
     handleConfirm()
