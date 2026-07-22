@@ -87,14 +87,26 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   useEffect(() => {
     if (!isOpen) return
     setTipoRegistro('nuevo')
-    Promise.all([
-      supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre'),
-      supabase.from('paquetes').select('id, nombre, vigencia_dias').eq('estatus', 'Activo').order('nombre'),
-    ]).then(([{ data: sucs }, { data: pqs }]) => {
-      if (sucs) setSucursales(sucs)
-      if (pqs)  setPaquetes(pqs)
-    })
+    supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre')
+      .then(({ data: sucs }) => { if (sucs) setSucursales(sucs) })
   }, [isOpen])
+
+  useEffect(() => {
+    if (!form.sucursal_id) { setPaquetes([]); return }
+
+    supabase
+      .from('paquetes')
+      .select('id, nombre, vigencia_dias, paquete_precios!inner(sucursal_id)')
+      .eq('estatus', 'Activo')
+      .eq('paquete_precios.sucursal_id', form.sucursal_id)
+      .order('nombre')
+      .then(({ data: pqs }) => {
+        if (pqs) setPaquetes(pqs)
+      })
+
+  // Resetear paquete seleccionado cuando cambia sucursal
+  setForm(p => ({ ...p, paquete_id: '', fecha_fin_membresia: '' }))
+}, [form.sucursal_id])
 
   // Auto-calcular fecha_fin cuando cambia paquete o fecha_inicio
   useEffect(() => {
@@ -318,9 +330,17 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
           <SectionTitle icon={<CreditCard size={13}/>}>Membresía</SectionTitle>
 
           <Field label="Paquete">
-            <select className={selectCls} value={form.paquete_id} onChange={e => set('paquete_id', e.target.value)}>
-              <option value="">Seleccionar paquete</option>
-              {paquetes.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            <select
+              className={selectCls}
+              value={form.paquete_id}
+              onChange={e => set('paquete_id', e.target.value)}
+              disabled={!form.sucursal_id}>
+              <option value="">
+                {!form.sucursal_id ? 'Primero selecciona una sucursal' : 'Seleccionar paquete'}
+              </option>
+              {paquetes.map(p => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
             </select>
           </Field>
 
