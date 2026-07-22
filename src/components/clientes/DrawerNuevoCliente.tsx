@@ -14,7 +14,7 @@ interface Sucursal { id: string; nombre: string }
 interface Paquete  { id: string; nombre: string; vigencia_dias?: number }
 
 const SEXOS      = ['Masculino', 'Femenino', 'Prefiero no decir']
-const FORMAS_PAGO = ['Efectivo', 'Tarjeta', 'Transferencia', 'OXXO']
+const FORMAS_PAGO = ['Efectivo', 'Tarjeta', 'Transferencia', 'OXXO', 'Terminal']
 
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 bg-gray-50 transition placeholder:text-gray-400"
 const selectCls = `${inputCls} appearance-none cursor-pointer`
