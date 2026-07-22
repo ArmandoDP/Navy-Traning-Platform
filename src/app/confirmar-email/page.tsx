@@ -70,8 +70,7 @@ export default function ConfirmarEmailPage() {
         width: '100%',
         textAlign: 'center',
       }}>
-        <p style={{ color: '#fff', fontSize: '32px', fontWeight: 900, letterSpacing: '-1px', margin: '0 0 4px' }}>NAVY</p>
-        <p style={{ color: '#6b7280', fontSize: '11px', letterSpacing: '4px', textTransform: 'uppercase', margin: '0 0 40px' }}>Training Center</p>
+        <img src="/logo-navy.svg" alt="Navy Training Center" style={{ width: '140px', marginBottom: '40px' }} />
 
         <div style={{
           width: '72px', height: '72px', borderRadius: '50%',
