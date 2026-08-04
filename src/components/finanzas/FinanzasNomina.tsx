@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase }            from '@/lib/supabase'
 import { ChevronRight, X }     from 'lucide-react'
 
-interface Props { fechaInicio: string; fechaFin: string }
+interface Props { fechaInicio: string; fechaFin: string, sucursalId: string | null }
 
 const NIVEL_TARIFA: Record<string, number> = {
   Marine: 300, Seal: 420, Elite: 600, Junior: 200, 'Semi-senior': 350, Senior: 500, Lead: 400,
@@ -19,7 +19,7 @@ const TIPO_COLORS: Record<string, string> = {
   Limpieza: '#9ca3af', Regional: '#ec4899', Mantto: '#f97316',
 }
 
-export default function FinanzasNomina({ fechaInicio, fechaFin }: Props) {
+export default function FinanzasNomina({ fechaInicio, fechaFin, sucursalId }: Props) {
   const [loading,     setLoading]     = useState(true)
   const [staff,       setStaff]       = useState<any[]>([])
   const [nomina,      setNomina]      = useState<any[]>([])
@@ -29,33 +29,36 @@ export default function FinanzasNomina({ fechaInicio, fechaFin }: Props) {
 
   useEffect(() => {
     const fetch = async () => {
-      setLoading(true)
-      const [{ data: s }, { data: n }, { data: sucs }] = await Promise.all([
-        supabase.from('staff')
-          .select('*, staff_sucursales(sucursales(id, nombre, color))')
-          .eq('estatus', 'Activo')
-          .order('nombre'),
-        supabase.from('nomina_empleados')
-          .select('*')
-          .gte('created_at', fechaInicio)
-          .lte('created_at', fechaFin + 'T23:59:59'),
-        supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
-      ])
+    setLoading(true)
 
-      if (s) setStaff(s)
-      if (sucs) setSucursales(sucs)
+    const [{ data: s }, { data: n }, { data: sucs }] = await Promise.all([
+      supabase.from('staff')
+        .select('*, staff_sucursales(sucursales(id, nombre, color))')
+        .eq('estatus', 'Activo')
+        .order('nombre'),  // ← sin filtro de sucursal aquí
+      supabase.from('nomina_empleados')
+        .select('*')
+        .gte('created_at', fechaInicio)
+        .lte('created_at', fechaFin + 'T23:59:59'),
+      supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
+    ])
 
-      // Si no hay nómina para este período, usar datos base del staff
-      if (!n || n.length === 0) {
-        setNomina([]) // Vacío — el cálculo se hace con staffConNomina
-      } else {
-        setNomina(n)
-      }
-
-      setLoading(false)
+    if (s) {
+      const staffFiltrado = sucursalId
+        ? s.filter(st =>
+            st.staff_sucursales?.some((ss: any) => ss.sucursales?.id === sucursalId)
+          )
+        : s
+      setStaff(staffFiltrado)
     }
+    if (sucs) setSucursales(sucs)
+    if (!n || n.length === 0) setNomina([])
+    else setNomina(n)
+
+    setLoading(false)
+  }
     fetch()
-  }, [fechaInicio, fechaFin])
+  }, [fechaInicio, fechaFin, sucursalId])
 
   // Cálculo automático por staff
   const staffConNomina = staff.map(emp => {

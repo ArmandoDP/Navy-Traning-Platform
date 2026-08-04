@@ -4,12 +4,12 @@ import { supabase }            from '@/lib/supabase'
 import { TrendingUp, TrendingDown, AlertTriangle, Receipt } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
-interface Props { fechaInicio: string; fechaFin: string }
+interface Props { fechaInicio: string; fechaFin: string, sucursalId:  string | null }
 
 const COLORS_INGRESOS = ['#171B24','#6366f1','#9ca3af','#22c55e']
 const COLORS_COSTOS   = ['#171B24','#6366f1','#9ca3af','#f59e0b']
 
-export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
+export default function FinanzasResumen({ fechaInicio, fechaFin, sucursalId }: Props) {
   const [loading,     setLoading]     = useState(true)
   const [ingresos,    setIngresos]    = useState(0)
   const [fallidos,    setFallidos]    = useState(0)
@@ -23,12 +23,16 @@ export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
     const fetch = async () => {
       setLoading(true)
 
-      // Pagos del período
-      const { data: pagos } = await supabase
+      // Query de pagos con filtro de sucursal
+      let qPagos = supabase
         .from('pagos')
         .select('monto, estatus, canal, concepto, metodo_pago')
         .gte('fecha_pago', fechaInicio)
         .lte('fecha_pago', fechaFin + 'T23:59:59')
+        .eq('estatus', 'Completado')
+      if (sucursalId) qPagos = qPagos.eq('sucursal_id', sucursalId)
+
+      const { data: pagos } = await qPagos
 
       if (pagos) {
         const exitosos = pagos.filter(p => p.estatus === 'Completado' || p.estatus === 'Exitoso')
@@ -40,22 +44,25 @@ export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
         setTxExitosas(exitosos.length)
         setTicketProm(exitosos.length > 0 ? Math.round(total / exitosos.length) : 0)
 
+        // Mes anterior
         const fechaInicioAnt = new Date(fechaInicio)
         fechaInicioAnt.setMonth(fechaInicioAnt.getMonth() - 1)
         const fechaFinAnt = new Date(fechaFin)
         fechaFinAnt.setMonth(fechaFinAnt.getMonth() - 1)
 
-        const { data: pagosAnt } = await supabase
+        let qPagosAnt = supabase
           .from('pagos')
           .select('monto, estatus')
           .gte('fecha_pago', fechaInicioAnt.toISOString().split('T')[0])
           .lte('fecha_pago', fechaFinAnt.toISOString().split('T')[0] + 'T23:59:59')
+        if (sucursalId) qPagosAnt = qPagosAnt.eq('sucursal_id', sucursalId)
 
+        const { data: pagosAnt } = await qPagosAnt
         if (pagosAnt) {
           const exitososAnt = pagosAnt.filter(p => p.estatus === 'Completado' || p.estatus === 'Exitoso')
           setIngresosAnt(exitososAnt.reduce((a, p) => a + (p.monto || 0), 0))
         }
-        
+
         // Donut por canal
         const canales: Record<string, number> = {}
         exitosos.forEach(p => {
@@ -65,10 +72,8 @@ export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
         setDonutData(Object.entries(canales).map(([name, value]) => ({ name, value })))
       }
 
-      setLoading(false)
-
-      // Dentro del fetch, después de los pagos:
-      const { data: txData } = await supabase
+      // Últimas transacciones con filtro de sucursal
+      let qTx = supabase
         .from('pagos')
         .select('id, monto, estatus, fecha_pago, concepto, sucursal_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
         .gte('fecha_pago', fechaInicio)
@@ -77,13 +82,17 @@ export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
         .not('cliente_id', 'is', null)
         .order('fecha_pago', { ascending: false })
         .limit(10)
+      if (sucursalId) qTx = qTx.eq('sucursal_id', sucursalId)
 
+      const { data: txData } = await qTx
       if (txData) setUltTx(txData)
+
+      setLoading(false)
     }
     fetch()
-  }, [fechaInicio, fechaFin])
+  }, [fechaInicio, fechaFin, sucursalId]) // ← agrega sucursalId
 
-  const costos    = Math.round(ingresos * 0.56)
+  const costos    = Math.round(ingresos * 0.56)  // 56% de los ingresos
   const margen    = ingresos > 0 ? Math.round(((ingresos - costos) / ingresos) * 100) : 0
   const utilidad  = ingresos - costos
 

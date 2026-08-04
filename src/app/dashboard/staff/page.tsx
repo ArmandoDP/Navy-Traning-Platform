@@ -28,18 +28,19 @@ const bonos = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
     
   const fetchStaff = async () => {
     setLoading(true)
-    let q = supabase
+    const { data, error } = await supabase
       .from('staff')
       .select('*, staff_sucursales(sucursales(id, nombre, color))')
       .order('created_at', { ascending: false })
 
-    if (sucursalId) {
-      // filtrar por sucursal via join
-      q = q.eq('staff_sucursales.sucursal_id', sucursalId)
+    if (!error && data) {
+      const filtrado = sucursalId
+        ? data.filter(st =>
+            st.staff_sucursales?.some((ss: any) => ss.sucursales?.id === sucursalId)
+          )
+        : data
+      setStaff(filtrado)
     }
-
-    const { data, error } = await q
-    if (!error && data) setStaff(data)
     setLoading(false)
   }
 

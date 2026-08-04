@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react'
 import { supabase }            from '@/lib/supabase'
 import { X, ChevronRight, ChevronLeft } from 'lucide-react'
 
-interface Props { fechaInicio: string; fechaFin: string }
+interface Props { fechaInicio: string; fechaFin: string, sucursalId: string | null }
 
 const selectCls = "border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none bg-white focus:border-gray-400 appearance-none cursor-pointer"
 
-export default function FinanzasTransacciones({ fechaInicio, fechaFin }: Props) {
+export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalId }: Props) {
   const [loading,    setLoading]    = useState(true)
   const [pagos,      setPagos]      = useState<any[]>([])
   const [sucursales, setSucursales] = useState<any[]>([])
@@ -19,21 +19,25 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin }: Props) 
   useEffect(() => {
     const fetch = async () => {
       setLoading(true)
+
+      let qPagos = supabase.from('pagos')
+        .select('id, monto, estatus, fecha_pago, canal, concepto, metodo_pago, sucursal_id, stripe_payment_intent_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
+        .gte('fecha_pago', fechaInicio)
+        .lte('fecha_pago', fechaFin + 'T23:59:59')
+        .not('cliente_id', 'is', null)
+        .order('fecha_pago', { ascending: false })
+      if (sucursalId) qPagos = qPagos.eq('sucursal_id', sucursalId)
+
       const [{ data: pagosData }, { data: sucsData }] = await Promise.all([
-        supabase.from('pagos')
-            .select('id, monto, estatus, fecha_pago, canal, concepto, metodo_pago, sucursal_id, stripe_payment_intent_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
-            .gte('fecha_pago', fechaInicio)
-            .lte('fecha_pago', fechaFin + 'T23:59:59')
-            .not('cliente_id', 'is', null)
-            .order('fecha_pago', { ascending: false }),
+        qPagos,
         supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
-        ])
-        if (pagosData) setPagos(pagosData)
-        if (sucsData)  setSucursales(sucsData)
+      ])
+      if (pagosData) setPagos(pagosData)
+      if (sucsData)  setSucursales(sucsData)
       setLoading(false)
     }
     fetch()
-  }, [fechaInicio, fechaFin])
+  }, [fechaInicio, fechaFin, sucursalId])
 
   const filtrados = pagos.filter(p =>
     (!filtros.sucursal || p.sucursal_id === filtros.sucursal) &&

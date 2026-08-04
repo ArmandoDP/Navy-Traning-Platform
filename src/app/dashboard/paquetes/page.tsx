@@ -33,7 +33,14 @@ export default function PaquetesPage() {
       `)
       .order('created_at', { ascending: false })
 
-    if (data) setPaquetes(data)
+    if (data) {
+      const filtrado = sucursalId
+        ? data.filter(p =>
+            p.paquete_precios?.some((pp: any) => pp.sucursal_id === sucursalId)
+          )
+        : data
+      setPaquetes(filtrado)
+    }
     setLoading(false)
   }
 

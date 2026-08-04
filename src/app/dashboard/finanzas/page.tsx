@@ -5,7 +5,8 @@ import FinanzasResumen       from '@/components/finanzas/FinanzasResumen'
 import FinanzasIngresos      from '@/components/finanzas/FinanzasIngresos'
 import FinanzasTransacciones from '@/components/finanzas/FinanzasTransacciones'
 import FinanzasPagosFallidos from '@/components/finanzas/FinanzasPagosFallidos'
-import FinanzasNomina        from '@/components/finanzas/FinanzasNomina'
+import FinanzasNomina from '@/components/finanzas/FinanzasNomina'
+import { useSucursal } from '@/context/SucursalContext'
 
 type Tab = 'resumen' | 'ingresos' | 'transacciones' | 'fallidos' | 'nomina'
 
@@ -29,6 +30,7 @@ export default function FinanzasPage() {
 
   const fechaInicio = new Date(anio, mes, 1).toISOString().split('T')[0]
   const fechaFin    = new Date(anio, mes + 1, 0).toISOString().split('T')[0]
+  const { sucursalId } = useSucursal()
 
   return (
     <div className="space-y-5">
@@ -68,11 +70,11 @@ export default function FinanzasPage() {
       </div>
 
       {/* Contenido */}
-      {tab === 'resumen'       && <FinanzasResumen       fechaInicio={fechaInicio} fechaFin={fechaFin} />}
-      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} />}
-      {tab === 'transacciones' && <FinanzasTransacciones fechaInicio={fechaInicio} fechaFin={fechaFin} />}
-      {tab === 'fallidos'      && <FinanzasPagosFallidos fechaInicio={fechaInicio} fechaFin={fechaFin} />}
-      {tab === 'nomina'        && <FinanzasNomina        fechaInicio={fechaInicio} fechaFin={fechaFin} />}
+      {tab === 'resumen'       && <FinanzasResumen       fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
+      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
+      {tab === 'transacciones' && <FinanzasTransacciones fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
+      {tab === 'fallidos'      && <FinanzasPagosFallidos fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
+      {tab === 'nomina'        && <FinanzasNomina        fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
     </div>
   )
 }

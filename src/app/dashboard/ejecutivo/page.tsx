@@ -8,6 +8,7 @@ import DashboardAlertas        from '@/components/dashboard/DashboardAlertas'
 import DashboardGrafica        from '@/components/dashboard/DashboardGrafica'
 import DashboardSucursales     from '@/components/dashboard/DashboardSucursales'
 import DashboardActividad      from '@/components/dashboard/DashboardActividad'
+import { useSucursal } from '@/context/SucursalContext'
 
 const PERIODOS = [
   { label: 'Hoy',        dias: 1   },
@@ -26,7 +27,8 @@ export default function DashboardEjecutivo() {
     ocupacion: 0, retencion: 0, nominaTotal: 0
   })
   const [metricsAnt,   setMetricsAnt]   = useState({ ingresos: 0, clientesActivos: 0 })
-  const [loading,      setLoading]      = useState(true)
+  const [loading, setLoading] = useState(true)
+  const { sucursalId } = useSucursal()
 
   const fechaInicio = () => {
     const d = new Date()
@@ -51,9 +53,16 @@ export default function DashboardEjecutivo() {
 
   const fetchData = async () => {
     setLoading(true)
-    const inicio    = fechaInicio()
+    const inicio    = fechaInicio()    // ← primero las variables
     const inicioAnt = fechaInicioAnt()
     const finAnt    = fechaFinAnt()
+
+    let qClientes = supabase.from('clientes').select('id, estatus')
+    if (sucursalId) qClientes = qClientes.eq('sucursal_id', sucursalId)
+
+    let qPagos = supabase.from('pagos').select('monto, fecha_pago')
+      .eq('estatus', 'Completado').gte('fecha_pago', inicio)
+    if (sucursalId) qPagos = qPagos.eq('sucursal_id', sucursalId)
 
     const [
       { data: clientes },
@@ -63,10 +72,8 @@ export default function DashboardEjecutivo() {
       { data: pagosAnt },
       { data: clientesAnt },
     ] = await Promise.all([
-      supabase.from('clientes').select('id, estatus'),
-      supabase.from('pagos').select('monto, fecha_pago')
-        .eq('estatus', 'Completado')
-        .gte('fecha_pago', inicio),
+      qClientes,
+      qPagos,
       supabase.from('clases').select('id, capacidad_max'),
       supabase.from('reservas').select('id'),
       supabase.from('pagos').select('monto')
@@ -92,7 +99,7 @@ export default function DashboardEjecutivo() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [periodo])
+  useEffect(() => { fetchData() }, [periodo, sucursalId])
 
   const deltaIngresos = metricsAnt.ingresos > 0
     ? Math.round(((metrics.ingresos - metricsAnt.ingresos) / metricsAnt.ingresos) * 100)

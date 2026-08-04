@@ -3,11 +3,11 @@ import { useEffect, useState } from 'react'
 import { supabase }            from '@/lib/supabase'
 import { RefreshCw, X }        from 'lucide-react'
 
-interface Props { fechaInicio: string; fechaFin: string }
+interface Props { fechaInicio: string; fechaFin: string, sucursalId: string | null }
 
 type SubTab = 'todo' | 'notificados' | 'resueltos'
 
-export default function FinanzasPagosFallidos({ fechaInicio, fechaFin }: Props) {
+export default function FinanzasPagosFallidos({ fechaInicio, fechaFin, sucursalId }: Props) {
   const [loading,    setLoading]    = useState(true)
   const [fallidos,   setFallidos]   = useState<any[]>([])
   const [sucursales, setSucursales] = useState<any[]>([])
@@ -31,7 +31,28 @@ export default function FinanzasPagosFallidos({ fechaInicio, fechaFin }: Props) 
     setLoading(false)
   }
 
-  useEffect(() => { fetchFallidos() }, [fechaInicio, fechaFin])
+  useEffect(() => {
+    const fetchFallidos = async () => {
+      setLoading(true)
+
+      let qFallidos = supabase.from('pagos')
+        .select('*, clientes(nombre_completo, email), sucursales(nombre, color)')
+        .eq('estatus', 'Fallido')
+        .gte('fecha_pago', fechaInicio)
+        .lte('fecha_pago', fechaFin + 'T23:59:59')
+        .order('fecha_pago', { ascending: false })
+      if (sucursalId) qFallidos = qFallidos.eq('sucursal_id', sucursalId)
+
+      const [{ data: p }, { data: s }] = await Promise.all([
+        qFallidos,
+        supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
+      ])
+      if (p) setFallidos(p)
+      if (s) setSucursales(s)
+      setLoading(false)
+    }
+    fetchFallidos()
+  }, [fechaInicio, fechaFin, sucursalId])
 
   const filtrados = fallidos.filter(p =>
     (!filtros.sucursal || p.sucursal_id === filtros.sucursal) &&

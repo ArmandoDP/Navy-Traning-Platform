@@ -38,13 +38,9 @@ export default function DrawerClienteHeader({ cliente, onEditar, noShows }: Prop
 
   return (
     <div className="px-6 pt-5 pb-4 border-b border-gray-100">
-      {/* Nombre + editar */}
+      {/* Nombre */}
       <div className="flex items-start justify-between mb-1">
         <h2 className="text-xl font-black text-gray-900">{cliente.nombre_completo}</h2>
-        <button onClick={onEditar}
-          className="flex items-center gap-1.5 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition">
-          <Pencil size={12}/> Editar cliente
-        </button>
       </div>
 
       {/* Email + teléfono */}
@@ -52,6 +48,12 @@ export default function DrawerClienteHeader({ cliente, onEditar, noShows }: Prop
         {cliente.email}
         {cliente.telefono && <> · <span>{cliente.telefono}</span></>}
       </p>
+
+      {/* Botón editar */}
+      <button onClick={onEditar}
+        className="flex items-center gap-1.5 bg-gray-900 px-3 py-1.5 rounded-xl text-xs font-bold text-white hover:bg-gray-700 transition mb-3">
+        <Pencil size={12}/> Información de cliente y cuenta app
+      </button>
 
       {/* Badges */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">

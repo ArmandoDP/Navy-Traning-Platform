@@ -113,10 +113,10 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
             <div className="flex overflow-x-auto border-b border-gray-100 px-6 gap-0 flex-shrink-0">
               {TABS.map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition border-b-2 ${
+                  className={`px-4 py-3 text-sm font-semibold whitespace-nowrap transition border-b-2 ${
                     tab === t.key
-                      ? 'border-gray-900 text-gray-900 font-bold'
-                      : 'border-transparent text-gray-400 hover:text-gray-700'
+                      ? 'border-gray-900 text-black font-bold'
+                      : 'border-transparent text-gray-700 hover:text-gray-400'
                   }`}>
                   {t.label}
                 </button>
