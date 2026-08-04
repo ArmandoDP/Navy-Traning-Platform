@@ -8,6 +8,8 @@ interface Props {
   ocupacion:       number
   retencion:       number
   nominaTotal:     number
+  deltaIngresos:   number
+  deltaClientes:   number
 }
 
 function Delta({ value }: { value: number }) {
@@ -38,14 +40,14 @@ function Card({ icon, label, value, delta, sub }: {
   )
 }
 
-export default function DashboardMetricas({ ingresos, clientesActivos, totalClientes, ocupacion, retencion, nominaTotal }: Props) {
+export default function DashboardMetricas({ ingresos, clientesActivos, totalClientes, ocupacion, retencion, nominaTotal, deltaIngresos, deltaClientes }: Props) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      <Card icon={<DollarSign size={15}/>} label="Ingresos totales"   value={`$${ingresos.toLocaleString()}`}      delta={18.5} />
-      <Card icon={<Users size={15}/>}      label="Clientes activos"   value={clientesActivos.toLocaleString()}     delta={8.2}  sub="+50 vs mes anterior" />
-      <Card icon={<Activity size={15}/>}   label="Ocupación promedio" value={`${ocupacion}%`}                       delta={-2.1} />
-      <Card icon={<Users size={15}/>}      label="Retención"          value={`${retencion}%`}                       delta={1.5}  />
-      <Card icon={<DollarSign size={15}/>} label="Nómina total"       value={`$${nominaTotal.toLocaleString()}`}    delta={5}    />
+      <Card icon={<DollarSign size={15}/>} label="Ingresos totales"   value={`$${ingresos.toLocaleString()}`}      delta={deltaIngresos} />
+      <Card icon={<Users size={15}/>}      label="Clientes activos"   value={clientesActivos.toLocaleString()}     delta={deltaClientes} sub={`${totalClientes} totales`} />
+      <Card icon={<Activity size={15}/>}   label="Ocupación promedio" value={`${ocupacion}%`}                      delta={0} />
+      <Card icon={<Users size={15}/>}      label="Retención"          value={`${retencion}%`}                      delta={0} />
+      <Card icon={<DollarSign size={15}/>} label="Nómina total"       value={`$${nominaTotal.toLocaleString()}`}   delta={0} />
     </div>
   )
 }

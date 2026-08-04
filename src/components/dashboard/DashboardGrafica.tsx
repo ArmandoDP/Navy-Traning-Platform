@@ -3,37 +3,59 @@ import { useEffect, useState } from 'react'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { supabase } from '@/lib/supabase'
 
-interface Props { margen: number }
+interface Props { margen: number; periodo: number }
 
-export default function DashboardGrafica({ margen }: Props) {
+export default function DashboardGrafica({ margen, periodo }: Props) {
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
-      const inicioMes = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-      const [{ data: pagos }, { data: nomina }] = await Promise.all([
-        supabase.from('pagos').select('monto, fecha_pago').neq('estatus', 'Fallido').gte('fecha_pago', inicioMes.toISOString()),
-        supabase.from('pagos_coaches').select('monto, fecha_pago').gte('fecha_pago', inicioMes.toISOString()),
-      ])
+      const inicio = new Date()
+      inicio.setDate(inicio.getDate() - periodo)
+      inicio.setHours(0, 0, 0, 0)
 
-      const dias = new Date(inicioMes.getFullYear(), inicioMes.getMonth() + 1, 0).getDate()
-      const porDia = Array.from({ length: dias }, (_, i) => ({ dia: String(i + 1), Ingresos: 0, Nomina: 0 }))
+      const { data: pagos } = await supabase
+        .from('pagos')
+        .select('monto, fecha_pago')
+        .eq('estatus', 'Completado')
+        .gte('fecha_pago', inicio.toISOString())
 
-      pagos?.forEach(p => {
-        const d = new Date(p.fecha_pago).getDate()
-        if (porDia[d - 1]) porDia[d - 1].Ingresos += Number(p.monto)
-      })
-      nomina?.forEach(n => {
-        const d = new Date(n.fecha_pago).getDate()
-        if (porDia[d - 1]) porDia[d - 1].Nomina += Number(n.monto)
-      })
+      // Si periodo <= 30, agrupar por día, si no por semana
+      if (periodo <= 30) {
+        const porDia: Record<string, number> = {}
+        for (let i = periodo; i >= 0; i--) {
+          const d = new Date()
+          d.setDate(d.getDate() - i)
+          const key = d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
+          porDia[key] = 0
+        }
+        pagos?.forEach(p => {
+          const key = new Date(p.fecha_pago).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
+          if (porDia[key] !== undefined) porDia[key] += Number(p.monto)
+        })
+        setData(Object.entries(porDia).map(([dia, Ingresos]) => ({ dia, Ingresos, Nomina: 0 })))
+      } else {
+        // Agrupar por mes
+        const porMes: Record<string, number> = {}
+        const meses = Math.ceil(periodo / 30)
+        for (let i = meses; i >= 0; i--) {
+          const d = new Date()
+          d.setMonth(d.getMonth() - i)
+          const key = d.toLocaleDateString('es-MX', { month: 'short', year: '2-digit' })
+          porMes[key] = 0
+        }
+        pagos?.forEach(p => {
+          const key = new Date(p.fecha_pago).toLocaleDateString('es-MX', { month: 'short', year: '2-digit' })
+          if (porMes[key] !== undefined) porMes[key] += Number(p.monto)
+        })
+        setData(Object.entries(porMes).map(([dia, Ingresos]) => ({ dia, Ingresos, Nomina: 0 })))
+      }
 
-      setData(porDia)
       setLoading(false)
     }
     fetchData()
-  }, [])
+  }, [periodo])
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">

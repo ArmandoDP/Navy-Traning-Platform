@@ -74,7 +74,11 @@ export default function ConfirmarEmailPage() {
         width: '100%',
         textAlign: 'center',
       }}>
-        <img src="/logo-navy.svg" alt="Navy Training Center" style={{ width: '140px', marginBottom: '40px' }} />
+        <img 
+            src="/logo-navy.svg" 
+            alt="Navy Training Center" 
+            style={{ width: '140px', display: 'block', margin: '0 auto 40px' }} 
+          />
 
         <div style={{
           width: '72px', height: '72px', borderRadius: '50%',

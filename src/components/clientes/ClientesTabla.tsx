@@ -278,18 +278,21 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
                   })()}
                 </td>
 
-                {/* Flecha */}
+                {/* Acciones */}
                 <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                        <button onClick={() => onEditarCliente(c)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-gray-600 transition text-xs font-bold">
-                        ✎
-                        </button>
-                        <button onClick={() => onVerCliente(c)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-300 hover:text-indigo-600 transition flex items-center">
-                        <ChevronRight size={15}/>
-                        </button>
-                    </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onEditarCliente(c)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-600 transition text-xs font-bold">
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => onVerCliente(c)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-gray-700 text-white transition text-xs font-bold">
+                      Ver
+                      <ChevronRight size={12} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

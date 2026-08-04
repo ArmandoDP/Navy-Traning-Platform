@@ -3,35 +3,42 @@ import { useEffect, useState } from 'react'
 import { MapPin, ChevronRight, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
+interface Props { periodo: number }
+
 const COLORS = ['#22c55e', '#6366f1', '#3b82f6', '#f97316', '#a855f7', '#eab308']
 
-export default function DashboardSucursales() {
+export default function DashboardSucursales({ periodo }: Props) {
   const [sucursales, setSucursales] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading,    setLoading]    = useState(true)
 
   useEffect(() => {
     const fetchData = async () => {
+      const inicio = new Date()
+      inicio.setDate(inicio.getDate() - periodo)
+      inicio.setHours(0, 0, 0, 0)
+
       const [{ data: sedes }, { data: clientes }, { data: pagos }, { data: reservas }, { data: clases }] = await Promise.all([
         supabase.from('sucursales').select('id, nombre'),
         supabase.from('clientes').select('id, sucursal_id, estatus'),
-        supabase.from('pagos').select('monto, sucursal_id').neq('estatus', 'Fallido'),
+        supabase.from('pagos').select('monto, sucursal_id')
+          .neq('estatus', 'Fallido')
+          .gte('fecha_pago', inicio.toISOString()), // ← filtro aplicado aquí
         supabase.from('reservas').select('id, clase_id'),
         supabase.from('clases').select('id, sucursal_id, capacidad_max'),
       ])
 
-      // mapa clase_id -> sucursal_id
       const claseSucursal: Record<string, string> = {}
       clases?.forEach(c => { claseSucursal[c.id] = c.sucursal_id })
 
       const rows = (sedes || []).map(s => {
-        const cli = clientes?.filter(c => c.sucursal_id === s.id) || []
-        const ingresos = pagos?.filter(p => p.sucursal_id === s.id).reduce((a, p) => a + Number(p.monto), 0) || 0
+        const cli       = clientes?.filter(c => c.sucursal_id === s.id) || []
+        const ingresos  = pagos?.filter(p => p.sucursal_id === s.id).reduce((a, p) => a + Number(p.monto), 0) || 0
         const clasesSede = clases?.filter(c => c.sucursal_id === s.id) || []
-        const capacidad = clasesSede.reduce((a, c) => a + c.capacidad_max, 0)
+        const capacidad  = clasesSede.reduce((a, c) => a + c.capacidad_max, 0)
         const reservasSede = reservas?.filter(r => claseSucursal[r.clase_id] === s.id).length || 0
-        const ocu = capacidad > 0 ? Math.round((reservasSede / capacidad) * 100) : 0
+        const ocu    = capacidad > 0 ? Math.round((reservasSede / capacidad) * 100) : 0
         const activos = cli.filter(c => c.estatus === 'Activo').length
-        const ret = cli.length > 0 ? Math.round((activos / cli.length) * 100) : 0
+        const ret    = cli.length > 0 ? Math.round((activos / cli.length) * 100) : 0
         return { nombre: s.nombre, ingresos, ocu, ret, cli: cli.length }
       })
 
@@ -39,7 +46,7 @@ export default function DashboardSucursales() {
       setLoading(false)
     }
     fetchData()
-  }, [])
+  }, [periodo])
 
   if (loading) return (
     <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl shadow-sm flex items-center justify-center h-64 text-gray-400 gap-2 text-sm">

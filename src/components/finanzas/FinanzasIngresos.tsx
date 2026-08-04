@@ -14,22 +14,41 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin }: Props) {
   const [loading,     setLoading]     = useState(true)
   const [pagos,       setPagos]       = useState<any[]>([])
   const [sucursales,  setSucursales]  = useState<any[]>([])
+  const [totalBrutoAnt, setTotalBrutoAnt] = useState(0)
 
   useEffect(() => {
-    const fetch = async () => {
-      setLoading(true)
-      const [{ data: p }, { data: s }] = await Promise.all([
-        supabase.from('pagos').select('monto, canal, sucursal_id, estatus')
-          .gte('fecha_pago', fechaInicio).lte('fecha_pago', fechaFin + 'T23:59:59')
-          .eq('estatus', 'Completado'),
-        supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
-      ])
-      if (p) setPagos(p)
-      if (s) setSucursales(s)
-      setLoading(false)
+  const fetch = async () => {
+    setLoading(true)
+    const [{ data: p }, { data: s }] = await Promise.all([
+      supabase.from('pagos').select('monto, canal, sucursal_id, estatus')
+        .gte('fecha_pago', fechaInicio).lte('fecha_pago', fechaFin + 'T23:59:59')
+        .eq('estatus', 'Completado'),
+      supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
+    ])
+    if (p) setPagos(p)
+    if (s) setSucursales(s)
+
+    // Mes anterior
+    const fechaInicioAnt = new Date(fechaInicio)
+    fechaInicioAnt.setMonth(fechaInicioAnt.getMonth() - 1)
+    const fechaFinAnt = new Date(fechaFin)
+    fechaFinAnt.setMonth(fechaFinAnt.getMonth() - 1)
+
+    const { data: pagosAnt } = await supabase
+      .from('pagos')
+      .select('monto, estatus')
+      .gte('fecha_pago', fechaInicioAnt.toISOString().split('T')[0])
+      .lte('fecha_pago', fechaFinAnt.toISOString().split('T')[0] + 'T23:59:59')
+      .eq('estatus', 'Completado')
+
+    if (pagosAnt) {
+      setTotalBrutoAnt(pagosAnt.reduce((a, p) => a + (p.monto || 0), 0))
     }
-    fetch()
-  }, [fechaInicio, fechaFin])
+
+    setLoading(false)
+  }
+  fetch()
+}, [fechaInicio, fechaFin])
 
   const totalBruto   = pagos.reduce((a, p) => a + (p.monto || 0), 0)
   const comisiones   = Math.round(totalBruto * 0.055)
@@ -79,7 +98,7 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin }: Props) {
       {/* Métricas */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Ingreso bruto',        val: `$${(totalBruto/1000).toFixed(1)}k`,  sub: '+5.6% vs mes anterior', color: 'text-emerald-600' },
+          { label: 'Ingreso bruto',        val: `$${(totalBruto/1000).toFixed(1)}k`,  sub: `${totalBrutoAnt > 0 ? ((totalBruto - totalBrutoAnt) / totalBrutoAnt * 100).toFixed(1) : '0'}% vs mes anterior`, color: 'text-emerald-600' },
           { label: 'Comisiones plataformas', val: `$${(comisiones/1000).toFixed(1)}k`, sub: 'Stripe + Fitpass + Wellhub', color: 'text-emerald-600' },
           { label: 'Ingreso neto',          val: `$${(neto/1000).toFixed(1)}k`,        sub: `${totalBruto > 0 ? Math.round(neto/totalBruto*100) : 0}% del bruto`, color: 'text-emerald-600' },
           { label: '% Canal directo',       val: `${pctDirecto}%`,                     sub: 'Sin comisión', color: 'text-gray-900' },

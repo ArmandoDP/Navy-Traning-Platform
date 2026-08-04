@@ -17,6 +17,7 @@ export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
   const [ticketProm,  setTicketProm]  = useState(0)
   const [donutData,   setDonutData]   = useState<any[]>([])
   const [ultTx, setUltTx] = useState<any[]>([])
+  const [ingresosAnt, setIngresosAnt] = useState(0)
 
   useEffect(() => {
     const fetch = async () => {
@@ -39,6 +40,22 @@ export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
         setTxExitosas(exitosos.length)
         setTicketProm(exitosos.length > 0 ? Math.round(total / exitosos.length) : 0)
 
+        const fechaInicioAnt = new Date(fechaInicio)
+        fechaInicioAnt.setMonth(fechaInicioAnt.getMonth() - 1)
+        const fechaFinAnt = new Date(fechaFin)
+        fechaFinAnt.setMonth(fechaFinAnt.getMonth() - 1)
+
+        const { data: pagosAnt } = await supabase
+          .from('pagos')
+          .select('monto, estatus')
+          .gte('fecha_pago', fechaInicioAnt.toISOString().split('T')[0])
+          .lte('fecha_pago', fechaFinAnt.toISOString().split('T')[0] + 'T23:59:59')
+
+        if (pagosAnt) {
+          const exitososAnt = pagosAnt.filter(p => p.estatus === 'Completado' || p.estatus === 'Exitoso')
+          setIngresosAnt(exitososAnt.reduce((a, p) => a + (p.monto || 0), 0))
+        }
+        
         // Donut por canal
         const canales: Record<string, number> = {}
         exitosos.forEach(p => {
@@ -70,11 +87,21 @@ export default function FinanzasResumen({ fechaInicio, fechaFin }: Props) {
   const margen    = ingresos > 0 ? Math.round(((ingresos - costos) / ingresos) * 100) : 0
   const utilidad  = ingresos - costos
 
+  const pctCambio = (actual: number, anterior: number) => {
+    if (anterior === 0) return '+0%'
+    const diff = ((actual - anterior) / anterior) * 100
+    return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`
+  }
+
+  const costosAnt    = Math.round(ingresosAnt * 0.56)
+  const utilidadAnt  = ingresosAnt - costosAnt
+  const margenAnt    = ingresosAnt > 0 ? Math.round(((ingresosAnt - costosAnt) / ingresosAnt) * 100) : 0
+
   const METRICAS = [
-    { label: 'Ingresos del mes',  val: `$${(ingresos/1000).toFixed(1)}k`,  badge: '+18.5%', color: 'text-emerald-600', icon: TrendingUp },
-    { label: 'Costos',            val: `$${(costos/1000).toFixed(1)}k`,    badge: '+5.1%',  color: 'text-red-500',     icon: TrendingDown },
-    { label: 'Margen operativo',  val: `${margen}%`,                        badge: '+3.8pp', color: 'text-emerald-600', icon: TrendingUp },
-    { label: 'Utilidad',          val: `$${(utilidad/1000).toFixed(1)}k`,  badge: '+22%',   color: 'text-emerald-600', icon: TrendingUp },
+    { label: 'Ingresos del mes',  val: `$${(ingresos/1000).toFixed(1)}k`,  badge: pctCambio(ingresos, ingresosAnt),  color: ingresos >= ingresosAnt ? 'text-emerald-600' : 'text-red-500', icon: TrendingUp },
+    { label: 'Costos',            val: `$${(costos/1000).toFixed(1)}k`,    badge: pctCambio(costos, costosAnt),      color: costos <= costosAnt ? 'text-emerald-600' : 'text-red-500',   icon: TrendingDown },
+    { label: 'Margen operativo',  val: `${margen}%`,                        badge: `${margen - margenAnt >= 0 ? '+' : ''}${(margen - margenAnt).toFixed(1)}pp`, color: margen >= margenAnt ? 'text-emerald-600' : 'text-red-500', icon: TrendingUp },
+    { label: 'Utilidad',          val: `$${(utilidad/1000).toFixed(1)}k`,  badge: pctCambio(utilidad, utilidadAnt), color: utilidad >= utilidadAnt ? 'text-emerald-600' : 'text-red-500', icon: TrendingUp },
   ]
 
   if (loading) return <div className="p-10 text-center text-gray-400 italic text-sm">Cargando...</div>

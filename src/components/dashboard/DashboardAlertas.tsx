@@ -14,7 +14,10 @@ export default function DashboardAlertas() {
 
       const [{ data: pagosFallidos }, { data: membresias }, { data: clases }, { data: reservas }] = await Promise.all([
         supabase.from('pagos').select('id').eq('estatus', 'Fallido').gte('fecha_pago', hace7dias),
-        supabase.from('membresias').select('id').lte('fecha_fin', en7dias).gte('fecha_fin', new Date().toISOString()),
+        supabase.from('membresias').select('id')
+          .eq('estatus', 'Activa')  // ← agrega esto
+          .lte('fecha_fin', en7dias)
+          .gte('fecha_fin', new Date().toISOString()),
         supabase.from('clases').select('id, capacidad_max'),
         supabase.from('reservas').select('id, clase_id'),
       ])

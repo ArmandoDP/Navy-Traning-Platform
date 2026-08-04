@@ -1,32 +1,34 @@
 'use client'
 import { Calendar, RefreshCw, Pause, RotateCcw } from 'lucide-react'
 import { useState } from 'react'
-import ToastExito from '@/components/ToastExito'
+import ToastExito         from '@/components/ToastExito'
+import ModalPagoSucursal  from '@/components/clientes/ModalPagoSucursal'
 
 interface Props { cliente: any; reservas: any[] }
 
 function ToastPendiente({ msg, onClose }: { msg: string; onClose: () => void }) {
-  return (
-    <ToastExito
-      titulo="Próximamente"
-      mensaje={msg}
-      onClose={onClose}
-      duracion={3000}
-    />
-  )
+  return <ToastExito titulo="Próximamente" mensaje={msg} onClose={onClose} duracion={3000} />
 }
 
 export default function TabMembresia({ cliente, reservas }: Props) {
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast,        setToast]        = useState<string | null>(null)
+  const [modalPago,    setModalPago]    = useState(false)
 
-  const fechaVenc  = cliente.fecha_vencimiento_memb || cliente.fecha_venc_plan
-  const diasVenc   = fechaVenc ? Math.ceil((new Date(fechaVenc).getTime() - Date.now()) / (1000*3600*24)) : null
+  const fechaVenc    = cliente.fecha_vencimiento_memb || cliente.fecha_venc_plan
+  const diasVenc     = fechaVenc ? Math.ceil((new Date(fechaVenc).getTime() - Date.now()) / (1000*3600*24)) : null
   const clasesUsadas = reservas.filter(r => r.estatus === 'Confirmada').length
   const clasesTotal  = cliente.paquetes?.numero_clases || null
 
   return (
     <div className="space-y-5">
       {toast && <ToastPendiente msg={toast} onClose={() => setToast(null)} />}
+
+      <ModalPagoSucursal
+        isOpen={modalPago}
+        cliente={cliente}
+        onClose={() => setModalPago(false)}
+        onSuccess={() => setModalPago(false)}
+      />
 
       {/* Plan actual */}
       <div className="border border-gray-100 rounded-2xl p-5">
@@ -40,7 +42,6 @@ export default function TabMembresia({ cliente, reservas }: Props) {
           </p>
         </div>
 
-        {/* Clases usadas */}
         {clasesTotal && (
           <div className="mb-4">
             <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
@@ -54,7 +55,6 @@ export default function TabMembresia({ cliente, reservas }: Props) {
           </div>
         )}
 
-        {/* Vencimiento */}
         {fechaVenc && (
           <div className="flex items-center gap-2 text-sm mb-5">
             <Calendar size={14} className="text-gray-400"/>
@@ -71,7 +71,8 @@ export default function TabMembresia({ cliente, reservas }: Props) {
 
         {/* Botones acción */}
         <div className="flex gap-2">
-          <button onClick={() => setToast('Renovar membresía estará disponible con la integración de Stripe.')}
+          <button
+            onClick={() => setModalPago(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white transition"
             style={{ backgroundColor: '#171B24' }}>
             <RefreshCw size={12}/> Renovar / cambiar plan
@@ -92,10 +93,10 @@ export default function TabMembresia({ cliente, reservas }: Props) {
         <p className="text-xs font-bold text-gray-500 mb-4">Políticas aplicadas</p>
         <div className="grid grid-cols-2 gap-4">
           {[
-            { label: 'Cancelación gratuita', val: '4hrs antes' },
-            { label: 'Cargo No-Show',        val: '$35,000'    },
+            { label: 'Cancelación gratuita', val: '4hrs antes'      },
+            { label: 'Cargo No-Show',        val: '$35,000'         },
             { label: 'Bloqueo de cuenta',    val: 'Tras 3 No-Shows' },
-            { label: 'Renovación Auto',      val: 'Activa'     },
+            { label: 'Renovación Auto',      val: 'Activa'          },
           ].map(p => (
             <div key={p.label}>
               <p className="text-xs text-gray-400">{p.label}</p>

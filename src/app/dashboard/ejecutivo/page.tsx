@@ -9,41 +9,102 @@ import DashboardGrafica        from '@/components/dashboard/DashboardGrafica'
 import DashboardSucursales     from '@/components/dashboard/DashboardSucursales'
 import DashboardActividad      from '@/components/dashboard/DashboardActividad'
 
+const PERIODOS = [
+  { label: 'Hoy',        dias: 1   },
+  { label: '7 días',     dias: 7   },
+  { label: '15 días',    dias: 15  },
+  { label: '30 días',    dias: 30  },
+  { label: '2 meses',    dias: 60  },
+  { label: '3 meses',    dias: 90  },
+  { label: 'Este año',   dias: 365 },
+]
+
 export default function DashboardEjecutivo() {
-  const [metrics, setMetrics] = useState({
+  const [periodo,      setPeriodo]      = useState(30)
+  const [metrics,      setMetrics]      = useState({
     ingresos: 0, clientesActivos: 0, totalClientes: 0,
     ocupacion: 0, retencion: 0, nominaTotal: 0
   })
-  const [loading, setLoading] = useState(true)
+  const [metricsAnt,   setMetricsAnt]   = useState({ ingresos: 0, clientesActivos: 0 })
+  const [loading,      setLoading]      = useState(true)
+
+  const fechaInicio = () => {
+    const d = new Date()
+    d.setDate(d.getDate() - periodo)
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString()
+  }
+
+  const fechaInicioAnt = () => {
+    const d = new Date()
+    d.setDate(d.getDate() - periodo * 2)
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString()
+  }
+
+  const fechaFinAnt = () => {
+    const d = new Date()
+    d.setDate(d.getDate() - periodo)
+    d.setHours(23, 59, 59, 999)
+    return d.toISOString()
+  }
 
   const fetchData = async () => {
     setLoading(true)
-    const [{ data: clientes }, { data: pagos }, { data: clases }, { data: reservas }, { data: pagosCoaches }] = await Promise.all([
+    const inicio    = fechaInicio()
+    const inicioAnt = fechaInicioAnt()
+    const finAnt    = fechaFinAnt()
+
+    const [
+      { data: clientes },
+      { data: pagos },
+      { data: clases },
+      { data: reservas },
+      { data: pagosAnt },
+      { data: clientesAnt },
+    ] = await Promise.all([
       supabase.from('clientes').select('id, estatus'),
-      supabase.from('pagos').select('monto, fecha_pago').neq('estatus', 'Fallido'),
+      supabase.from('pagos').select('monto, fecha_pago')
+        .eq('estatus', 'Completado')
+        .gte('fecha_pago', inicio),
       supabase.from('clases').select('id, capacidad_max'),
       supabase.from('reservas').select('id'),
-      supabase.from('pagos_coaches').select('monto'),
+      supabase.from('pagos').select('monto')
+        .eq('estatus', 'Completado')
+        .gte('fecha_pago', inicioAnt)
+        .lte('fecha_pago', finAnt),
+      supabase.from('clientes').select('id, estatus')
+        .lte('created_at', finAnt),
     ])
 
-    const total      = clientes?.length || 0
-    const activos    = clientes?.filter(c => c.estatus === 'Activo').length || 0
-    const inicioMes  = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()
-    const ingresos   = pagos?.filter(p => p.fecha_pago >= inicioMes).reduce((a, p) => a + Number(p.monto), 0) || 0
-    const capTotal   = clases?.reduce((a, c) => a + c.capacidad_max, 0) || 1
-    const ocupacion  = Math.round(((reservas?.length || 0) / capTotal) * 100)
-    const retencion  = total > 0 ? Math.round((activos / total) * 100) : 0
-    const nomina     = pagosCoaches?.reduce((a, p) => a + Number(p.monto), 0) || 0
+    const total     = clientes?.length || 0
+    const activos   = clientes?.filter(c => c.estatus === 'Activo').length || 0
+    const ingresos  = pagos?.reduce((a, p) => a + Number(p.monto), 0) || 0
+    const capTotal  = clases?.reduce((a, c) => a + c.capacidad_max, 0) || 1
+    const ocupacion = Math.round(((reservas?.length || 0) / capTotal) * 100)
+    const retencion = total > 0 ? Math.round((activos / total) * 100) : 0
 
-    setMetrics({ ingresos, clientesActivos: activos, totalClientes: total, ocupacion, retencion, nominaTotal: nomina })
+    const ingresosAnt   = pagosAnt?.reduce((a, p) => a + Number(p.monto), 0) || 0
+    const activosAnt    = clientesAnt?.filter(c => c.estatus === 'Activo').length || 0
+
+    setMetrics({ ingresos, clientesActivos: activos, totalClientes: total, ocupacion, retencion, nominaTotal: 0 })
+    setMetricsAnt({ ingresos: ingresosAnt, clientesActivos: activosAnt })
     setLoading(false)
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [periodo])
 
+  const deltaIngresos = metricsAnt.ingresos > 0
+    ? Math.round(((metrics.ingresos - metricsAnt.ingresos) / metricsAnt.ingresos) * 100)
+    : 0
+  const deltaClientes = metricsAnt.clientesActivos > 0
+    ? Math.round(((metrics.clientesActivos - metricsAnt.clientesActivos) / metricsAnt.clientesActivos) * 100)
+    : 0
   const margen = metrics.ingresos > 0
     ? Math.round(((metrics.ingresos - metrics.nominaTotal) / metrics.ingresos) * 100)
-    : 36
+    : 0
+
+  const labelPeriodo = PERIODOS.find(p => p.dias === periodo)?.label || '30 días'
 
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
@@ -59,36 +120,42 @@ export default function DashboardEjecutivo() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-400 text-sm mt-0.5">
-            Visión general del negocio ·{' '}
-            <span className="text-indigo-500 font-medium cursor-pointer">Vista Global</span>
+            Visión general del negocio · <span className="text-indigo-500 font-medium">{labelPeriodo}</span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 border border-gray-200 bg-white rounded-xl px-3 py-2 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
-            📅 Últimos 30 días ▾
-          </div>
-          <div className="flex items-center gap-2 border border-gray-200 bg-white rounded-xl px-3 py-2 text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
-            🌐 Global ▾
-          </div>
-          <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-4 py-2 rounded-xl transition">
-            <Zap size={14} /> Quick actions
-          </button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {PERIODOS.map(p => (
+            <button
+              key={p.dias}
+              onClick={() => setPeriodo(p.dias)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                periodo === p.dias
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}>
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Métricas */}
-      <DashboardMetricas {...metrics} />
+      <DashboardMetricas
+        {...metrics}
+        deltaIngresos={deltaIngresos}
+        deltaClientes={deltaClientes}
+      />
 
       {/* Fila media */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <DashboardEstadoClientes totalClientes={metrics.totalClientes} clientesActivos={metrics.clientesActivos} />
         <DashboardAlertas />
-        <DashboardGrafica margen={margen} />
+        <DashboardGrafica margen={margen} periodo={periodo} />
       </div>
 
       {/* Fila inferior */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <DashboardSucursales />
+        <DashboardSucursales periodo={periodo} />
         <DashboardActividad />
       </div>
 
