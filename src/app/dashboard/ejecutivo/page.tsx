@@ -156,13 +156,13 @@ export default function DashboardEjecutivo() {
       {/* Fila media */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <DashboardEstadoClientes totalClientes={metrics.totalClientes} clientesActivos={metrics.clientesActivos} />
-        <DashboardAlertas />
+        <DashboardAlertas sucursalId={sucursalId} />
         <DashboardGrafica margen={margen} periodo={periodo} />
       </div>
 
       {/* Fila inferior */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <DashboardSucursales periodo={periodo} />
+        <DashboardSucursales periodo={periodo} sucursalId={sucursalId}/>
         <DashboardActividad />
       </div>
 

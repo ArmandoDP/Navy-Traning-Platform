@@ -2,27 +2,42 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Clock, BarChart2, ChevronRight, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
-export default function DashboardAlertas() {
+interface Props { sucursalId?: string | null }
+
+export default function DashboardAlertas( { sucursalId }: Props ) {
   const [alertas, setAlertas] = useState({ pagosFallidos: 0, membresiasPorExpirar: 0, clasesBajaOcupacion: 0 })
   const [loading, setLoading] = useState(true)
+
+  const router = useRouter()
 
   useEffect(() => {
     const fetchAlertas = async () => {
       const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const en7dias = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      const en7dias   = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+
+      let qFallidos = supabase.from('pagos').select('id')
+        .eq('estatus', 'Fallido').gte('fecha_pago', hace7dias)
+      if (sucursalId) qFallidos = qFallidos.eq('sucursal_id', sucursalId)
 
       const [{ data: pagosFallidos }, { data: membresias }, { data: clases }, { data: reservas }] = await Promise.all([
-        supabase.from('pagos').select('id').eq('estatus', 'Fallido').gte('fecha_pago', hace7dias),
-        supabase.from('membresias').select('id')
-          .eq('estatus', 'Activa')  // ← agrega esto
+        qFallidos,
+        supabase.from('membresias')
+          .select('id, clientes(sucursal_id)')
+          .eq('estatus', 'Activa')
           .lte('fecha_fin', en7dias)
           .gte('fecha_fin', new Date().toISOString()),
         supabase.from('clases').select('id, capacidad_max'),
         supabase.from('reservas').select('id, clase_id'),
       ])
 
-      // Ocupación por clase: reservas agrupadas por clase_id vs capacidad_max
+      // Filtrar membresías por sucursal en JS
+      const membresiasFiltradas = sucursalId
+        ? membresias?.filter((m: any) => m.clientes?.sucursal_id === sucursalId)
+        : membresias
+
+      // Ocupación por clase
       const reservasPorClase: Record<string, number> = {}
       reservas?.forEach(r => {
         reservasPorClase[r.clase_id] = (reservasPorClase[r.clase_id] || 0) + 1
@@ -33,14 +48,14 @@ export default function DashboardAlertas() {
       }).length || 0
 
       setAlertas({
-        pagosFallidos: pagosFallidos?.length || 0,
-        membresiasPorExpirar: membresias?.length || 0,
+        pagosFallidos:       pagosFallidos?.length || 0,
+        membresiasPorExpirar: membresiasFiltradas?.length || 0,
         clasesBajaOcupacion,
       })
       setLoading(false)
     }
     fetchAlertas()
-  }, [])
+  }, [sucursalId])
 
   const items = [
     { icon: <AlertTriangle size={14} className="text-red-500" />, bg: 'bg-red-50 border-red-100', iconBg: 'bg-red-100', label: 'Pagos fallidos', sub: 'Últ. 7 días', val: alertas.pagosFallidos, color: 'text-red-500', arrow: 'text-red-400' },
@@ -62,7 +77,9 @@ export default function DashboardAlertas() {
           <h3 className="font-bold text-gray-900 text-sm">Alertas críticas</h3>
           {total > 0 && <span className="bg-red-500 text-white text-xs font-black px-1.5 py-0.5 rounded-full">{total}</span>}
         </div>
-        <button className="text-indigo-500 text-xs font-bold hover:underline flex items-center gap-0.5">
+        <button 
+          onClick={() => router.push('/dashboard/alertas')}
+          className="text-indigo-500 text-xs font-bold hover:underline flex items-center gap-0.5">
           Ver alertas <ChevronRight size={12}/>
         </button>
       </div>
