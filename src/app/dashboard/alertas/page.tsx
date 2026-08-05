@@ -1,43 +1,23 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { supabase }            from '@/lib/supabase'
-import { RefreshCw }           from 'lucide-react'
+import { useEffect, useState }    from 'react'
+import { supabase }               from '@/lib/supabase'
+import { Bell, Zap, Megaphone }   from 'lucide-react'
+import AlertasLista               from '@/components/alertas/AlertasLista'
+import AlertasAutomaticas         from '@/components/alertas/AlertasAutomaticas'
+import AlertasAnuncios            from '@/components/alertas/AlertasAnuncios'
 
-type Categoria = 'todas' | 'operacion' | 'recordatorio' | 'asistencia' | 'vencimiento'
+type Tab = 'alertas' | 'automaticas' | 'anuncios'
 
-const TIPO_CONFIG: Record<string, { icon: string; bg: string; color: string }> = {
-  pago_fallido:    { icon: '⊗', bg: '#fef2f2', color: '#ef4444' },
-  lista_espera:    { icon: '⏱', bg: '#fffbeb', color: '#f59e0b' },
-  membresia_vence: { icon: '⚠', bg: '#fffbeb', color: '#f59e0b' },
-  retencion:       { icon: '⚑', bg: '#fffbeb', color: '#f59e0b' },
-  no_show:         { icon: '⊗', bg: '#fef2f2', color: '#ef4444' },
-  recordatorio:    { icon: '🔔', bg: '#eff6ff', color: '#3b82f6' },
-}
-
-const TABS: { key: Categoria; label: string }[] = [
-  { key: 'todas',        label: 'Todas' },
-  { key: 'operacion',    label: 'Operación' },
-  { key: 'recordatorio', label: 'Recordatorios' },
-  { key: 'asistencia',   label: 'Asistencia' },
-  { key: 'vencimiento',  label: 'Vencimientos' },
+const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: 'alertas',      label: 'Alertas',      icon: <Bell size={14}/>      },
+  { key: 'automaticas',  label: 'Automáticas',  icon: <Zap size={14}/>       },
+  { key: 'anuncios',     label: 'Anuncios',     icon: <Megaphone size={14}/> },
 ]
 
-const tiempoRelativo = (fecha: string) => {
-  const diff = Date.now() - new Date(fecha).getTime()
-  const min  = Math.floor(diff / 60000)
-  const hrs  = Math.floor(diff / 3600000)
-  const dias = Math.floor(diff / 86400000)
-  if (min < 60)  return `Hace ${min} min`
-  if (hrs < 24)  return `Hace ${hrs}h`
-  if (dias === 0) return 'Hoy 8:00 hrs'
-  return `Hace ${dias} días`
-}
-
 export default function AlertasPage() {
-  const [alertas,  setAlertas]  = useState<any[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [tab,      setTab]      = useState<Categoria>('todas')
-  const [menuOpen, setMenuOpen] = useState<string | null>(null)
+  const [tab,     setTab]     = useState<Tab>('alertas')
+  const [alertas, setAlertas] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   const fetchAlertas = async () => {
     setLoading(true)
@@ -50,184 +30,65 @@ export default function AlertasPage() {
     setLoading(false)
   }
 
-  // Realtime
   useEffect(() => {
     fetchAlertas()
-
-    const channel = supabase
-      .channel('alertas-realtime')
-      .on('postgres_changes', {
-        event:  '*',
-        schema: 'public',
-        table:  'alertas',
-      }, () => fetchAlertas())
+    const channel = supabase.channel('alertas-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, fetchAlertas)
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [])
 
   const marcarLeida = async (id: string) => {
     await supabase.from('alertas').update({ leida: true }).eq('id', id)
     setAlertas(prev => prev.map(a => a.id === id ? { ...a, leida: true } : a))
-    setMenuOpen(null)
   }
 
   const marcarResuelta = async (id: string) => {
     await supabase.from('alertas').update({ resuelta: true }).eq('id', id)
     setAlertas(prev => prev.filter(a => a.id !== id))
-    setMenuOpen(null)
   }
 
-  const marcarTodasLeidas = async () => {
+  const marcarTodas = async () => {
     await supabase.from('alertas').update({ leida: true }).eq('leida', false)
     setAlertas(prev => prev.map(a => ({ ...a, leida: true })))
   }
 
-  const filtradas = tab === 'todas'
-    ? alertas
-    : alertas.filter(a => a.categoria === tab)
-
-  const conteo = (cat: Categoria) =>
-    cat === 'todas' ? alertas.length : alertas.filter(a => a.categoria === cat).length
-
-  const getAcciones = (alerta: any) => {
-    const acciones = []
-    if (alerta.cliente_id)  acciones.push({ label: 'Ver cliente',  href: `/dashboard/clientes/${alerta.cliente_id}` })
-    if (alerta.clase_id)    acciones.push({ label: 'Ver clase',    href: `/dashboard/clases/${alerta.clase_id}` })
-    if (alerta.sucursal_id) acciones.push({ label: 'Ver sucursal', href: `/dashboard/sucursales/${alerta.sucursal_id}` })
-    return acciones
-  }
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
-      <RefreshCw size={16} className="animate-spin" /> Cargando alertas...
-    </div>
-  )
+  const noLeidas = alertas.filter(a => !a.leida).length
 
   return (
-    <div className="space-y-5" onClick={() => setMenuOpen(null)}>
-
+    <div className="space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Alertas</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Gestiona tus notificaciones</p>
+          <p className="text-gray-400 text-sm mt-0.5">Centro de notificaciones y anuncios</p>
         </div>
-        {alertas.some(a => !a.leida) && (
-          <button onClick={marcarTodasLeidas}
-            className="text-xs font-bold text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-2 rounded-xl hover:bg-gray-50 transition">
-            Marcar todas como leídas
+      </div>
+
+      {/* Tabs principales */}
+      <div className="flex gap-2">
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition border ${
+              tab === t.key
+                ? 'bg-gray-900 text-white border-gray-900'
+                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+            }`}>
+            {t.icon}
+            {t.label}
+            {t.key === 'alertas' && noLeidas > 0 && (
+              <span className="bg-red-500 text-white text-xs font-black px-1.5 py-0.5 rounded-full">
+                {noLeidas}
+              </span>
+            )}
           </button>
-        )}
+        ))}
       </div>
 
-      {/* Contenedor */}
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-
-        {/* Tabs */}
-        <div className="grid grid-cols-5 border-b border-gray-100">
-            {TABS.map(t => (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                className={`flex items-center justify-center gap-1.5 px-5 py-4 text-sm font-medium transition border-b-2 whitespace-nowrap ${
-                    tab === t.key
-                    ? 'border-gray-900 text-gray-900 font-bold'
-                    : 'border-transparent text-gray-400 hover:text-gray-700'
-                }`}>
-                {t.label}
-                <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                    tab === t.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'
-                }`}>
-                    {conteo(t.key)}
-                </span>
-                </button>
-            ))}
-        </div>
-
-        {/* Lista */}
-        {filtradas.length === 0 ? (
-          <div className="py-16 text-center text-gray-400 text-sm italic">
-            No hay alertas pendientes
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {filtradas.map(alerta => {
-              const cfg     = TIPO_CONFIG[alerta.tipo] || TIPO_CONFIG['recordatorio']
-              const acciones = getAcciones(alerta)
-
-              return (
-                <div key={alerta.id}
-                  className={`flex items-start gap-4 px-6 py-4 hover:bg-gray-50 transition relative ${
-                    !alerta.leida ? 'bg-white' : 'bg-gray-50/30'
-                  }`}>
-
-                  {/* Dot no leída */}
-                  {!alerta.leida && (
-                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                  )}
-
-                  {/* Ícono */}
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-lg"
-                    style={{ backgroundColor: cfg.bg, color: cfg.color }}>
-                    {cfg.icon}
-                  </div>
-
-                  {/* Contenido */}
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!alerta.leida ? 'font-black text-gray-900' : 'font-semibold text-gray-700'}`}>
-                      {alerta.titulo}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{alerta.descripcion}</p>
-                    <p className="text-[11px] text-gray-300 mt-1">{tiempoRelativo(alerta.created_at)}</p>
-                  </div>
-
-                  {/* Menú ⋮ */}
-                  <div className="relative flex-shrink-0"
-                    onClick={e => e.stopPropagation()}>
-                    <button
-                      onClick={() => setMenuOpen(menuOpen === alerta.id ? null : alerta.id)}
-                      className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition text-lg leading-none">
-                      ⋮
-                    </button>
-
-                    {menuOpen === alerta.id && (
-                      <div className="absolute right-0 top-8 z-10 bg-white border border-gray-100 rounded-2xl shadow-xl py-1.5 min-w-[180px]">
-                        {/* Acciones de navegación */}
-                        {acciones.map(a => (
-                          <a key={a.href} href={a.href}
-                            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
-                            → {a.label}
-                          </a>
-                        ))}
-                        {acciones.length > 0 && <div className="border-t border-gray-100 my-1" />}
-
-                        {/* Marcar leída */}
-                        {!alerta.leida && (
-                          <button onClick={() => marcarLeida(alerta.id)}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition text-left">
-                            ✓ Marcar como leída
-                          </button>
-                        )}
-
-                        {/* Resolver */}
-                        <button onClick={() => marcarResuelta(alerta.id)}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-emerald-600 hover:bg-emerald-50 transition text-left">
-                          ✓ Marcar como resuelta
-                        </button>
-
-                        {/* Ignorar */}
-                        <button onClick={() => marcarResuelta(alerta.id)}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition text-left">
-                          ✕ Ignorar alerta
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+      {/* Contenido */}
+      {tab === 'alertas'     && <AlertasLista alertas={alertas} loading={loading} onMarcarLeida={marcarLeida} onMarcarResuelta={marcarResuelta} onMarcarTodas={marcarTodas} />}
+      {tab === 'automaticas' && <AlertasAutomaticas />}
+      {tab === 'anuncios'    && <AlertasAnuncios />}
     </div>
   )
 }
