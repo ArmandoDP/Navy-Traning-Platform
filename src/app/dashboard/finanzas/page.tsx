@@ -71,7 +71,7 @@ export default function FinanzasPage() {
 
       {/* Contenido */}
       {tab === 'resumen'       && <FinanzasResumen       fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
-      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
+      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} />}
       {tab === 'transacciones' && <FinanzasTransacciones fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
       {tab === 'fallidos'      && <FinanzasPagosFallidos fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
       {tab === 'nomina'        && <FinanzasNomina        fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
