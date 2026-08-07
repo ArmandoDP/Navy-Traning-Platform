@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
   try {
     await resend.emails.send({
-      from:    'Navy Training Center <onboarding@resend.dev>',
+      from: 'Navy Training Center <noreply@navytrainingcenter.com>',
       to:      email,
       subject: '¡Tu membresía está confirmada! 🏋️ Navy Training Center',
       html: `
