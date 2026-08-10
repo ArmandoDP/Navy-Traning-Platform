@@ -44,6 +44,11 @@ export default function PaquetesPage() {
     setLoading(false)
   }
 
+  const handleToggleVisibilidad = async (paqueteId: string, visible: boolean) => {
+    await supabase.from('paquetes').update({ visible_en_app: visible }).eq('id', paqueteId)
+    setPaquetes(prev => prev.map(p => p.id === paqueteId ? { ...p, visible_en_app: visible } : p))
+  }
+
   const fetchCatalogos = async () => {
     const [{ data: sers }, { data: sucs }] = await Promise.all([
       supabase.from('series_paquetes').select('*').order('nombre'),
@@ -107,6 +112,7 @@ export default function PaquetesPage() {
         verticales={verticales}
         onVer={(p) => { setPaqueteActivo(p); setDrawerOpen(true) }}
         onNuevo={() => { setPaqueteActivo(null); setDrawerOpen(true) }}
+        onToggleVisibilidad={handleToggleVisibilidad}
       />
 
       {/* Drawer */}

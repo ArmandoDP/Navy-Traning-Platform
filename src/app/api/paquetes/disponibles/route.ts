@@ -12,6 +12,7 @@ export async function GET(req: NextRequest) {
     .eq('estatus', 'Activo')
     .eq('paquete_precios.sucursal_id', sucursalId)
     .eq('paquete_precios.activo', true)
+    .eq('visible_en_app', true)
     .order('nombre')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

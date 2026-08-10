@@ -44,6 +44,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     vigencia_dias:            30,
     clases_incluidas:         null as number | null,
     renovacion:               'Automatica',
+    visible_en_app: true,
   })
 
   const [precios, setPrecios] = useState<{
@@ -98,6 +99,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           vigencia_dias:           paquete.duracion || 30,
           clases_incluidas:        paquete.clases_incluidas || null,
           renovacion:              paquete.renovacion || 'Automatica',
+          visible_en_app:           paquete.visible_en_app !== false, 
         })
 
         // Precios — combinar sucursales con datos existentes
@@ -126,6 +128,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           nombre: '', codigo_interno: '', bio: '', serie_id: '',
           acceso_total: false, acceso_sucursal_hermana: false,
           vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
+          visible_en_app:          paquete.visible_en_app !== false,
         })
         if (sucs) {
           setPrecios(sucs.map(s => ({ sucursal_id: s.id, activo: false, precio_app: '', activo_desde: '' })))
@@ -170,6 +173,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       renovacion:              form.renovacion,
       acceso_total:            form.acceso_total,            // ← faltaba
       acceso_sucursal_hermana: form.acceso_sucursal_hermana, // ← faltaba
+      visible_en_app: form.visible_en_app,
       estatus,
     }
 

@@ -12,6 +12,7 @@ interface Paquete {
   created_at:      string
   serie_id:        string | null
   renovacion:      string | null
+  visible_en_app?: boolean
   series_paquetes?: { nombre: string; color: string }
   paquete_precios?: { activo: boolean; precio_app: number; sucursales: { nombre: string; color: string } }[]
   paquete_verticales?: { verticales: { nombre: string; color: string } }[]
@@ -26,6 +27,7 @@ interface Props {
   verticales: { id: string; nombre: string }[]
   onVer:      (p: Paquete) => void
   onNuevo:    () => void
+  onToggleVisibilidad: (id: string, visible: boolean) => void
 }
 
 type TabEstatus = 'Activo' | 'Borrador' | 'Pausado' | 'Archivado'
@@ -48,7 +50,7 @@ function BadgeSerie({ nombre, color }: { nombre: string; color: string }) {
   )
 }
 
-export default function PaquetesTabla({ paquetes, series, sucursales, verticales, onVer, onNuevo }: Props) {
+export default function PaquetesTabla({ paquetes, series, sucursales, verticales, onVer, onNuevo, onToggleVisibilidad }: Props) {
   const [tab,     setTab]     = useState<TabEstatus>('Activo')
   const [pagina,  setPagina]  = useState(1)
   const [filtros, setFiltros] = useState({ sucursal: '', serie: '', vertical: '', modalidad: '' })
@@ -164,6 +166,9 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
                     <p>Ingresos {sortIcon('ingresos')}</p>
                 <p className="text-[10px] font-bold text-gray-300 uppercase normal-case">Este mes</p>
                 </th>
+                <th className="px-5 py-3 text-center">
+                  Activo/Inactivo
+                </th>
                 <th className="px-5 py-3 w-8" />
             </tr>
             </thead>
@@ -253,6 +258,21 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
                     {p._ingresos ? `$${p._ingresos.toLocaleString()}` : '—'}
                   </td>
 
+                  <td className="px-5 py-3.5 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onToggleVisibilidad(p.id, p.visible_en_app !== false ? false : true)
+                      }}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                        p.visible_en_app !== false ? 'bg-emerald-500' : 'bg-gray-200'
+                      }`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                        p.visible_en_app !== false ? 'translate-x-6' : 'translate-x-0'
+                      }`} />
+                    </button>
+                  </td>
+                  
                   {/* Flecha */}
                   <td className="px-5 py-3.5">
                     <button onClick={() => onVer(p)}

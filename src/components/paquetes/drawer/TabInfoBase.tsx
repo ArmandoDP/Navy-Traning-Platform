@@ -180,6 +180,25 @@ export default function TabInfoBase({ form, set, series, onRefreshCatalogos }: P
           </select>
         </div>
       </div>
+
+      {/* Visibilidad en app */}
+      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+        <div>
+          <p className="text-sm font-bold text-gray-800">Visible en app</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Si está desactivado, este paquete no aparecerá en la app para nuevas compras
+          </p>
+        </div>
+        <button
+          onClick={() => set('visible_en_app', !form.visible_en_app)}
+          className={`relative w-12 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+            form.visible_en_app !== false ? 'bg-emerald-500' : 'bg-gray-200'
+          }`}>
+          <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
+            form.visible_en_app !== false ? 'translate-x-6' : 'translate-x-0'
+          }`} />
+        </button>
+      </div>
     </div>
   )
 }
