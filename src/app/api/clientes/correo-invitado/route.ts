@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
           <h2 style="color:#111;font-size:22px;font-weight:900">¡Hola ${nombre}! 👋</h2>
           <p style="color:#6b7280;font-size:15px;line-height:24px">
             <strong>${titular?.nombre_completo}</strong> te ha invitado como usuario adicional en su membresía 
-            <strong>${titular?.paquetes?.nombre}</strong> en Navy Training Center.
+            <strong>${(titular?.paquetes as any)?.nombre}</strong> en Navy Training Center.
           </p>
           <p style="color:#6b7280;font-size:15px">Tendrás acceso a todas las clases y beneficios incluidos en el paquete, sin costo adicional.</p>
           
