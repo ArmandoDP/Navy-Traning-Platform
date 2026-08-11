@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase }            from '@/lib/supabase'
 import { X, User, CreditCard, Calendar, Lock } from 'lucide-react'
 import ToastExito              from '@/components/ToastExito'
+import ModalInvitado from './ModalInvitado'
 
 interface Props {
   isOpen:    boolean
@@ -58,6 +59,8 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   const [nuevoId,    setNuevoId]    = useState<string | null>(null)
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [paquetes,   setPaquetes]   = useState<Paquete[]>([])
+  const [modalInvitado, setModalInvitado] = useState(false)
+  const [titularId,     setTitularId]     = useState<string | null>(null)
 
   // Tipo de registro
   const [tipoRegistro, setTipoRegistro] = useState<'nuevo' | 'migracion'>('nuevo')
@@ -96,7 +99,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
 
     supabase
       .from('paquetes')
-      .select('id, nombre, vigencia_dias, paquete_precios!inner(sucursal_id)')
+      .select('id, nombre, vigencia_dias, max_usuarios, paquete_precios!inner(sucursal_id)')
       .eq('estatus', 'Activo')
       .eq('paquete_precios.sucursal_id', form.sucursal_id)
       .order('nombre')
@@ -210,6 +213,17 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
       }])
     }
 
+    const paqueteCompleto = paquetes.find(p => p.id === form.paquete_id) as any
+    console.log('paquete completo:', paqueteCompleto)
+    console.log('max_usuarios:', paqueteCompleto?.max_usuarios)
+    if (paqueteCompleto?.max_usuarios === 2 && nuevoCliente) {
+      setTitularId(nuevoCliente.id)
+      setModalInvitado(true)
+      setLoading(false)
+      // ← No llamar onSuccess() aquí
+      return
+    }
+
     setNuevoId(nuevoCliente?.id || null)
     setLoading(false)
     setToast(true)
@@ -231,6 +245,19 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
           mensaje="El cliente se ha dado de alta exitosamente."
           onClose={() => setToast(false)}
           onVer={nuevoId ? () => window.location.href = `/dashboard/clientes/${nuevoId}` : undefined}
+        />
+      )}
+
+      {/* Modal Invitado — FUERA del drawer */}
+      {modalInvitado && titularId && (
+        <ModalInvitado
+          titularId={titularId}
+          onClose={() => { 
+            setModalInvitado(false)
+            onSuccess()  // ← aquí
+            onClose()
+            resetForm()
+          }}
         />
       )}
 

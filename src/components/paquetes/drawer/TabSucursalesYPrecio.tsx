@@ -22,11 +22,13 @@ interface Room {
 }
 
 interface Props {
-  sucursales:    Sucursal[]
-  precios:       PrecioSucursal[]
-  roomsSelected: string[]  // IDs de rooms seleccionados
-  onChange:      (sucursalId: string, campo: string, valor: any) => void
-  onRoomToggle:  (roomId: string) => void
+  sucursales:       Sucursal[]
+  precios:          PrecioSucursal[]
+  roomsSelected:    string[]
+  accesosSucursales: string[]  // ← agrega
+  onChange:         (sucursalId: string, campo: string, valor: any) => void
+  onRoomToggle:     (roomId: string) => void
+  onAccesoToggle:   (sucursalId: string) => void  // ← agrega
 }
 
 function hexSoftBg(hex: string) {
@@ -39,7 +41,7 @@ function hexSoftBg(hex: string) {
 
 const inputCls = "border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 bg-gray-50 transition placeholder:text-gray-400 w-full"
 
-export default function TabSucursalesYPrecio({ sucursales, precios, roomsSelected, onChange, onRoomToggle }: Props) {
+export default function TabSucursalesYPrecio({ sucursales, precios, roomsSelected, onChange, onRoomToggle, onAccesoToggle, accesosSucursales }: Props) {
   const [roomsPorSucursal, setRoomsPorSucursal] = useState<Record<string, Room[]>>({})
 
   // Cargar rooms de cada sucursal activa
@@ -162,6 +164,32 @@ export default function TabSucursalesYPrecio({ sucursales, precios, roomsSelecte
           </div>
         )
       })}
+      {/* Accesos a sucursales */}
+      <div className="border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <p className="text-sm font-bold text-gray-800">Accesos a sucursales</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Sucursales donde el cliente puede hacer check-in y reservar clases, independiente de donde compró
+          </p>
+        </div>
+        <div className="px-4 py-4 flex flex-wrap gap-2">
+          {sucursales.map(s => {
+            const tieneAcceso = accesosSucursales.includes(s.id)
+            return (
+              <button key={s.id} type="button"
+                onClick={() => onAccesoToggle(s.id)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold border transition flex items-center gap-1.5"
+                style={tieneAcceso
+                  ? { backgroundColor: s.color, color: '#fff', borderColor: s.color }
+                  : { backgroundColor: hexSoftBg(s.color), color: s.color, borderColor: 'transparent' }
+                }>
+                {tieneAcceso && '✓ '}
+                {s.nombre}
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }

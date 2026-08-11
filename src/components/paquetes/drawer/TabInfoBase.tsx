@@ -199,6 +199,77 @@ export default function TabInfoBase({ form, set, series, onRefreshCatalogos }: P
           }`} />
         </button>
       </div>
+
+      {/* Máximo de usuarios */}
+      <div className="border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <p className="text-sm font-bold text-gray-800">Usuarios por membresía</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Define cuántos usuarios pueden usar este paquete
+          </p>
+        </div>
+        <div className="px-4 py-4 flex gap-3">
+          {[1, 2].map(n => (
+            <button key={n} type="button"
+              onClick={() => set('max_usuarios', n)}
+              className={`flex-1 flex flex-col items-center gap-1.5 py-4 rounded-xl border-2 transition ${
+                form.max_usuarios === n
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+              }`}>
+              <span className="text-2xl">{n === 1 ? '👤' : '👥'}</span>
+              <span className="text-sm font-bold">{n === 1 ? '1 usuario' : '2 usuarios'}</span>
+              <span className={`text-xs ${form.max_usuarios === n ? 'text-gray-300' : 'text-gray-400'}`}>
+                {n === 1 ? 'Membresía individual' : 'Titular + invitado'}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {/* Penalización No Show */}
+      <div className="border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-gray-800">Penalización No Show</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Cobro automático al cliente si no se presenta a su clase reservada
+            </p>
+          </div>
+          <button
+            onClick={() => set('penalizacion_noshow', !form.penalizacion_noshow)}
+            className={`relative w-12 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+              form.penalizacion_noshow ? 'bg-emerald-500' : 'bg-gray-200'
+            }`}>
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
+              form.penalizacion_noshow ? 'translate-x-6' : 'translate-x-0'
+            }`} />
+          </button>
+        </div>
+
+        {form.penalizacion_noshow && (
+          <div className="px-4 py-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Monto de penalización</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="150"
+                  className={`${inputCls} pl-6`}
+                  value={form.monto_penalizacion || ''}
+                  onChange={e => set('monto_penalizacion', Number(e.target.value))}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">MXN</span>
+              </div>
+              <p className="text-xs text-gray-400">
+                El cobro se realiza automáticamente con OrkestaPay al detectar el No Show
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

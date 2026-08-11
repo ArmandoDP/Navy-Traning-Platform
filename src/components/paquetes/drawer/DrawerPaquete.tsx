@@ -33,6 +33,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [series,     setSeries]     = useState<any[]>([])
   const [roomsSelected, setRoomsSelected] = useState<string[]>([])
+  const [accesosSucursales, setAccesosSucursales] = useState<string[]>([])
 
   const [form, setForm] = useState({
     nombre:                   '',
@@ -45,6 +46,9 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     clases_incluidas:         null as number | null,
     renovacion:               'Automatica',
     visible_en_app: true,
+    penalizacion_noshow: false,
+    monto_penalizacion: 150,
+    max_usuarios: 1,
   })
 
   const [precios, setPrecios] = useState<{
@@ -86,6 +90,12 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       if (sucs)  setSucursales(sucs)
       if (sers)  setSeries(sers)
       
+      // Después de cargar rooms y splits:
+      const { data: accesos } = await supabase
+        .from('paquete_accesos_sucursales')
+        .select('sucursal_id')
+        .eq('paquete_id', paquete.id)
+      setAccesosSucursales(accesos?.map(a => a.sucursal_id) || [])
 
       if (paquete) {
         // Edición — cargar datos del paquete
@@ -100,6 +110,9 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           clases_incluidas:        paquete.clases_incluidas || null,
           renovacion:              paquete.renovacion || 'Automatica',
           visible_en_app:           paquete.visible_en_app !== false, 
+          penalizacion_noshow: paquete.penalizacion_noshow || false,
+          monto_penalizacion: paquete.monto_penalizacion || 150,
+          max_usuarios: paquete.max_usuarios || 1,
         })
 
         // Precios — combinar sucursales con datos existentes
@@ -128,6 +141,8 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           nombre: '', codigo_interno: '', bio: '', serie_id: '',
           acceso_total: false, acceso_sucursal_hermana: false,
           vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
+          penalizacion_noshow: false, monto_penalizacion: 150,
+          max_usuarios: 1,
           visible_en_app:          paquete.visible_en_app !== false,
         })
         if (sucs) {
@@ -147,6 +162,12 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     ))
   }
 
+  const handleAccesoToggle = (sucursalId: string) => {
+    setAccesosSucursales(prev =>
+      prev.includes(sucursalId) ? prev.filter(id => id !== sucursalId) : [...prev, sucursalId]
+    )
+  }
+  
   const handleRoomToggle = (roomId: string) => {
     setRoomsSelected(prev =>
       prev.includes(roomId) ? prev.filter(id => id !== roomId) : [...prev, roomId]
@@ -170,10 +191,13 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       duracion:                form.vigencia_dias,
       clases_incluidas:        form.clases_incluidas,
       numero_clases:           form.clases_incluidas,
+      max_usuarios:            form.max_usuarios,
       renovacion:              form.renovacion,
       acceso_total:            form.acceso_total,            // ← faltaba
       acceso_sucursal_hermana: form.acceso_sucursal_hermana, // ← faltaba
       visible_en_app: form.visible_en_app,
+      penalizacion_noshow: form.penalizacion_noshow,
+      monto_penalizacion: form.monto_penalizacion,
       estatus,
     }
 
@@ -203,6 +227,14 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       )
     }
 
+    // Después de guardar rooms:
+    await supabase.from('paquete_accesos_sucursales').delete().eq('paquete_id', paqueteId)
+    if (accesosSucursales.length > 0) {
+      await supabase.from('paquete_accesos_sucursales').insert(
+        accesosSucursales.map(sucursalId => ({ paquete_id: paqueteId, sucursal_id: sucursalId }))
+      )
+    }
+
     // Rooms — borrar y reinsertar
     await supabase.from('paquete_rooms').delete().eq('paquete_id', paqueteId)
     if (roomsSelected.length > 0) {
@@ -229,11 +261,15 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     onSuccess()
   }
 
-  const handleClose = () => {
+ const handleClose = () => {
     setForm({
       nombre: '', codigo_interno: '', bio: '', serie_id: '',
       acceso_total: false, acceso_sucursal_hermana: false,
       vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
+      penalizacion_noshow: false,
+      monto_penalizacion: 150,
+      visible_en_app: true,
+      max_usuarios: 1,
     })
     setPrecios([])
     setSplits([])
@@ -340,8 +376,10 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
               sucursales={sucursales}
               precios={precios}
               roomsSelected={roomsSelected}
+              accesosSucursales={accesosSucursales}
               onChange={handlePrecioChange}
               onRoomToggle={handleRoomToggle}
+              onAccesoToggle={handleAccesoToggle}
             />
           )}
           {activeTab === 'splits' && (
