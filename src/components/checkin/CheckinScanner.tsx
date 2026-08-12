@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { Html5Qrcode }                 from 'html5-qrcode'
+import jsQR                            from 'jsqr'
 import { supabase }                    from '@/lib/supabase'
 import { QrCode, Camera, CameraOff }   from 'lucide-react'
 import CheckinResultado                from './CheckinResultado'
@@ -18,45 +18,81 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
   const [resultado,    setResultado]    = useState<any>(null)
   const [nuevoCliente, setNuevoCliente] = useState<any>(null)
   const [error,        setError]        = useState('')
-  const scannerRef = useRef<Html5Qrcode | null>(null)
+
+  const videoRef    = useRef<HTMLVideoElement>(null)
+  const canvasRef   = useRef<HTMLCanvasElement>(null)
+  const streamRef   = useRef<MediaStream | null>(null)
+  const rafRef      = useRef<number | null>(null)
+  const procesandoRef = useRef(false)
 
   const iniciarScanner = async () => {
     setError('')
     try {
-      const scanner = new Html5Qrcode('qr-reader')
-      scannerRef.current = scanner
-
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 280, height: 280 } },
-        onScanExito,
-        () => {}
-      )
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+      })
+      streamRef.current = stream
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+      }
       setActivo(true)
     } catch (e: any) {
       setError('No se pudo acceder a la cámara. Verifica los permisos.')
     }
   }
 
-  const detenerScanner = async () => {
-    if (scannerRef.current) {
-      await scannerRef.current.stop()
-      scannerRef.current = null
+  const detenerScanner = () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
     }
     setActivo(false)
   }
 
+  // Loop de detección de QR
   useEffect(() => {
-    return () => { detenerScanner() }
+    if (!activo) return
+
+    const detectar = () => {
+      const video  = videoRef.current
+      const canvas = canvasRef.current
+      if (!video || !canvas || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        rafRef.current = requestAnimationFrame(detectar)
+        return
+      }
+
+      canvas.width  = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const qr        = jsQR(imageData.data, imageData.width, imageData.height)
+
+      if (qr && !procesandoRef.current) {
+        procesandoRef.current = true
+        detenerScanner()
+        onScanExito(qr.data)
+      } else {
+        rafRef.current = requestAnimationFrame(detectar)
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(detectar)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [activo])
+
+  useEffect(() => {
+    return () => detenerScanner()
   }, [])
 
   const onScanExito = async (qrData: string) => {
-    if (procesando) return
     setProcesando(true)
-    await detenerScanner()
 
     try {
-      // Buscar la reserva
       const { data: reserva, error: errReserva } = await supabase
         .from('reservas')
         .select(`
@@ -70,6 +106,7 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
       if (errReserva || !reserva) {
         setResultado({ tipo: 'error', mensaje: 'QR inválido — reserva no encontrada' })
         setProcesando(false)
+        procesandoRef.current = false
         return
       }
 
@@ -82,6 +119,7 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
           mensaje: `Esta reserva es para ${new Date(reserva.clases.horario).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}`,
         })
         setProcesando(false)
+        procesandoRef.current = false
         return
       }
 
@@ -97,10 +135,11 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
           }
         })
         setProcesando(false)
+        procesandoRef.current = false
         return
       }
 
-      // Verificar si ya hizo check-in
+      // Verificar duplicado
       const { data: checkinExistente } = await supabase
         .from('asistencias')
         .select('id')
@@ -115,6 +154,7 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
           reserva,
         })
         setProcesando(false)
+        procesandoRef.current = false
         return
       }
 
@@ -134,15 +174,14 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
         fecha_checkin: new Date().toISOString(),
       })
 
-      // Marcar reserva como asistida
       await supabase.from('reservas').update({ estatus: 'Asistida' }).eq('id', reserva.id)
 
       onCheckin()
 
       if (esNuevo) {
-        setNuevoCliente({ reserva, esNuevo: true })
+        setNuevoCliente({ reserva })
       } else {
-        setResultado({ tipo: 'exito', reserva, esNuevo: false })
+        setResultado({ tipo: 'exito', reserva })
       }
 
     } catch (e: any) {
@@ -150,12 +189,14 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
     }
 
     setProcesando(false)
+    procesandoRef.current = false
   }
 
   const resetear = () => {
     setResultado(null)
     setNuevoCliente(null)
     setError('')
+    procesandoRef.current = false
   }
 
   return (
@@ -189,7 +230,7 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
           </div>
         )}
 
-        {!activo && !resultado && !nuevoCliente && (
+        {!activo && !resultado && !nuevoCliente && !procesando && (
           <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
             <div className="w-20 h-20 rounded-2xl bg-gray-100 flex items-center justify-center">
               <QrCode size={36} className="text-gray-400" />
@@ -208,19 +249,29 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
           </div>
         )}
 
-        {/* Contenedor del scanner */}
-        <div 
-            id="qr-reader" 
-            className={activo ? 'rounded-xl overflow-hidden' : 'hidden'}
-            style={{ minHeight: activo ? '300px' : '0' }}
-        />
+        {/* Video de la cámara */}
+        <div className="relative" style={{ display: activo ? 'block' : 'none' }}>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{ width: '100%', borderRadius: '12px', display: 'block' }}
+          />
+          {/* Guía de escaneo */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="border-2 border-white rounded-xl"
+              style={{ width: '200px', height: '200px', boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)' }} />
+          </div>
+        </div>
 
-        {/* Resultado */}
+        {/* Canvas oculto para procesar frames */}
+        <canvas ref={canvasRef} style={{ display: 'none' }} />
+
         {resultado && !nuevoCliente && (
           <CheckinResultado resultado={resultado} onReset={resetear} />
         )}
 
-        {/* Nuevo cliente */}
         {nuevoCliente && (
           <CheckinNuevoCliente data={nuevoCliente} onContinuar={resetear} />
         )}

@@ -50,7 +50,7 @@ export default function CheckinNuevoCliente({ data, onContinuar }: Props) {
           </div>
         </div>
 
-        {/* Alerta introducción */} n
+        {/* Alerta introducción */} 
         <div className="bg-amber-400 text-amber-900 rounded-xl px-4 py-3 text-sm font-bold flex items-center gap-2">
           <Star size={16} className="fill-amber-700 text-amber-700 flex-shrink-0" />
           Por favor realizar la introducción Navy a este nuevo miembro antes de la clase
