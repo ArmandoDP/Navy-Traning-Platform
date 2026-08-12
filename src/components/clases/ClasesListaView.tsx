@@ -15,7 +15,8 @@ interface Clase {
   capacidad_max:   number
   salon:           string
   estado:          string
-  duracion_minutos:number
+  duracion_minutos: number
+  estado_actual?: string
   staff?:          { nombre: string; primer_apellido: string }
   reservas?:       any[]
   rooms?:          { nombre: string; capacidad: number }
@@ -191,9 +192,12 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
                 {/* Estado */}
                 <td className="px-5 py-3.5">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                    c.estado === 'Activa' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                    c.estado_actual === 'En curso'    ? 'bg-blue-100 text-blue-700' :
+                    c.estado_actual === 'Finalizada'  ? 'bg-black text-white' :
+                    c.estado === 'Activa'             ? 'bg-green-100 text-green-700' 
+                                                      : 'bg-red-100 text-red-600'
                   }`}>
-                    {c.estado || 'Activa'}
+                    {c.estado_actual || c.estado || 'Programada'}
                   </span>
                 </td>
 

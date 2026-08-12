@@ -33,6 +33,7 @@ interface Integration {
 // ─── Config nav ───────────────────────────────────────────────────────────────
 const NAV: NavItem[] = [
   { href: '/dashboard/ejecutivo', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/checkin', label: 'Check-in', icon: Activity },
   { href: '/dashboard/reservas',  label: 'Reservas', icon: Calendar },
   { href: '/dashboard/clases',    label: 'Clases', icon: BookOpen },
   // { href: '/dashboard/coaches', label: 'Coaches', icon: UserCircle },

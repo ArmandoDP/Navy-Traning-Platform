@@ -89,13 +89,6 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       ])
       if (sucs)  setSucursales(sucs)
       if (sers)  setSeries(sers)
-      
-      // Después de cargar rooms y splits:
-      const { data: accesos } = await supabase
-        .from('paquete_accesos_sucursales')
-        .select('sucursal_id')
-        .eq('paquete_id', paquete.id)
-      setAccesosSucursales(accesos?.map(a => a.sucursal_id) || [])
 
       if (paquete) {
         // Edición — cargar datos del paquete
@@ -115,6 +108,12 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           max_usuarios: paquete.max_usuarios || 1,
         })
 
+        // Accesos — debe estar AQUÍ dentro
+        const { data: accesos } = await supabase
+          .from('paquete_accesos_sucursales')
+          .select('sucursal_id')
+          .eq('paquete_id', paquete.id)
+        setAccesosSucursales(accesos?.map(a => a.sucursal_id) || [])
         // Precios — combinar sucursales con datos existentes
         if (sucs) {
           setPrecios(sucs.map(s => {
@@ -141,9 +140,9 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           nombre: '', codigo_interno: '', bio: '', serie_id: '',
           acceso_total: false, acceso_sucursal_hermana: false,
           vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
+          visible_en_app: true,  // ← era paquete.visible_en_app que es null
           penalizacion_noshow: false, monto_penalizacion: 150,
           max_usuarios: 1,
-          visible_en_app:          paquete.visible_en_app !== false,
         })
         if (sucs) {
           setPrecios(sucs.map(s => ({ sucursal_id: s.id, activo: false, precio_app: '', activo_desde: '' })))
