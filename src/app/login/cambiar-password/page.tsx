@@ -1,20 +1,20 @@
 'use client'
-import { useState } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import AuthCard  from '@/components/auth/AuthCard'
 import AuthLogo  from '@/components/auth/AuthLogo'
 import AuthInput from '@/components/auth/AuthInput'
 
-export default function CambiarPasswordPage() {
+function CambiarPasswordContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const staffId      = searchParams.get('staffId')
 
-  const [password,   setPassword]   = useState('')
-  const [confirmar,  setConfirmar]  = useState('')
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState('')
+  const [password,  setPassword]  = useState('')
+  const [confirmar, setConfirmar] = useState('')
+  const [loading,   setLoading]   = useState(false)
+  const [error,     setError]     = useState('')
 
   const handleCambiar = async () => {
     setError('')
@@ -29,7 +29,6 @@ export default function CambiarPasswordPage() {
 
     setLoading(true)
 
-    // Actualizar password en Supabase Auth
     const { error: authError } = await supabase.auth.updateUser({ password })
     if (authError) {
       setError('Error al cambiar la contraseña. Intenta de nuevo.')
@@ -37,7 +36,6 @@ export default function CambiarPasswordPage() {
       return
     }
 
-    // Marcar como cambiada en staff
     if (staffId) {
       await supabase.from('staff').update({
         debe_cambiar_password: false,
@@ -89,5 +87,13 @@ export default function CambiarPasswordPage() {
         </button>
       </div>
     </AuthCard>
+  )
+}
+
+export default function CambiarPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <CambiarPasswordContent />
+    </Suspense>
   )
 }
