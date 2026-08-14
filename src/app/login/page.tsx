@@ -20,7 +20,7 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     setErrorCampo(null)
-    if (!email)    { setErrorCampo('correo');    return }
+    if (!email)    { setErrorCampo('correo');     return }
     if (!password) { setErrorCampo('contrasena'); return }
 
     setLoading(true)
@@ -30,7 +30,7 @@ export default function LoginPage() {
 
     if (authError) {
       const msg = authError.message.toLowerCase()
-      if (msg.includes('email'))    setErrorCampo('correo')
+      if (msg.includes('email'))         setErrorCampo('correo')
       else if (msg.includes('password')) setErrorCampo('contrasena')
       else setToast({ mensaje: 'No se encontraron las credenciales ingresadas. Intente de nuevo.', tipo: 'error' })
       setLoading(false)
@@ -38,6 +38,29 @@ export default function LoginPage() {
     }
 
     if (data.user) {
+      // Verificar si es staff
+      const { data: staff } = await supabase
+        .from('staff')
+        .select('id, estatus, debe_cambiar_password')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (staff) {
+        if (staff.estatus === 'Inactivo') {
+          await supabase.auth.signOut()
+          setToast({ mensaje: 'Tu cuenta está inactiva. Contacta a tu manager.', tipo: 'warning' })
+          setLoading(false)
+          return
+        }
+        if (staff.debe_cambiar_password) {
+          router.push(`/login/cambiar-password?staffId=${staff.id}`)
+          return
+        }
+        router.push('/dashboard/ejecutivo')
+        return
+      }
+
+      // Verificar si es admin/cliente normal
       const { data: perfil } = await supabase
         .from('clientes').select('estatus').eq('id', data.user.id).single()
       if (perfil?.estatus === 'Inactivo' || perfil?.estatus === 'Vencido') {
@@ -46,9 +69,9 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
-    }
 
-    router.push('/dashboard/ejecutivo')
+      router.push('/dashboard/ejecutivo')
+    }
   }
 
   return (

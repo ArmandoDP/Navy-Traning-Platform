@@ -8,6 +8,7 @@ import StaffTabClases      from './StaffTabClases'
 import StaffTabPerformance from './StaffTabPerformance'
 import StaffTabNomina      from './StaffTabNomina'
 import StaffTabHoras       from './StaffTabHoras'
+import StaffTabAcceso from '../StaffTabAcceso'
 
 interface Props {
   staffId: string | null
@@ -36,17 +37,18 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
   const isCoach = empleado?.tipo === 'Coach'
 
   const TABS = [
-    { key: 'metricas',     label: 'Métricas',      icon: '📊' },
-    { key: 'info',         label: 'Info general',  icon: '👤' },
+    { key: 'metricas',  label: 'Métricas',     icon: '📊' },
+    { key: 'info',      label: 'Info general', icon: '👤' },
     ...(isCoach ? [
-      { key: 'clases',     label: 'Clases',        icon: '📅' },
-      { key: 'performance',label: 'Performance',   icon: '📈' },
-      { key: 'nomina',     label: 'Nómina',        icon: '💰' },
-      { key: 'horas',      label: 'Horas',         icon: '⏱' },
+      { key: 'clases',      label: 'Clases',      icon: '📅' },
+      { key: 'performance', label: 'Performance', icon: '📈' },
+      { key: 'nomina',      label: 'Nómina',      icon: '💰' },
+      { key: 'horas',       label: 'Horas',       icon: '⏱' },
     ] : [
-      { key: 'nomina',     label: 'Nómina',        icon: '💰' },
-      { key: 'horas',      label: 'Horas',         icon: '⏱' },
+      { key: 'nomina', label: 'Nómina', icon: '💰' },
+      { key: 'horas',  label: 'Horas',  icon: '⏱' },
     ]),
+    { key: 'acceso', label: 'Acceso CRM', icon: '🔐' },  // ← fuera del spread
   ]
 
   const fetchEmpleado = async () => {
@@ -304,6 +306,7 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
               {activeTab === 'performance'   && isCoach && <StaffTabPerformance empleado={empleado} />}
               {activeTab === 'nomina'        && <StaffTabNomina       empleado={empleado} />}
               {activeTab === 'horas'         && <StaffTabHoras        empleado={empleado} />}
+              {activeTab === 'acceso' && <StaffTabAcceso empleado={empleado} onRefresh={fetchEmpleado} />}
             </div>
 
             {/* Footer */}
