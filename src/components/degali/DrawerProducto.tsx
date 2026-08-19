@@ -245,7 +245,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
                   <p className="text-sm font-bold text-gray-900">Producto activo</p>
                   <p className="text-xs text-gray-400">Aparece en el punto de venta</p>
                 </div>
-                <button onClick={() => setActivo(p => !p)}
+                <button onClick={() => setActivo((p: boolean) => !p)}
                   className={`w-10 h-6 rounded-full transition-colors relative ${activo ? 'bg-emerald-500' : 'bg-gray-200'}`}>
                   <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${activo ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </button>
