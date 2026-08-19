@@ -191,6 +191,7 @@ export default function ModalCopiarSemana({ isOpen, onClose, onSuccess, fechaAct
             categoria_id:      clase.categoria_id,
             publicar_wellhub:  clase.publicar_wellhub,
             semana_copiada_de: clase.id,
+            room_id:           clase.room_id,
           }).select().single()
 
           // Publicar en Wellhub si aplica
@@ -206,6 +207,7 @@ export default function ModalCopiarSemana({ isOpen, onClose, onSuccess, fechaAct
                   horario:         nuevaFecha.toISOString(),
                   duracionMinutos: clase.duracion_minutos,
                   capacidadMax:    clase.capacidad_max,
+                  room_id:         clase.room_id,
                 }),
               })
             } catch { /* silencioso */ }
@@ -253,6 +255,7 @@ export default function ModalCopiarSemana({ isOpen, onClose, onSuccess, fechaAct
           categoria_id:      clase.categoria_id,
           publicar_wellhub:  clase.publicar_wellhub,
           semana_copiada_de: clase.id,
+          room_id:           clase.room_id,
         }).select().single()
 
         if (clase.publicar_wellhub && claseCopiada) {
@@ -267,6 +270,7 @@ export default function ModalCopiarSemana({ isOpen, onClose, onSuccess, fechaAct
                 horario:         nuevaFecha.toISOString(),
                 duracionMinutos: clase.duracion_minutos,
                 capacidadMax:    clase.capacidad_max,
+                room_id:         clase.room_id,
               }),
             })
           } catch { /* silencioso */ }

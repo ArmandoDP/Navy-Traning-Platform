@@ -10,7 +10,7 @@ import { LayoutDashboard, Package, Bell, BarChart2, Settings, LogOut, ChevronLef
   Users, CreditCard, Star, Activity, ChevronDown,
   DollarSign,
   MapPin,
-  Puzzle,
+  Puzzle,ShoppingBag 
 } from 'lucide-react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ interface Integration {
 const NAV: NavItem[] = [
   { href: '/dashboard/ejecutivo', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/checkin', label: 'Check-in', icon: Activity },
+  { href: '/dashboard/degali', label: 'De Gali', icon: ShoppingBag },
   { href: '/dashboard/reservas',  label: 'Reservas', icon: Calendar },
   { href: '/dashboard/clases',    label: 'Clases', icon: BookOpen },
   // { href: '/dashboard/coaches', label: 'Coaches', icon: UserCircle },
