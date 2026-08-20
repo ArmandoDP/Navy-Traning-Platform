@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase }                  from '@/lib/supabase'
-import { validarAccesoWellhub, confirmarBookingWellhub } from '@/lib/wellhub'
+import { validarAccesoWellhub, confirmarBookingWellhub, actualizarCuposSlotWellhub } from '@/lib/wellhub'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-
-  // Verificación de firma — pendiente de implementar con el secret que les compartas
-  // const signature = req.headers.get('x-gympass-signature')
 
   try {
 
@@ -67,7 +64,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── BOOKING REQUESTED — debe confirmarse en <15 min ──────────────────────
+    // ── BOOKING REQUESTED ─────────────────────────────────────────────────────
     if (body.event_type === 'booking-requested') {
       const user = body.event_data?.user
       const slot = body.event_data?.slot
@@ -76,14 +73,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'booking_number faltante' }, { status: 400 })
       }
 
-      // 1. Buscar la clase en nuestro sistema usando el wellhub_slot_id
       const { data: clase } = await supabase
         .from('clases')
         .select('id, capacidad_max, espacios_ocupados, nombre_clase, horario')
         .eq('wellhub_slot_id', String(slot.id))
         .single()
 
-      // 2. Buscar/crear cliente
       const { data: clienteExistente } = await supabase
         .from('clientes')
         .select('id')
@@ -102,7 +97,6 @@ export async function POST(req: NextRequest) {
         clienteId = nuevoCliente?.id
       }
 
-      // 3. Guardar el booking como pendiente
       const { data: booking } = await supabase.from('wellhub_bookings').insert({
         booking_number:  slot.booking_number,
         gympass_user_id: user.unique_token,
@@ -112,37 +106,49 @@ export async function POST(req: NextRequest) {
         metadata:        body,
       }).select().single()
 
-      // 4. Validar si hay cupo disponible
       const hayCupo = clase
         ? (clase.espacios_ocupados || 0) < clase.capacidad_max
-        : true // si no encontramos la clase localmente, confiamos y confirmamos
+        : true
 
       if (hayCupo) {
-  try {
-    const resultado = await confirmarBookingWellhub(slot.booking_number, slot.class_id, true)
-    console.log('Booking confirmado en Wellhub:', resultado)
+        try {
+          const resultado = await confirmarBookingWellhub(slot.booking_number, slot.class_id, true)
+          console.log('Booking confirmado en Wellhub:', resultado)
 
-    await supabase.from('wellhub_bookings')
-      .update({ estatus: 'Confirmado' })
-      .eq('id', booking?.id)
+          await supabase.from('wellhub_bookings')
+            .update({ estatus: 'Confirmado' })
+            .eq('id', booking?.id)
 
-    if (clase) {
-      await supabase.from('reservas').insert({
-        clase_id:   clase.id,
-        cliente_id: clienteId,
-        estatus:    'Confirmada',
-        origen:     'Wellhub',
-      })
-      await supabase.from('clases')
-        .update({ espacios_ocupados: (clase.espacios_ocupados || 0) + 1 })
-        .eq('id', clase.id)
-    }
+          if (clase) {
+            const nuevosOcupados = (clase.espacios_ocupados || 0) + 1
 
-  } catch (errConfirm: any) {
-    console.error('❌ Error confirmando booking en Wellhub:', errConfirm.message)
-  }
-} else {
-        // Sin cupo — rechazar
+            await supabase.from('reservas').insert({
+              clase_id:   clase.id,
+              cliente_id: clienteId,
+              estatus:    'Confirmada',
+              origen:     'Wellhub',
+            })
+
+            await supabase.from('clases')
+              .update({ espacios_ocupados: nuevosOcupados })
+              .eq('id', clase.id)
+
+            // Actualizar cupos en Wellhub
+            try {
+              await actualizarCuposSlotWellhub(
+                String(slot.id),
+                nuevosOcupados,
+                clase.capacidad_max
+              )
+            } catch (e: any) {
+              console.error('Error actualizando cupos en Wellhub:', e.message)
+            }
+          }
+
+        } catch (errConfirm: any) {
+          console.error('❌ Error confirmando booking en Wellhub:', errConfirm.message)
+        }
+      } else {
         try {
           await confirmarBookingWellhub(slot.booking_number, slot.class_id, false)
           await supabase.from('wellhub_bookings')
@@ -181,19 +187,30 @@ export async function POST(req: NextRequest) {
             .update({ estatus: 'Cancelado' })
             .eq('id', booking.id)
 
-          // Liberar el cupo en la clase
           const { data: clase } = await supabase
             .from('clases')
-            .select('id, espacios_ocupados')
+            .select('id, espacios_ocupados, capacidad_max')
             .eq('wellhub_slot_id', booking.wellhub_slot_id)
             .single()
 
           if (clase) {
+            const nuevosOcupados = Math.max(0, (clase.espacios_ocupados || 0) - 1)
+
             await supabase.from('clases')
-              .update({ espacios_ocupados: Math.max(0, (clase.espacios_ocupados || 0) - 1) })
+              .update({ espacios_ocupados: nuevosOcupados })
               .eq('id', clase.id)
 
-            // Marcar reserva como cancelada
+            // Actualizar cupos en Wellhub
+            try {
+              await actualizarCuposSlotWellhub(
+                String(booking.wellhub_slot_id),
+                nuevosOcupados,
+                clase.capacidad_max
+              )
+            } catch (e: any) {
+              console.error('Error actualizando cupos cancelación Wellhub:', e.message)
+            }
+
             await supabase.from('reservas')
               .update({ estatus: 'Cancelada' })
               .eq('clase_id', clase.id)
