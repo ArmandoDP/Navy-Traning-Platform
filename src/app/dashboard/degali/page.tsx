@@ -39,7 +39,7 @@ export default function DegaliPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">De Gali</h1>
+          <h1 className="text-2xl font-black text-gray-900">THE GALLEY</h1>
           <p className="text-gray-400 text-sm mt-0.5">Smoothie Bar · {nombreSucursal}</p>
         </div>
 

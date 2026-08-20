@@ -34,7 +34,7 @@ interface Integration {
 const NAV: NavItem[] = [
   { href: '/dashboard/ejecutivo', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/checkin', label: 'Check-in', icon: Activity },
-  { href: '/dashboard/degali', label: 'De Gali', icon: ShoppingBag },
+  { href: '/dashboard/degali', label: 'THE GALLEY', icon: ShoppingBag },
   { href: '/dashboard/reservas',  label: 'Reservas', icon: Calendar },
   { href: '/dashboard/clases',    label: 'Clases', icon: BookOpen },
   // { href: '/dashboard/coaches', label: 'Coaches', icon: UserCircle },

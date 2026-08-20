@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   await resend.emails.send({
     from:    'Navy Training Center <noreply@navytrainingcenter.com>',
     to:      email,
-    subject: `Comprobante De Gali · #${ventaId.slice(0,8).toUpperCase()}`,
+    subject: `Comprobante THE GALLEY · #${ventaId.slice(0,8).toUpperCase()}`,
     html: `
 <!DOCTYPE html>
 <html>
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     <div style="background:linear-gradient(135deg,#171B24 0%,#1e2433 100%);border-radius:20px 20px 0 0;padding:36px 32px;text-align:center">
       <p style="color:#fff;font-size:28px;font-weight:900;margin:0;letter-spacing:4px">NAVY</p>
-      <p style="color:#4b5563;font-size:10px;font-weight:700;margin:4px 0 0;letter-spacing:6px">DE GALI · SMOOTHIE BAR</p>
+      <p style="color:#4b5563;font-size:10px;font-weight:700;margin:4px 0 0;letter-spacing:6px">THE GALLEY · SMOOTHIE BAR</p>
       <div style="margin-top:16px;background:rgba(255,255,255,0.08);border-radius:10px;padding:10px 20px;display:inline-block">
         <p style="color:#9ca3af;font-size:12px;margin:0">Comprobante <strong style="color:#fff">#${ventaId.slice(0,8).toUpperCase()}</strong></p>
       </div>
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       </div>
 
       <p style="color:#9ca3af;font-size:12px;text-align:center;margin:0">
-        Gracias por tu compra en Navy Training Center · De Gali Smoothie Bar
+        Gracias por tu compra en Navy Training Center · THE GALLEY Smoothie Bar
       </p>
     </div>
 

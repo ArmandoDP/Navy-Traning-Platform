@@ -174,7 +174,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
             <h2 className="text-base font-black text-gray-900">
               {esNuevo ? 'Nuevo producto' : `Editar · ${producto.nombre}`}
             </h2>
-            <p className="text-xs text-gray-400 mt-0.5">{esNuevo ? 'De Gali Smoothie Bar' : producto.categoria}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{esNuevo ? 'THE GALLEY Smoothie Bar' : producto.categoria}</p>
           </div>
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
             <X size={16} />
