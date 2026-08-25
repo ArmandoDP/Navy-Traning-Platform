@@ -48,7 +48,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     setLoading(true)
 
     const [{ data: claseData }, { data: reservasData }, { data: asistData }, { data: coachData }] = await Promise.all([
-      supabase.from('clases').select('*, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)').eq('id', claseId).single(),
+      supabase.from('clases').select('*, wellhub_slot_id, totalpass_occurrence_uuid, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)').eq('id', claseId).single(),
       supabase.from('reservas').select('*, clientes(id, nombre_completo, email)').eq('clase_id', claseId).order('created_at'),
       supabase.from('asistencias').select('*').eq('clase_id', claseId),
       supabase.from('staff').select('id, nombre, primer_apellido').eq('tipo', 'Coach').eq('estatus', 'Activo').order('nombre'),
@@ -132,11 +132,56 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     onSuccess()
   }
 
+  const handlePublicarWellhub = async () => {
+    if (!clase || !claseId) return
+    try {
+      const res = await fetch('/api/wellhub/publicar-clase', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          claseId,
+          nombre:          clase.nombre_clase,
+          descripcion:     clase.descripcion || clase.nombre_clase,
+          horario:         clase.horario,
+          duracionMinutos: clase.duracion_minutos,
+          capacidadMax:    clase.capacidad_max,
+        }),
+      })
+      if (res.ok) fetchData()
+    } catch (e) {
+      console.error('Error publicando en Wellhub:', e)
+    }
+  }
+
+  const handlePublicarTotalpass = async () => {
+    if (!clase || !claseId) return
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/publicar-clase`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          clase_id:        claseId,
+          sucursal_id:     clase.sucursal_id,
+          nombre:          clase.nombre_clase,
+          descripcion:     clase.descripcion || clase.nombre_clase,
+          horario:         clase.horario,
+          duracion_minutos: clase.duracion_minutos,
+          capacidad_max:   clase.capacidad_max,
+          coach:           clase.staff ? `${clase.staff.nombre} ${clase.staff.primer_apellido}` : 'Navy Coach',
+        }),
+      })
+      if (res.ok) fetchData()
+    } catch (e) {
+      console.error('Error publicando en TotalPass:', e)
+    }
+  }
   if (!isOpen) return null
 
   const totalReservas    = reservas.filter(r => r.estatus !== 'Cancelada').length
   const totalAsistencias = asistencias.length
   const ocupacion        = clase?.capacidad_max > 0 ? Math.round((totalReservas / clase.capacidad_max) * 100) : 0
+  const enWellhub        = !!clase?.wellhub_slot_id
+  const enTotalpass      = !!clase?.totalpass_occurrence_uuid
 
   return (
     <>
@@ -151,7 +196,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-5 border-b border-gray-100">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-black text-gray-900">
                 {loading ? '...' : clase?.nombre_clase}
               </h2>
@@ -161,9 +206,14 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   {clase.categorias_clase.nombre}
                 </span>
               )}
-              {clase?.es_recurrente && (
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-600">
-                  🔁 Recurrente
+              {enWellhub && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-orange-50 text-orange-500 border border-orange-100">
+                  Wellhub ✓
+                </span>
+              )}
+              {enTotalpass && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-blue-50 text-blue-500 border border-blue-100">
+                  TotalPass ✓
                 </span>
               )}
             </div>
@@ -254,6 +304,49 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                 <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">{clase.descripcion}</p>
               )}
 
+              {/* Plataformas */}
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <p className="text-xs font-black text-gray-500 uppercase tracking-wide">Plataformas externas</p>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {/* Wellhub */}
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-gray-900">Wellhub</span>
+                      {enWellhub
+                        ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500">✓ Publicada · Slot {clase.wellhub_slot_id}</span>
+                        : <span className="text-xs text-gray-400">No publicada</span>
+                      }
+                    </div>
+                    {!enWellhub && (
+                      <button
+                        onClick={handlePublicarWellhub}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 transition">
+                        Publicar
+                      </button>
+                    )}
+                  </div>
+                  {/* TotalPass */}
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-gray-900">TotalPass</span>
+                      {enTotalpass
+                        ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">✓ Publicada</span>
+                        : <span className="text-xs text-gray-400">No publicada</span>
+                      }
+                    </div>
+                    {!enTotalpass && clase?.sucursal_id && (
+                      <button
+                        onClick={handlePublicarTotalpass}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
+                        Publicar
+                      </button>
+                    )}z
+                  </div>
+                </div>
+              </div>
+
               {/* Estatus + cancelar */}
               <div className="flex items-center justify-between pt-2">
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -323,13 +416,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           {/* Tab Editar */}
           {tab === 'editar' && (
             <div className="px-6 py-5 space-y-4">
-
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-gray-700">Nombre de la clase</label>
                 <input className={inputCls} value={form.nombre_clase}
                   onChange={e => set('nombre_clase', e.target.value)} />
               </div>
-
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-gray-700">Coach</label>
                 <select className={selectCls} value={form.coach_id} onChange={e => set('coach_id', e.target.value)}>
@@ -339,7 +430,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   ))}
                 </select>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-gray-700">Fecha</label>
@@ -352,7 +442,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                     onChange={e => set('hora', e.target.value)} />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-gray-700">Duración (min)</label>
@@ -375,13 +464,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   </div>
                 </div>
               </div>
-
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-gray-700">Salón / Room</label>
                 <input className={inputCls} value={form.salon}
                   onChange={e => set('salon', e.target.value)} />
               </div>
-
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-gray-700">Estatus</label>
                 <select className={selectCls} value={form.estado} onChange={e => set('estado', e.target.value)}>
@@ -390,7 +477,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   <option value="Finalizada">Finalizada</option>
                 </select>
               </div>
-
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-gray-700">Descripción</label>
                 <textarea rows={3} className={`${inputCls} resize-none`}

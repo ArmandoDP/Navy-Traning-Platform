@@ -6,20 +6,23 @@ import ClasesFilters      from './ClasesFilters'
 import { useState } from 'react'
 
 interface Clase {
-  id:              string
-  nombre_clase:    string
-  tipo_clase:      string
-  tipo_display:    string
-  color:           string
-  horario:         string
-  capacidad_max:   number
-  salon:           string
-  estado:          string
-  duracion_minutos: number
-  estado_actual?: string
-  staff?:          { nombre: string; primer_apellido: string }
-  reservas?:       any[]
-  rooms?:          { nombre: string; capacidad: number }
+  id:                       string
+  nombre_clase:             string
+  tipo_clase:               string
+  tipo_display:             string
+  color:                    string
+  horario:                  string
+  capacidad_max:            number
+  salon:                    string
+  estado:                   string
+  duracion_minutos:         number
+  estado_actual?:           string
+  wellhub_slot_id?:         string | null
+  totalpass_occurrence_uuid?: string | null
+  publicar_wellhub?:        boolean
+  staff?:                   { nombre: string; primer_apellido: string }
+  reservas?:                any[]
+  rooms?:                   { nombre: string; capacidad: number }
 }
 
 interface Props {
@@ -28,26 +31,12 @@ interface Props {
   onVerClase:   (id: string) => void
 }
 
-// Badge de tipo con color dinámico
 function TipoBadge({ tipo, color }: { tipo: string; color: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border"
       style={{ borderColor: color, color, backgroundColor: `${color}12` }}>
       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
       {tipo || 'General'}
-    </span>
-  )
-}
-
-function CategoriaBadge({ categoria }: { categoria?: { nombre: string; color: string } }) {
-  if (!categoria) return <span className="text-xs text-gray-300">—</span>
-  const r = parseInt(categoria.color.slice(1,3),16)
-  const g = parseInt(categoria.color.slice(3,5),16)
-  const b = parseInt(categoria.color.slice(5,7),16)
-  return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold"
-      style={{ color: categoria.color, backgroundColor: `rgba(${r},${g},${b},0.12)` }}>
-      {categoria.nombre}
     </span>
   )
 }
@@ -73,7 +62,6 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
   const setFiltro = (k: string, v: string) => setFiltros(p => ({ ...p, [k]: v }))
   const limpiar   = () => setFiltros({ hora: '', clase: '', room: '', coach: '', tipo: '', estado: '' })
 
-  // Filtrar clases del día activo
   const clasesDia = clases.filter(c => {
     const f = new Date(c.horario)
     return f.toDateString() === fechaActiva.toDateString()
@@ -101,8 +89,6 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-
-      {/* Sub-header con filtros */}
       <div className="px-5 border-b border-gray-100">
         <ClasesFilters
           filtros={filtros}
@@ -114,7 +100,6 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
         />
       </div>
 
-      {/* Tabla */}
       <table className="w-full text-left">
         <thead>
           <tr className="text-gray-400 text-xs font-bold uppercase border-b border-gray-100">
@@ -125,6 +110,7 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
             <th className="px-5 py-3">Room</th>
             <th className="px-5 py-3">Capacidad</th>
             <th className="px-5 py-3">Duración</th>
+            <th className="px-5 py-3">Plataformas</th>
             <th className="px-5 py-3">Estado</th>
             <th className="px-5 py-3 w-8"/>
           </tr>
@@ -132,7 +118,7 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
         <tbody className="divide-y divide-gray-50">
           {filtradas.length === 0 ? (
             <tr>
-              <td colSpan={9} className="px-5 py-12 text-center text-gray-400 italic text-sm">
+              <td colSpan={10} className="px-5 py-12 text-center text-gray-400 italic text-sm">
                 No hay clases para este día
               </td>
             </tr>
@@ -142,15 +128,15 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
             const tipo        = c.tipo_display || c.tipo_clase || 'General'
             const color       = getColor(tipo, c.color)
             const duracion    = c.duracion_minutos || 60
+            const enWellhub   = !!c.wellhub_slot_id
+            const enTotalpass = !!c.totalpass_occurrence_uuid
 
             return (
               <tr key={c.id} className="hover:bg-gray-50 transition group">
-                {/* Hora */}
                 <td className="px-5 py-3.5">
                   <span className="text-sm font-bold text-gray-900">{hora}</span>
                 </td>
 
-                {/* Clase / Room */}
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
@@ -161,47 +147,59 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
                   </div>
                 </td>
 
-                {/* Coach */}
                 <td className="px-5 py-3.5 text-sm text-gray-600">
                   {c.staff ? `${c.staff.nombre} ${c.staff.primer_apellido}`.trim() : '—'}
                 </td>
 
-                {/* Tipo badge */}
                 <td className="px-5 py-3.5">
                   <TipoBadge tipo={tipo} color={color} />
                 </td>
 
-                {/* Room */}
                 <td className="px-5 py-3.5">
                   {c.rooms
                     ? <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2 py-1 rounded-lg">{c.rooms.nombre}</span>
                     : <span className="text-xs text-gray-300">—</span>
                   }
                 </td>
-                
-                {/* Capacidad */}
+
                 <td className="px-5 py-3.5">
                   <ClasesCapacidadBar reservas={totalReservas} capacidad={c.capacidad_max} />
                 </td>
 
-                {/* Duración */}
                 <td className="px-5 py-3.5 text-sm text-gray-600">
                   {duracion} min
                 </td>
 
-                {/* Estado */}
+                {/* Plataformas */}
+                <td className="px-5 py-3.5">
+                  <div className="flex items-center gap-1.5">
+                    {enWellhub && (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-100">
+                        WH
+                      </span>
+                    )}
+                    {enTotalpass && (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 border border-blue-100">
+                        TP
+                      </span>
+                    )}
+                    {!enWellhub && !enTotalpass && (
+                      <span className="text-gray-300 text-xs">—</span>
+                    )}
+                  </div>
+                </td>
+
                 <td className="px-5 py-3.5">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
                     c.estado_actual === 'En curso'    ? 'bg-blue-100 text-blue-700' :
                     c.estado_actual === 'Finalizada'  ? 'bg-black text-white' :
-                    c.estado === 'Activa'             ? 'bg-green-100 text-green-700' 
+                    c.estado === 'Activa'             ? 'bg-green-100 text-green-700'
                                                       : 'bg-red-100 text-red-600'
                   }`}>
                     {c.estado_actual || c.estado || 'Programada'}
                   </span>
                 </td>
 
-                {/* Flecha */}
                 <td className="px-5 py-3.5">
                   <button onClick={() => onVerClase(c.id)}
                     className="p-1.5 rounded-lg hover:bg-gray-100 transition text-gray-300 hover:text-indigo-600 flex items-center">

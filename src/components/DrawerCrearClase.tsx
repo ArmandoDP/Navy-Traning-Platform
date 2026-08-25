@@ -38,6 +38,7 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
     descripcion:      '',
     es_recurrente:    false,
     publicar_wellhub: false,
+    publicar_totalpass: false,
   })
 
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
@@ -99,6 +100,7 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
       estado:           'Activa',
       tipo_clase:       'General',
       publicar_wellhub: form.publicar_wellhub,
+      publicar_totalpass: form.publicar_totalpass,
       recurrencia_tipo: form.es_recurrente ? recurrenciaTipo : null,
       recurrencia_fin:  form.es_recurrente && recurrenciaFin ? recurrenciaFin : null,
     }
@@ -159,12 +161,37 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
       }
     }
 
+    // 4. Publicar en TotalPass si aplica
+    if (form.publicar_totalpass && claseCreada) {
+      try {
+        const coach = coaches.find(c => c.id === form.coach_id)
+        const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/publicar-clase`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clase_id:         claseCreada.id,
+            sucursal_id:      form.sucursal_id,
+            nombre:           form.nombre_clase,
+            descripcion:      form.descripcion,
+            horario,
+            duracion_minutos: form.duracion_minutos,
+            capacidad_max:    form.capacidad_max,
+            coach:            coach ? `${coach.nombre} ${coach.primer_apellido}` : 'Navy Coach',
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) alert('Clase creada, pero error en TotalPass: ' + data.detail)
+      } catch (err: any) {
+        alert('Clase creada, pero no se pudo conectar con TotalPass: ' + err.message)
+      }
+    }
+
     onSuccess()
     onClose()
     setForm({
       nombre_clase: '', sucursal_id: sucursalId || '', coach_id: '',
       room_id: '', fecha: '', hora: '', duracion_minutos: 60,
-      capacidad_max: 0, descripcion: '', es_recurrente: false, publicar_wellhub: false,
+      capacidad_max: 0, descripcion: '', es_recurrente: false, publicar_wellhub: false, publicar_totalpass: false,
     })
     setRecurrenciaTipo('semanal')
     setRecurrenciaFin('')
@@ -349,6 +376,16 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
               className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500" />
             <span className="text-sm text-gray-700">
               🏃 Publicar también en Wellhub <span className="text-gray-400 text-xs">(visible para usuarios de Wellhub)</span>
+            </span>
+          </label>
+          
+          {/* TotalPass */}
+          <label className="flex items-center gap-2 cursor-pointer bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+            <input type="checkbox" checked={form.publicar_totalpass}
+              onChange={e => set('publicar_totalpass', e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            <span className="text-sm text-gray-700">
+              🏋️ Publicar también en TotalPass <span className="text-gray-400 text-xs">(visible para usuarios de TotalPass)</span>
             </span>
           </label>
 
