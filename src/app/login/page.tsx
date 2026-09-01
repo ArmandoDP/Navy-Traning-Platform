@@ -27,6 +27,7 @@ export default function LoginPage() {
     setToast(null)
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    console.log('Auth result:', data, authError)
 
     if (authError) {
       const msg = authError.message.toLowerCase()

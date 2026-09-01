@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     precio:           p.paquete_precios[0]?.precio_app || 0,
     rooms:            p.paquete_rooms?.map((pr: any) => pr.rooms?.nombre).filter(Boolean) || [],
     max_usuarios: p.max_usuarios || 1, 
+    es_recurrente:    p.es_recurrente || false,
   }))
 
   return NextResponse.json({ paquetes })

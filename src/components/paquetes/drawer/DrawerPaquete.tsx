@@ -49,6 +49,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     penalizacion_noshow: false,
     monto_penalizacion: 150,
     max_usuarios: 1,
+    es_recurrente: false,
   })
 
   const [precios, setPrecios] = useState<{
@@ -106,6 +107,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           penalizacion_noshow: paquete.penalizacion_noshow || false,
           monto_penalizacion: paquete.monto_penalizacion || 150,
           max_usuarios: paquete.max_usuarios || 1,
+          es_recurrente: paquete.es_recurrente || false,
         })
 
         // Accesos — debe estar AQUÍ dentro
@@ -142,6 +144,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
           vigencia_dias: 30, clases_incluidas: null, renovacion: 'Automatica',
           visible_en_app: true,  // ← era paquete.visible_en_app que es null
           penalizacion_noshow: false, monto_penalizacion: 150,
+          es_recurrente: false,
           max_usuarios: 1,
         })
         if (sucs) {
@@ -197,6 +200,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       visible_en_app: form.visible_en_app,
       penalizacion_noshow: form.penalizacion_noshow,
       monto_penalizacion: form.monto_penalizacion,
+      es_recurrente: form.es_recurrente,
       estatus,
     }
 
@@ -269,6 +273,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       monto_penalizacion: 150,
       visible_en_app: true,
       max_usuarios: 1,
+      es_recurrente: false,
     })
     setPrecios([])
     setSplits([])

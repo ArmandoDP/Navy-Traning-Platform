@@ -200,6 +200,44 @@ export default function TabInfoBase({ form, set, series, onRefreshCatalogos }: P
         </button>
       </div>
 
+      {/* Tipo de pago */}
+      <div className="border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <p className="text-sm font-bold text-gray-800">Tipo de pago</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Define si este paquete se cobra de forma recurrente o es un pago único
+          </p>
+        </div>
+        <div className="px-4 py-4 flex gap-3">
+          <button type="button"
+            onClick={() => set('es_recurrente', false)}
+            className={`flex-1 flex flex-col items-center gap-1.5 py-4 rounded-xl border-2 transition ${
+              !form.es_recurrente
+                ? 'border-gray-900 bg-gray-900 text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+            }`}>
+            <span className="text-2xl">💳</span>
+            <span className="text-sm font-bold">Pago único</span>
+            <span className={`text-xs ${!form.es_recurrente ? 'text-gray-300' : 'text-gray-400'}`}>
+              El cliente paga una sola vez
+            </span>
+          </button>
+          <button type="button"
+            onClick={() => set('es_recurrente', true)}
+            className={`flex-1 flex flex-col items-center gap-1.5 py-4 rounded-xl border-2 transition ${
+              form.es_recurrente
+                ? 'border-gray-900 bg-gray-900 text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+            }`}>
+            <span className="text-2xl">🔄</span>
+            <span className="text-sm font-bold">Recurrente</span>
+            <span className={`text-xs ${form.es_recurrente ? 'text-gray-300' : 'text-gray-400'}`}>
+              Se renueva automáticamente
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Máximo de usuarios */}
       <div className="border border-gray-200 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
