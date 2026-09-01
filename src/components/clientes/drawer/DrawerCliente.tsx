@@ -11,8 +11,9 @@ import TabNotas            from './tabs/TabNotas'
 import TabComunicaciones   from './tabs/TabComunicaciones'
 import TabActividad        from './tabs/TabActividad'
 import ToastExito          from '@/components/ToastExito'
+import TabAccesoCliente from './tabs/TabAccesoCliente'
 
-type Tab = 'resumen' | 'membresia' | 'reservas' | 'pagos' | 'notas' | 'comunicaciones' | 'actividad'
+type Tab = 'resumen' | 'membresia' | 'reservas' | 'pagos' | 'notas' | 'comunicaciones' | 'actividad' |  'acceso'
 
 interface Props {
   clienteId: string | null
@@ -70,6 +71,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
     { key: 'notas',          label: `Notas (${notas.length})`              },
     { key: 'comunicaciones', label: 'Comunicaciones'                       },
     { key: 'actividad',      label: 'Actividad'                            },
+    { key: 'acceso',         label: 'Acceso App' },
   ]
 
   return (
@@ -132,6 +134,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
               {tab === 'notas'          && <TabNotas          clienteId={clienteId!} notas={notas} onRefresh={fetchData} />}
               {tab === 'comunicaciones' && <TabComunicaciones cliente={cliente} comunicaciones={comunicaciones} />}
               {tab === 'actividad'      && <TabActividad      reservas={reservas} pagos={pagos} comunicaciones={comunicaciones} />}
+              {tab === 'acceso' && <TabAccesoCliente cliente={cliente} onRefresh={fetchData} />}
             </div>
 
             {/* Footer */}

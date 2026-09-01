@@ -98,12 +98,13 @@ export async function POST(req: NextRequest) {
       }
 
       const { data: booking } = await supabase.from('wellhub_bookings').insert({
-        booking_number:  slot.booking_number,
-        gympass_user_id: user.unique_token,
-        wellhub_slot_id: String(slot.id),
-        estatus:         'Pendiente',
-        cliente_id:      clienteId,
-        metadata:        body,
+        booking_number:   slot.booking_number,
+        gympass_user_id:  user.unique_token,
+        wellhub_slot_id:  String(slot.id),
+        wellhub_class_id: String(slot.class_id),
+        estatus:          'Pendiente',
+        cliente_id:       clienteId,
+        metadata:         body,
       }).select().single()
 
       const hayCupo = clase
@@ -133,12 +134,11 @@ export async function POST(req: NextRequest) {
               .update({ espacios_ocupados: nuevosOcupados })
               .eq('id', clase.id)
 
-            // Actualizar cupos en Wellhub
             try {
               await actualizarCuposSlotWellhub(
                 String(slot.id),
                 nuevosOcupados,
-                clase.capacidad_max
+                String(slot.class_id)
               )
             } catch (e: any) {
               console.error('Error actualizando cupos en Wellhub:', e.message)
@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
       if (bookingNumber) {
         const { data: booking } = await supabase
           .from('wellhub_bookings')
-          .select('id, cliente_id, wellhub_slot_id')
+          .select('id, cliente_id, wellhub_slot_id, wellhub_class_id, metadata')
           .eq('booking_number', bookingNumber)
           .single()
 
@@ -200,12 +200,11 @@ export async function POST(req: NextRequest) {
               .update({ espacios_ocupados: nuevosOcupados })
               .eq('id', clase.id)
 
-            // Actualizar cupos en Wellhub
             try {
               await actualizarCuposSlotWellhub(
                 String(booking.wellhub_slot_id),
                 nuevosOcupados,
-                clase.capacidad_max
+                String(booking.wellhub_class_id || booking.metadata?.event_data?.slot?.class_id)
               )
             } catch (e: any) {
               console.error('Error actualizando cupos cancelación Wellhub:', e.message)

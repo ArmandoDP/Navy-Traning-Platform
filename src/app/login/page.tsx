@@ -12,11 +12,11 @@ type ToastInfo = { mensaje: string; tipo: 'error' | 'warning' | 'success' } | nu
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email,    setEmail]    = useState('')
-  const [password, setPassword] = useState('')
-  const [loading,  setLoading]  = useState(false)
-  const [toast,    setToast]    = useState<ToastInfo>(null)
-  const [errorCampo, setErrorCampo] = useState<'correo'|'contrasena'|null>(null)
+  const [email,      setEmail]      = useState('')
+  const [password,   setPassword]   = useState('')
+  const [loading,    setLoading]    = useState(false)
+  const [toast,      setToast]      = useState<ToastInfo>(null)
+  const [errorCampo, setErrorCampo] = useState<'correo' | 'contrasena' | null>(null)
 
   const handleLogin = async () => {
     setErrorCampo(null)
@@ -37,41 +37,39 @@ export default function LoginPage() {
       return
     }
 
-    if (data.user) {
-      // Verificar si es staff
-      const { data: staff } = await supabase
-        .from('staff')
-        .select('id, estatus, debe_cambiar_password')
-        .eq('email', email)
-        .maybeSingle()
+    if (!data.user) { setLoading(false); return }
 
-      if (staff) {
-        if (staff.estatus === 'Inactivo') {
-          await supabase.auth.signOut()
-          setToast({ mensaje: 'Tu cuenta está inactiva. Contacta a tu manager.', tipo: 'warning' })
-          setLoading(false)
-          return
-        }
-        if (staff.debe_cambiar_password) {
-          router.push(`/login/cambiar-password?staffId=${staff.id}`)
-          return
-        }
-        router.push('/dashboard/ejecutivo')
-        return
-      }
+    // Verificar si es staff
+    const { data: staff } = await supabase
+      .from('staff')
+      .select('id, estatus, debe_cambiar_password, rol')
+      .eq('email', email)
+      .maybeSingle()
 
-      // Verificar si es admin/cliente normal
-      const { data: perfil } = await supabase
-        .from('clientes').select('estatus').eq('id', data.user.id).single()
-      if (perfil?.estatus === 'Inactivo' || perfil?.estatus === 'Vencido') {
-        await supabase.auth.signOut()
-        setToast({ mensaje: 'Este usuario se ha dado de baja. Intente de nuevo.', tipo: 'warning' })
-        setLoading(false)
-        return
-      }
-
-      router.push('/dashboard/ejecutivo')
+    if (!staff) {
+      // No es staff — bloquear acceso al CRM
+      await supabase.auth.signOut()
+      setToast({ mensaje: 'No tienes acceso al CRM. Solo el equipo Navy puede ingresar.', tipo: 'error' })
+      setLoading(false)
+      return
     }
+
+    if (staff.estatus === 'Inactivo') {
+      await supabase.auth.signOut()
+      setToast({ mensaje: 'Tu cuenta está inactiva. Contacta a tu manager.', tipo: 'warning' })
+      setLoading(false)
+      return
+    }
+
+    if (staff.debe_cambiar_password) {
+      router.push(`/login/cambiar-password?staffId=${staff.id}`)
+      return
+    }
+
+    // Guardar rol en cookie — expira en 8 horas
+    document.cookie = `navy_rol=${staff.rol}; path=/; max-age=28800`
+
+    router.push('/dashboard/ejecutivo')
   }
 
   return (

@@ -126,15 +126,27 @@ export async function confirmarBookingWellhub(bookingNumber: string, classId: nu
   return data
 }
 
-export async function actualizarCuposSlotWellhub(slotId: string, totalBooked: number, totalCapacity: number) {
+export async function actualizarCapacidadSlotWellhub(slotId: string, totalCapacity: number) {
   const url = `${WELLHUB_BASE_URL}/booking/v1/gyms/${process.env.WELLHUB_GYM_ID}/slots/${slotId}`
   const res = await fetch(url, {
     method:  'PATCH',
     headers: wellhubHeaders(),
     body: JSON.stringify({
-      total_booked:   totalBooked,
       total_capacity: totalCapacity,
     }),
+  })
+  const text = await res.text()
+  let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
+  if (!res.ok) throw new Error(data?.message || `Error ${res.status}: ${text}`)
+  return data
+}
+
+export async function actualizarCuposSlotWellhub(slotId: string, totalBooked: number, classId: string) {
+  const url = `${WELLHUB_BASE_URL}/booking/v1/gyms/${process.env.WELLHUB_GYM_ID}/classes/${classId}/slots/${slotId}`
+  const res = await fetch(url, {
+    method:  'PATCH',
+    headers: wellhubHeaders(),
+    body: JSON.stringify({ total_booked: totalBooked }),
   })
   const text = await res.text()
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
