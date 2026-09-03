@@ -27,7 +27,6 @@ export default function LoginPage() {
     setToast(null)
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    console.log('Auth result:', data, authError)
 
     if (authError) {
       const msg = authError.message.toLowerCase()
@@ -40,36 +39,32 @@ export default function LoginPage() {
 
     if (!data.user) { setLoading(false); return }
 
-    // Verificar si es staff
-    const { data: staff } = await supabase
+    const { data: staffData } = await supabase
       .from('staff')
       .select('id, estatus, debe_cambiar_password, rol')
       .eq('email', email)
       .maybeSingle()
 
-    if (!staff) {
-      // No es staff — bloquear acceso al CRM
+    if (!staffData) {
       await supabase.auth.signOut()
       setToast({ mensaje: 'No tienes acceso al CRM. Solo el equipo Navy puede ingresar.', tipo: 'error' })
       setLoading(false)
       return
     }
 
-    if (staff.estatus === 'Inactivo') {
+    if (staffData.estatus === 'Inactivo') {
       await supabase.auth.signOut()
       setToast({ mensaje: 'Tu cuenta está inactiva. Contacta a tu manager.', tipo: 'warning' })
       setLoading(false)
       return
     }
 
-    if (staff.debe_cambiar_password) {
-      router.push(`/login/cambiar-password?staffId=${staff.id}`)
+    if (staffData.debe_cambiar_password) {
+      router.push(`/login/cambiar-password?staffId=${staffData.id}`)
       return
     }
 
-    // Guardar rol en cookie — expira en 8 horas
-    document.cookie = `navy_rol=${staff.rol}; path=/; max-age=2592000` // 30 días
-
+    document.cookie = `navy_rol=${staffData.rol}; path=/; max-age=2592000`
     router.push('/dashboard/ejecutivo')
   }
 
