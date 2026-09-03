@@ -128,7 +128,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
             {/* Contenido */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
               {tab === 'resumen'        && <TabResumen        cliente={cliente} reservas={reservas} onRefresh={fetchData} onEditar={onEditar} noShows={noShows} />}
-              {tab === 'membresia'      && <TabMembresia      cliente={cliente} reservas={reservas} />}
+              {tab === 'membresia'      && <TabMembresia      cliente={cliente} reservas={reservas} onRefresh={fetchData} />}
               {tab === 'reservas'       && <TabReservas       reservas={reservas} />}
               {tab === 'pagos'          && <TabPagos          pagos={pagos} />}
               {tab === 'notas'          && <TabNotas          clienteId={clienteId!} notas={notas} onRefresh={fetchData} />}

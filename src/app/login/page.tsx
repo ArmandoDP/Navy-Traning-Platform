@@ -68,7 +68,7 @@ export default function LoginPage() {
     }
 
     // Guardar rol en cookie — expira en 8 horas
-    document.cookie = `navy_rol=${staff.rol}; path=/; max-age=28800`
+    document.cookie = `navy_rol=${staff.rol}; path=/; max-age=2592000` // 30 días
 
     router.push('/dashboard/ejecutivo')
   }
