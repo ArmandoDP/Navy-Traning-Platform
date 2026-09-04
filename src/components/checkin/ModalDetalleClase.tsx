@@ -57,8 +57,8 @@ export default function ModalDetalleClase({ clase, onClose, onCheckin }: Props) 
 
     const lista = (reservas || []).map(r => {
       const cliente    = Array.isArray(r.clientes) ? r.clientes[0] : r.clientes
-      const asistio    = asistenciasMap.has(r.clientes?.id)
-      const asistencia = asistenciasMap.get(r.clientes?.id)
+        const asistio    = asistenciasMap.has(cliente?.id)    // ← cliente no r.clientes
+        const asistencia = asistenciasMap.get(cliente?.id) 
       
       let origen = 'Navy'
       if (r.es_clase_muestra)       origen = 'Clase Muestra'
