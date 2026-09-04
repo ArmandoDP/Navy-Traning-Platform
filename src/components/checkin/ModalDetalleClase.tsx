@@ -35,7 +35,7 @@ export default function ModalDetalleClase({ clase, onClose, onCheckin }: Props) 
     const { data: reservas } = await supabase.from('reservas')
         .select(`
             id, estatus, origen, es_clase_muestra, spot_id,
-            clientes(id, nombre_completo, plan, paquete_id, paquetes(nombre))
+            clientes!inner(id, nombre_completo, plan, paquete_id, paquetes(nombre))
         `)
         .eq('clase_id', clase.id)
         .neq('estatus', 'Cancelada')
@@ -56,6 +56,7 @@ export default function ModalDetalleClase({ clase, onClose, onCheckin }: Props) 
     const asistenciasMap = new Map(asistencias?.map(a => [a.cliente_id, a]) || [])
 
     const lista = (reservas || []).map(r => {
+      const cliente    = Array.isArray(r.clientes) ? r.clientes[0] : r.clientes
       const asistio    = asistenciasMap.has(r.clientes?.id)
       const asistencia = asistenciasMap.get(r.clientes?.id)
       
@@ -66,6 +67,7 @@ export default function ModalDetalleClase({ clase, onClose, onCheckin }: Props) 
 
       return {
         ...r,
+        clientes: cliente,
         asistio,
         asistencia,
         origen,
