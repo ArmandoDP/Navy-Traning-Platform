@@ -38,6 +38,11 @@ export default function CheckinFeedItem({ checkin }: Props) {
               <Star size={8} className="fill-amber-500 text-amber-500" /> Nuevo
             </span>
           )}
+          {checkin.es_clase_muestra && (
+            <span className="flex items-center gap-0.5 text-[10px] font-black text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              🎯 Muestra
+            </span>
+          )}
         </div>
         <p className="text-xs text-gray-400 truncate">{clase} · {sucursal}</p>
       </div>

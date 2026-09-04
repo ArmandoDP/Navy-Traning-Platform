@@ -13,7 +13,7 @@ export default function CheckinPage() {
     let q = supabase
       .from('asistencias')
       .select(`
-        *,
+        *, es_clase_muestra,
         clientes(nombre_completo, es_invitado),
         clases(nombre_clase, horario, duracion_minutos, tipo_clase),
         sucursales(nombre, color)

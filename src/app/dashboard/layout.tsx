@@ -8,7 +8,8 @@ import SucursalSelector     from '@/components/SucursalSelector'
 import { LayoutDashboard, Package, Bell, BarChart2, Settings, LogOut, ChevronLeft,
   ChevronRight, BookOpen, Calendar, UserCircle,
   Users, CreditCard, Star, Activity, ChevronDown,
-  DollarSign, MapPin, Puzzle, ShoppingBag, Lock
+  DollarSign, MapPin, Puzzle, ShoppingBag, Lock,
+  Sparkles
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Modulo, RUTAS_MODULOS } from '@/lib/permisos'
@@ -23,6 +24,7 @@ const NAV: NavItem[] = [
   { href: '/dashboard/degali',       label: 'THE GALLEY',    icon: ShoppingBag     },
   { href: '/dashboard/reservas',     label: 'Reservas',      icon: Calendar        },
   { href: '/dashboard/clases',       label: 'Clases',        icon: BookOpen        },
+  { href: '/dashboard/clases-muestra', label: 'Clases Muestra', icon: Sparkles },
   { href: '/dashboard/sucursales',   label: 'Sucursales',    icon: MapPin          },
   { href: '/dashboard/clientes',     label: 'Clientes',      icon: Users           },
   { href: '/dashboard/staff',        label: 'Staff',         icon: Users           },

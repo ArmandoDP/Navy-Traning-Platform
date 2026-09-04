@@ -91,6 +91,7 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
 
   const onScanExito = async (qrData: string) => {
     setProcesando(true)
+    console.log('QR data:', qrData)
 
     try {
       const { data: reserva, error: errReserva } = await supabase
@@ -102,6 +103,8 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
         `)
         .eq('id', qrData)
         .single()
+      
+      console.log('Reserva:', reserva, 'Error:', errReserva)
 
       if (errReserva || !reserva) {
         setResultado({ tipo: 'error', mensaje: 'QR inválido — reserva no encontrada' })
@@ -166,23 +169,28 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
 
       const esNuevo = (count || 0) === 0
 
+      const esClaseMuestra = reserva.es_clase_muestra === true
+      
       // Registrar check-in
       await supabase.from('asistencias').insert({
-        cliente_id:    reserva.cliente_id,
-        clase_id:      reserva.clase_id,
-        sucursal_id:   reserva.clases.sucursal_id,
-        fecha_checkin: new Date().toISOString(),
-      })
+      cliente_id:    reserva.cliente_id,
+      clase_id:      reserva.clase_id,
+      sucursal_id:   reserva.clases.sucursal_id,
+      fecha_checkin: new Date().toISOString(),
+      es_clase_muestra: esClaseMuestra,  // ← agrega
+    })
 
-      await supabase.from('reservas').update({ estatus: 'Asistida' }).eq('id', reserva.id)
+    await supabase.from('reservas').update({ estatus: 'Asistida' }).eq('id', reserva.id)
 
-      onCheckin()
+    onCheckin()
 
-      if (esNuevo) {
-        setNuevoCliente({ reserva })
-      } else {
-        setResultado({ tipo: 'exito', reserva })
-      }
+    if (esClaseMuestra) {
+      setResultado({ tipo: 'clase_muestra', reserva })
+    } else if (esNuevo) {
+      setNuevoCliente({ reserva })
+    } else {
+      setResultado({ tipo: 'exito', reserva })
+    }
 
     } catch (e: any) {
       setResultado({ tipo: 'error', mensaje: 'Error al procesar el check-in' })

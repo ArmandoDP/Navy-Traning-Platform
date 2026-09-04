@@ -110,6 +110,7 @@ export const RUTAS_MODULOS: Record<string, Modulo> = {
   '/dashboard/galley':       'galley',
   '/dashboard/reservas':     'reservas',
   '/dashboard/clases':       'clases',
+  '/dashboard/clases-muestra': 'clases',
   '/dashboard/sucursales':   'sucursales',
   '/dashboard/clientes':     'clientes',
   '/dashboard/staff':        'staff',
