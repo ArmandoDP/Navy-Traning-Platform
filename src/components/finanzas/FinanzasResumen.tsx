@@ -23,7 +23,7 @@ export default function FinanzasResumen({ fechaInicio, fechaFin, sucursalId }: P
     const fetch = async () => {
       setLoading(true)
 
-      // Query de pagos con filtro de sucursal
+      // Query de pagos
       let qPagos = supabase
         .from('pagos')
         .select('monto, estatus, canal, concepto, metodo_pago')
@@ -32,12 +32,46 @@ export default function FinanzasResumen({ fechaInicio, fechaFin, sucursalId }: P
         .eq('estatus', 'Completado')
       if (sucursalId) qPagos = qPagos.eq('sucursal_id', sucursalId)
 
-      const { data: pagos } = await qPagos
+      // Ventas de Gali (totales)
+      let qVentas = supabase.from('ventas')
+        .select('total, estatus')
+        .gte('created_at', fechaInicio)
+        .lte('created_at', fechaFin + 'T23:59:59')
+        .eq('estatus', 'Completada')
+      if (sucursalId) qVentas = qVentas.eq('sucursal_id', sucursalId)
+
+      // Ventas de Gali para últimas transacciones
+      let qVentasTx = supabase.from('ventas')
+        .select('id, total, metodo_pago, created_at, sucursal_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
+        .gte('created_at', fechaInicio)
+        .lte('created_at', fechaFin + 'T23:59:59')
+        .eq('estatus', 'Completada')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (sucursalId) qVentasTx = qVentasTx.eq('sucursal_id', sucursalId)
+
+      // Últimas transacciones membresías
+      let qTx = supabase
+        .from('pagos')
+        .select('id, monto, estatus, fecha_pago, concepto, sucursal_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
+        .gte('fecha_pago', fechaInicio)
+        .lte('fecha_pago', fechaFin + 'T23:59:59')
+        .eq('estatus', 'Completado')
+        .not('cliente_id', 'is', null)
+        .order('fecha_pago', { ascending: false })
+        .limit(50)
+      if (sucursalId) qTx = qTx.eq('sucursal_id', sucursalId)
+
+      const [{ data: pagos }, { data: ventasData }, { data: ventasTxData }, { data: txData }] = await Promise.all([
+        qPagos, qVentas, qVentasTx, qTx
+      ])
+
+      const totalGalley = (ventasData || []).reduce((a, v) => a + (v.total || 0), 0)
 
       if (pagos) {
         const exitosos = pagos.filter(p => p.estatus === 'Completado' || p.estatus === 'Exitoso')
         const fall     = pagos.filter(p => p.estatus === 'Fallido')
-        const total    = exitosos.reduce((a, p) => a + (p.monto || 0), 0)
+        const total    = exitosos.reduce((a, p) => a + (p.monto || 0), 0) + totalGalley
 
         setIngresos(total)
         setFallidos(fall.length)
@@ -72,25 +106,17 @@ export default function FinanzasResumen({ fechaInicio, fechaFin, sucursalId }: P
         setDonutData(Object.entries(canales).map(([name, value]) => ({ name, value })))
       }
 
-      // Últimas transacciones con filtro de sucursal
-      let qTx = supabase
-        .from('pagos')
-        .select('id, monto, estatus, fecha_pago, concepto, sucursal_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
-        .gte('fecha_pago', fechaInicio)
-        .lte('fecha_pago', fechaFin + 'T23:59:59')
-        .eq('estatus', 'Completado')
-        .not('cliente_id', 'is', null)
-        .order('fecha_pago', { ascending: false })
-        .limit(10)
-      if (sucursalId) qTx = qTx.eq('sucursal_id', sucursalId)
+      // Combinar y ordenar últimas transacciones
+      const txCombinadas = [
+        ...(txData || []).map(p => ({ ...p, _tipo: 'membresia', fecha: p.fecha_pago, monto: p.monto, concepto: p.concepto || 'Membresía' })),
+        ...(ventasTxData || []).map(v => ({ ...v, _tipo: 'galley', fecha: v.created_at, monto: v.total, concepto: 'The Galley' })),
+      ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).slice(0, 20)
 
-      const { data: txData } = await qTx
-      if (txData) setUltTx(txData)
-
+      setUltTx(txCombinadas)
       setLoading(false)
     }
     fetch()
-  }, [fechaInicio, fechaFin, sucursalId]) // ← agrega sucursalId
+  }, [fechaInicio, fechaFin, sucursalId])
 
   const costos    = Math.round(ingresos * 0.56)  // 56% de los ingresos
   const margen    = ingresos > 0 ? Math.round(((ingresos - costos) / ingresos) * 100) : 0
@@ -235,15 +261,22 @@ export default function FinanzasResumen({ fechaInicio, fechaFin, sucursalId }: P
               ) : ultTx.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50 transition">
                   <td className="px-5 py-3.5 text-sm text-gray-600">
-                    {new Date(p.fecha_pago).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    {new Date(p.fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
                   <td className="px-5 py-3.5 text-sm text-gray-600">
-                    {new Date(p.fecha_pago).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(p.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-5 py-3.5 text-sm font-medium text-gray-900">
-                    {p.clientes?.nombre_completo || '—'}
+                    {p.clientes?.nombre_completo || 'Cliente sin registro'}
                   </td>
-                  <td className="px-5 py-3.5 text-sm text-gray-600">{p.concepto || '—'}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      p._tipo === 'galley' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'
+                    }`}>
+                      {p.concepto}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-sm font-black text-gray-900">${p.monto?.toLocaleString()}</td>
                   <td className="px-5 py-3.5">
                     {p.sucursales ? (
                       <span className="text-xs font-bold px-2.5 py-1 rounded-lg"

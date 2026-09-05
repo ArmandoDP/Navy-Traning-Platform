@@ -56,7 +56,7 @@ export default function CheckinResultado({ resultado, onReset }: Props) {
       </div>
 
       {resultado.tipo === 'exito' && resultado.reserva && (
-        <div className="bg-white rounded-xl p-4 text-left space-y-2 border border-gray-100">
+        <div className="bg-white rounded-xl p-4 text-left space-y-3 border border-gray-100">
           <p className="text-base font-black text-gray-900">
             {resultado.reserva.clientes?.nombre_completo}
           </p>
@@ -66,6 +66,28 @@ export default function CheckinResultado({ resultado, onReset }: Props) {
           <p className="text-xs text-gray-400">
             {resultado.reserva.clientes?.paquetes?.nombre || 'Sin paquete'}
           </p>
+
+          {/* Historial de asistencia */}
+          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+            <div className="text-center bg-gray-50 rounded-xl py-2">
+              <p className="text-lg font-black text-gray-900">{resultado.totalClases}</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase">Clases</p>
+            </div>
+            <div className="text-center bg-amber-50 rounded-xl py-2">
+              <p className="text-lg font-black text-amber-600">🔥{resultado.racha}</p>
+              <p className="text-[10px] text-amber-500 font-bold uppercase">Racha</p>
+            </div>
+            <div className="text-center bg-gray-50 rounded-xl py-2">
+              <p className="text-lg font-black text-gray-900">{resultado.promSemanal}</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase">x Semana</p>
+            </div>
+          </div>
+
+          {resultado.ultimaVisita && (
+            <p className="text-xs text-gray-400 text-center">
+              Última visita: {new Date(resultado.ultimaVisita).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
+            </p>
+          )}
         </div>
       )}
 

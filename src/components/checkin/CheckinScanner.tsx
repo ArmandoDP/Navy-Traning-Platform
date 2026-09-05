@@ -149,6 +149,35 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
         .eq('cliente_id', reserva.cliente_id)
         .eq('clase_id', reserva.clase_id)
         .maybeSingle()
+      
+      // Después de verificar duplicado, agrega:
+      const { data: historial } = await supabase
+        .from('asistencias')
+        .select('fecha_checkin')
+        .eq('cliente_id', reserva.cliente_id)
+        .order('fecha_checkin', { ascending: false })
+
+      const totalClases  = historial?.length || 0
+      const ultimaVisita = historial?.[0]?.fecha_checkin || null
+
+      // Calcular racha
+      let racha = 0
+      if (historial && historial.length > 0) {
+        const fechas = historial.map(a => new Date(a.fecha_checkin).toDateString())
+        const unique  = [...new Set(fechas)]
+        let hoy = new Date()
+        for (const f of unique) {
+          const diff = Math.round((hoy.getTime() - new Date(f).getTime()) / (1000 * 3600 * 24))
+          if (diff <= 1) { racha++; hoy = new Date(f) }
+          else break
+        }
+      }
+
+      // Promedio semanal (últimas 4 semanas)
+      const hace4semanas = new Date()
+      hace4semanas.setDate(hace4semanas.getDate() - 28)
+      const clases4sem = historial?.filter(a => new Date(a.fecha_checkin) >= hace4semanas).length || 0
+      const promSemanal = +(clases4sem / 4).toFixed(1)
 
       if (checkinExistente) {
         setResultado({
@@ -187,9 +216,9 @@ export default function CheckinScanner({ sucursalId, sucursalNombre, onCheckin }
     if (esClaseMuestra) {
       setResultado({ tipo: 'clase_muestra', reserva })
     } else if (esNuevo) {
-      setNuevoCliente({ reserva })
+      setNuevoCliente({ reserva, totalClases: 1, racha: 1, promSemanal: 0, ultimaVisita: null })
     } else {
-      setResultado({ tipo: 'exito', reserva })
+      setResultado({ tipo: 'exito', reserva, totalClases, racha, promSemanal, ultimaVisita })
     }
 
     } catch (e: any) {
