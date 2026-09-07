@@ -68,6 +68,7 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
     banco:                   '',
     cuenta_bancaria:         '',
     bio:                     '',
+    rol:              '',
     contacto_emergencia_nombre:   '',
     contacto_emergencia_relacion: '',
     contacto_emergencia_telefono: '',
@@ -113,6 +114,7 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       contacto_emergencia_nombre:   empleado.contacto_emergencia_nombre || '',
       contacto_emergencia_relacion: empleado.contacto_emergencia_relacion || '',
       contacto_emergencia_telefono: empleado.contacto_emergencia_telefono || '',
+      rol: empleado.rol || '',
     })
 
     // Cargar docs existentes
@@ -169,6 +171,7 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       contacto_emergencia_nombre:   form.contacto_emergencia_nombre,
       contacto_emergencia_relacion: form.contacto_emergencia_relacion,
       contacto_emergencia_telefono: form.contacto_emergencia_telefono,
+      rol: form.rol || 'staff_navy',
     }).eq('id', empleado.id)
 
     if (error) { alert('Error: ' + error.message); setLoading(false); return }
@@ -317,15 +320,55 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
               value={form.rfc} onChange={e => set('rfc', e.target.value)} />
           </Field>
 
-          {/* Tipo de miembro */}
+          {/* ── Tipo de miembro ── */}
           <SectionTitle>Tipo de miembro</SectionTitle>
           <div className="flex flex-wrap gap-2">
             {TIPOS.map(t => (
               <button key={t} onClick={() => set('tipo', t)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-                  form.tipo === t ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                  form.tipo === t
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
                 }`}>
-                {form.tipo === t && '✓ '}{t}
+                {form.tipo === t && <span className="mr-1">✓</span>}
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Rol en el sistema ── */}
+          <SectionTitle>Rol en el sistema</SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'direccion',    label: 'Dirección' },
+              { value: 'gerente',      label: 'Gerente' },
+              { value: 'staff_navy',   label: 'Staff Navy' },
+              { value: 'staff_galley', label: 'Staff Galley' },
+            ].map(r => (
+              <button key={r.value} onClick={() => set('rol', r.value)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                  form.rol === r.value
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                }`}>
+                {form.rol === r.value && <span className="mr-1">✓</span>}
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Sucursales asignadas — para todos ── */}
+          <SectionTitle>Sucursales asignadas</SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            {sucursales.map(s => (
+              <button key={s.id} onClick={() => toggleSucursal(s.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                  form.sucursales_ids.includes(s.id)
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                }`}>
+                {form.sucursales_ids.includes(s.id) && <span className="mr-1">✓</span>}
+                {s.nombre}
               </button>
             ))}
           </div>

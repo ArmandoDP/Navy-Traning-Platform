@@ -42,7 +42,7 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
             .select('id, monto, estatus, fecha_pago, canal, concepto, metodo_pago, sucursal_id, stripe_payment_intent_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
             .gte('fecha_pago', fechaInicio)
             .lte('fecha_pago', fechaFin + 'T23:59:59')
-            .not('cliente_id', 'is', null)
+            .in('estatus', ['Completado', 'Reembolsado'])
             .order('fecha_pago', { ascending: false })
           if (sucursalId) q = q.eq('sucursal_id', sucursalId)
           return q
@@ -246,7 +246,7 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
             <select className={selectCls} value={filtros.tipo}
               onChange={e => { setFiltros(p => ({ ...p, tipo: e.target.value })); setPage(1) }}>
               <option value="">Método</option>
-              {['Stripe','Efectivo','Transferencia','OXXO','efectivo','tarjeta'].map(t => (
+              {['Tarjeta', 'card', 'link', 'Stripe', 'Efectivo', 'Terminal', 'Cortesía'].map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>

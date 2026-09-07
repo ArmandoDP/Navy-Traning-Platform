@@ -75,6 +75,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     cuenta_bancaria:  '',
     // Bio
     bio:              '',
+    rol: '', 
     // Contactos de emergencia
     contacto_emergencia_nombre:   '',
     contacto_emergencia_relacion: '',
@@ -135,6 +136,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
         contacto_emergencia_nombre:   form.contacto_emergencia_nombre,
         contacto_emergencia_relacion: form.contacto_emergencia_relacion,
         contacto_emergencia_telefono: form.contacto_emergencia_telefono,
+        rol: form.rol || 'staff_navy',
       })
       .select()
       .single()
@@ -146,6 +148,18 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     }
 
     const staffId = staffData.id
+
+    // Crear usuario en Supabase Auth
+    if (form.email) {
+      await fetch('/api/staff/crear-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: form.email,
+          staff_id: staffId 
+        }),
+      })
+    }
 
     // 2. Sucursales asignadas
     if (form.sucursales_ids.length > 0) {
@@ -202,6 +216,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
       contacto_emergencia_nombre: '',
       contacto_emergencia_relacion: '',
       contacto_emergencia_telefono: '',
+      rol: '',
     })
     setReglasTemp([])
     onClose()
@@ -302,8 +317,8 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
           </Field>
 
           {/* ── Tipo de miembro ── */}
+          {/* ── Tipo de miembro ── */}
           <SectionTitle>Tipo de miembro</SectionTitle>
-
           <div className="flex flex-wrap gap-2">
             {TIPOS.map(t => (
               <button key={t} onClick={() => set('tipo', t)}
@@ -314,6 +329,43 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
                 }`}>
                 {form.tipo === t && <span className="mr-1">✓</span>}
                 {t}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Rol en el sistema ── */}
+          <SectionTitle>Rol en el sistema</SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'direccion',    label: 'Dirección' },
+              { value: 'gerente',      label: 'Gerente' },
+              { value: 'staff_navy',   label: 'Staff Navy' },
+              { value: 'staff_galley', label: 'Staff Galley' },
+            ].map(r => (
+              <button key={r.value} onClick={() => set('rol', r.value)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                  form.rol === r.value
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                }`}>
+                {form.rol === r.value && <span className="mr-1">✓</span>}
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Sucursales asignadas — para todos ── */}
+          <SectionTitle>Sucursales asignadas</SectionTitle>
+          <div className="flex flex-wrap gap-2">
+            {sucursales.map(s => (
+              <button key={s.id} onClick={() => toggleSucursal(s.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                  form.sucursales_ids.includes(s.id)
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
+                }`}>
+                {form.sucursales_ids.includes(s.id) && <span className="mr-1">✓</span>}
+                {s.nombre}
               </button>
             ))}
           </div>

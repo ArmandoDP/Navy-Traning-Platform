@@ -57,7 +57,6 @@ export default function FinanzasResumen({ fechaInicio, fechaFin, sucursalId }: P
         .gte('fecha_pago', fechaInicio)
         .lte('fecha_pago', fechaFin + 'T23:59:59')
         .eq('estatus', 'Completado')
-        .not('cliente_id', 'is', null)
         .order('fecha_pago', { ascending: false })
         .limit(50)
       if (sucursalId) qTx = qTx.eq('sucursal_id', sucursalId)

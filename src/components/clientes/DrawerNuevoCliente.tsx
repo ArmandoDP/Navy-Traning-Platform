@@ -183,6 +183,19 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
       return
     }
 
+    // Enviar correo de bienvenida
+    if (nuevoCliente && form.email) {
+      await fetch('/api/correo/bienvenida-cliente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:   form.email,
+          nombre:  form.nombre,
+          paquete: paquete?.nombre || null,
+        }),
+      })
+    }
+
     // 3. Crear membresía
     if (nuevoCliente && form.paquete_id) {
       const fechaInicio = form.fecha_inicio_membresia || new Date().toISOString().split('T')[0]
@@ -425,15 +438,12 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
           {/* Credenciales temporales */}
           <SectionTitle icon={<Lock size={13}/>}>Acceso app</SectionTitle>
           <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 space-y-1">
-            <p className="text-xs text-gray-500">Se generará automáticamente al crear el cliente:</p>
+            <p className="text-xs text-gray-500">Al crear el cliente se le enviará un correo de bienvenida con instrucciones para acceder a la app.</p>
             <p className="text-xs text-gray-700">
               <span className="font-bold">Usuario:</span> {form.email || 'correo del cliente'}
             </p>
-            <p className="text-xs text-gray-700">
-              <span className="font-bold">Contraseña temporal:</span> NAVY-XXXXXX
-            </p>
-            <p className="text-[11px] text-amber-600 mt-1">
-              ⚠ El cliente deberá cambiar su contraseña en el primer inicio de sesión
+            <p className="text-[11px] text-emerald-600 mt-1">
+              ✓ El cliente entrará con su correo — recibirá un código OTP
             </p>
           </div>
 
