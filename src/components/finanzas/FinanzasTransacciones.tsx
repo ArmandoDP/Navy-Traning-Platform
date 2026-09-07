@@ -62,19 +62,22 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
         supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
       ])
 
-      const txMembresias: Transaccion[] = (pagosData || []).map(p => ({
-        id:           p.id,
-        tipo:         'membresia',
-        fecha:        p.fecha_pago,
-        cliente:      p.clientes?.nombre_completo || '—',
-        concepto:     p.concepto || 'Membresía',
-        sucursal:     p.sucursales?.nombre || '—',
-        sucursalColor: p.sucursales?.color || '#6b7280',
-        metodo:       p.metodo_pago || '—',
-        monto:        p.monto || 0,
-        estatus:      p.estatus || '—',
-        raw:          p,
-      }))
+      const txMembresias: Transaccion[] = (pagosData || []).map(p => {
+        const cliente = Array.isArray(p.clientes) ? p.clientes[0] : p.clientes
+        return {
+          id:           p.id,
+          tipo:         'membresia',
+          fecha:        p.fecha_pago,
+          cliente:      cliente?.nombre_completo || '—',
+          concepto:     p.concepto || 'Membresía',
+          sucursal:     Array.isArray(p.sucursales) ? p.sucursales[0]?.nombre || '—' : p.sucursales?.nombre || '—',
+          sucursalColor: Array.isArray(p.sucursales) ? p.sucursales[0]?.color || '#6b7280' : p.sucursales?.color || '#6b7280',
+          metodo:       p.metodo_pago || '—',
+          monto:        p.monto || 0,
+          estatus:      p.estatus || '—',
+          raw:          p,
+        }
+      })
 
       const txGalley: Transaccion[] = (ventasData || []).map(v => ({
         id:           v.id,
