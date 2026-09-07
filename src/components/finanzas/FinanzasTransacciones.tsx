@@ -63,19 +63,20 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
       ])
 
       const txMembresias: Transaccion[] = (pagosData || []).map(p => {
-        const cliente = Array.isArray(p.clientes) ? p.clientes[0] : p.clientes
+        const cli = Array.isArray(p.clientes)   ? (p.clientes as any)[0]   : p.clientes as any
+        const suc = Array.isArray(p.sucursales) ? (p.sucursales as any)[0] : p.sucursales as any
         return {
-          id:           p.id,
-          tipo:         'membresia',
-          fecha:        p.fecha_pago,
-          cliente:      cliente?.nombre_completo || '—',
-          concepto:     p.concepto || 'Membresía',
-          sucursal:     Array.isArray(p.sucursales) ? p.sucursales[0]?.nombre || '—' : p.sucursales?.nombre || '—',
-          sucursalColor: Array.isArray(p.sucursales) ? p.sucursales[0]?.color || '#6b7280' : p.sucursales?.color || '#6b7280',
-          metodo:       p.metodo_pago || '—',
-          monto:        p.monto || 0,
-          estatus:      p.estatus || '—',
-          raw:          p,
+          id:            p.id,
+          tipo:          'membresia' as const,
+          fecha:         p.fecha_pago,
+          cliente:       cli?.nombre_completo || '—',
+          concepto:      p.concepto || 'Membresía',
+          sucursal:      suc?.nombre || '—',
+          sucursalColor: suc?.color || '#6b7280',
+          metodo:        p.metodo_pago || '—',
+          monto:         p.monto || 0,
+          estatus:       p.estatus || '—',
+          raw:           p,
         }
       })
 
