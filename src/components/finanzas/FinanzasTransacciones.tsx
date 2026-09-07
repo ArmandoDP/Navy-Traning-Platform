@@ -80,19 +80,23 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
         }
       })
 
-      const txGalley: Transaccion[] = (ventasData || []).map(v => ({
-        id:           v.id,
-        tipo:         'galley',
-        fecha:        v.created_at,
-        cliente:      v.clientes?.nombre_completo || 'Cliente sin registro',
-        concepto:     'The Galley',
-        sucursal:     v.sucursales?.nombre || '—',
-        sucursalColor: v.sucursales?.color || '#6b7280',
-        metodo:       v.metodo_pago || '—',
-        monto:        v.total || 0,
-        estatus:      v.estatus === 'Completada' ? 'Completado' : v.estatus,
-        raw:          v,
-      }))
+      const txGalley: Transaccion[] = (ventasData || []).map(v => {
+        const cli = Array.isArray(v.clientes)   ? (v.clientes as any)[0]   : v.clientes as any
+        const suc = Array.isArray(v.sucursales) ? (v.sucursales as any)[0] : v.sucursales as any
+        return {
+          id:            v.id,
+          tipo:          'galley' as const,
+          fecha:         v.created_at,
+          cliente:       cli?.nombre_completo || 'Cliente sin registro',
+          concepto:      'The Galley',
+          sucursal:      suc?.nombre || '—',
+          sucursalColor: suc?.color || '#6b7280',
+          metodo:        v.metodo_pago || '—',
+          monto:         v.total || 0,
+          estatus:       v.estatus === 'Completada' ? 'Completado' : v.estatus,
+          raw:           v,
+        }
+      })
 
       // Combinar y ordenar por fecha
       const todas = [...txMembresias, ...txGalley].sort((a, b) =>
