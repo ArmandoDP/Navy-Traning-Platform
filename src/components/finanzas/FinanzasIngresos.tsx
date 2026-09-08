@@ -5,9 +5,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieCha
 
 interface Props { fechaInicio: string; fechaFin: string }
 
-const CANALES = ['Navy','Stripe','Fitpass','Totalpass','Wellhub']
+const CANALES = ['Navy','OrkestaPay','Stripe','Fitpass','Totalpass','Wellhub']
 const CANAL_COLORS: Record<string, string> = {
-  Navy: '#171B24', Stripe: '#6366f1', Fitpass: '#9ca3af', Totalpass: '#22c55e', Wellhub: '#f59e0b'
+  Navy: '#171B24', OrkestaPay: '#ec4899', Stripe: '#6366f1', Fitpass: '#9ca3af', Totalpass: '#22c55e', Wellhub: '#f59e0b'
 }
 
 export default function FinanzasIngresos({ fechaInicio, fechaFin }: Props) {

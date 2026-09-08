@@ -6,16 +6,29 @@ export async function POST(req: NextRequest) {
   try {
     const { claseId, nombre, descripcion, horario, duracionMinutos, capacidadMax } = await req.json()
 
+    // 0. Obtener la sucursal de la clase para usar el gym_id y product_id correctos
+    const { data: clase } = await supabase
+      .from('clases')
+      .select('sucursal_id, salon')
+      .eq('id', claseId)
+      .single()
+
+    if (!clase?.sucursal_id) {
+      return NextResponse.json({ error: 'Clase sin sucursal asignada' }, { status: 400 })
+    }
+
+    const sucursalId = clase.sucursal_id
+
     // 1. Crear la clase en Wellhub
-    const claseData = await crearClaseWellhub(nombre, descripcion || nombre, 869)
+    const claseData      = await crearClaseWellhub(nombre, descripcion || nombre, sucursalId)
     const wellhubClassId = claseData.classes[0].id
 
     // 2. Crear el slot
-    const slotData = await crearSlotWellhub(String(wellhubClassId), {
+    const slotData = await crearSlotWellhub(String(wellhubClassId), sucursalId, {
       fechaInicio: horario,
       duracionMin: duracionMinutos,
       capacidad:   capacidadMax,
-      productId:   869,
+      room:        clase.salon || 'Sala Principal',
     })
     const wellhubSlotId = slotData.results[0].id
 

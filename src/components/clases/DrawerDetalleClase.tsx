@@ -156,20 +156,29 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const handlePublicarTotalpass = async () => {
     if (!clase || !claseId) return
     try {
+      const payload = {
+        clase_id:         claseId,
+        sucursal_id:      clase.sucursal_id,
+        nombre:           clase.nombre_clase,
+        descripcion:      clase.descripcion || clase.nombre_clase,
+        horario:          clase.horario,
+        duracion_minutos: clase.duracion_minutos,
+        capacidad_max:    clase.capacidad_max,
+        coach:            clase.staff ? `${clase.staff.nombre} ${clase.staff.primer_apellido}` : 'Navy Coach',
+      }
+      console.log('TotalPass payload:', payload)
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/publicar-clase`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          clase_id:        claseId,
-          sucursal_id:     clase.sucursal_id,
-          nombre:          clase.nombre_clase,
-          descripcion:     clase.descripcion || clase.nombre_clase,
-          horario:         clase.horario,
-          duracion_minutos: clase.duracion_minutos,
-          capacidad_max:   clase.capacidad_max,
-          coach:           clase.staff ? `${clase.staff.nombre} ${clase.staff.primer_apellido}` : 'Navy Coach',
-        }),
+        body:    JSON.stringify(payload),
       })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => res.text())
+        console.error('TotalPass error response:', err)
+      }
+
       if (res.ok) fetchData()
     } catch (e) {
       console.error('Error publicando en TotalPass:', e)
@@ -342,7 +351,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                         className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
                         Publicar
                       </button>
-                    )}z
+                    )}
                   </div>
                 </div>
               </div>

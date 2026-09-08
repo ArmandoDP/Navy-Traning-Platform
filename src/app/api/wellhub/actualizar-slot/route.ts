@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const WELLHUB_BASE_URL = 'https://apitesting.partners.gympass.com'
+import { getWellhubConfig }          from '@/lib/wellhub'
 
 export async function POST(req: NextRequest) {
-  const { slotId, totalCapacity, totalBooked } = await req.json()
+  const { slotId, totalCapacity, totalBooked, sucursalId } = await req.json()
+
+  const { gymId } = getWellhubConfig(sucursalId)
 
   const body: any = {}
   if (totalCapacity !== undefined) body.total_capacity = totalCapacity
   if (totalBooked   !== undefined) body.total_booked   = totalBooked
 
   const res = await fetch(
-    `${WELLHUB_BASE_URL}/booking/v1/gyms/${process.env.WELLHUB_GYM_ID}/slots/${slotId}`,
+    `https://api.partners.gympass.com/booking/v1/gyms/${gymId}/slots/${slotId}`,
     {
       method:  'PATCH',
       headers: {
