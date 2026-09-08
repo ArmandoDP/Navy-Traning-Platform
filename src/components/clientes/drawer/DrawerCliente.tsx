@@ -61,7 +61,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
     if (isOpen && clienteId) { fetchData(); setTab('resumen') }
   }, [isOpen, clienteId])
 
-  const noShows = reservas.filter(r => r.lista_espera).length
+  const noShows = reservas.filter(r => r.estatus === 'No Show').length
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'resumen',        label: 'Resumen'                              },
@@ -107,6 +107,8 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
             {/* Header */}
             <DrawerClienteHeader
               cliente={cliente}
+              reservas={reservas}
+              pagos={pagos}
               onEditar={() => onEditar(cliente)}
               noShows={noShows}
             />

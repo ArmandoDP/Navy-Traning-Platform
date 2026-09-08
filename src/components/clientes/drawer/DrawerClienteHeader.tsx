@@ -1,40 +1,23 @@
 'use client'
 import { Pencil, Star } from 'lucide-react'
 
-interface Cliente {
-  id: string
-  nombre_completo: string
-  email: string
-  telefono?: string
-  estatus: string
-  plan?: string
-  valor_cliente?: number
-  visitas?: number
-  nps?: number
-  sucursales?: { nombre: string; color: string }
-  pagos?: any[]
-  reservas?: any[]
-}
-
 interface Props {
-  cliente:    Cliente
-  onEditar:   () => void
-  noShows:    number
+  cliente:  any
+  reservas: any[]
+  pagos:    any[]
+  onEditar: () => void
+  noShows:  number
 }
 
-const SUCURSAL_COLORS: Record<string, string> = {
-  Juriquilla: '#6366f1', Refugio: '#f97316',
-  Lomas: '#22c55e',     Interlomas: '#3b82f6',
-}
-
-function getSucursalColor(nombre: string) {
-  const key = Object.keys(SUCURSAL_COLORS).find(k => nombre?.includes(k))
-  return key ? SUCURSAL_COLORS[key] : '#6366f1'
-}
-
-export default function DrawerClienteHeader({ cliente, onEditar, noShows }: Props) {
+export default function DrawerClienteHeader({ cliente, reservas, pagos, onEditar, noShows }: Props) {
   const sucNombre = cliente.sucursales?.nombre || ''
-  const sucColor  = getSucursalColor(sucNombre)
+  const sucColor  = cliente.sucursales?.color  || '#6b7280'
+
+  // Calcular dinámico desde datos reales
+  const visitas     = reservas.filter(r => r.estatus === 'Confirmada').length
+  const valorCliente = pagos
+    .filter(p => p.estatus === 'Completado')
+    .reduce((acc, p) => acc + (Number(p.monto) || 0), 0)
 
   return (
     <div className="px-6 pt-5 pb-4 border-b border-gray-100">
@@ -78,12 +61,23 @@ export default function DrawerClienteHeader({ cliente, onEditar, noShows }: Prop
       {/* Métricas */}
       <div className="grid grid-cols-4 divide-x divide-gray-100 border border-gray-100 rounded-2xl overflow-hidden">
         {[
-          { label: 'Valor',     val: cliente.valor_cliente ? `$${(Number(cliente.valor_cliente)/1000).toFixed(0)}K` : '—' },
-          { label: 'Visitas',   val: cliente.visitas ?? (cliente.reservas?.filter((r: any) => r.estatus === 'Confirmada').length || 0) },
-          { label: 'No shows',  val: noShows },
-          { label: 'NPS',       val: cliente.nps ? (
-            <span className="flex items-center gap-1">{cliente.nps} <Star size={12} className="text-yellow-400 fill-yellow-400"/></span>
-          ) : '—' },
+          {
+            label: 'Valor',
+            val: valorCliente > 0
+              ? `$${valorCliente >= 1000 ? `${(valorCliente/1000).toFixed(1)}K` : valorCliente.toLocaleString()}`
+              : '—',
+          },
+          { label: 'Visitas',  val: visitas },
+          { label: 'No shows', val: noShows },
+          {
+            label: 'NPS',
+            val: cliente.nps ? (
+              <span className="flex items-center gap-1">
+                {cliente.nps}
+                <Star size={12} className="text-yellow-400 fill-yellow-400"/>
+              </span>
+            ) : '—',
+          },
         ].map(m => (
           <div key={m.label} className="px-4 py-3">
             <p className="text-xs text-gray-400 mb-0.5">{m.label}</p>

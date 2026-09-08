@@ -24,14 +24,17 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const [membresiaEnCola, setMembresiaEnCola]  = useState<any>(null)
   const [loadingMemb,     setLoadingMemb]      = useState(true)
 
-  const fechaVenc    = cliente.fecha_vencimiento_memb || cliente.fecha_venc_plan
-  const diasVenc     = fechaVenc ? Math.ceil((new Date(fechaVenc).getTime() - Date.now()) / (1000*3600*24)) : null
+  
   const clasesUsadas = reservas.filter(r => r.estatus === 'Confirmada').length
   const clasesTotal  = cliente.paquetes?.numero_clases || null
 
   useEffect(() => {
     fetchMembresias()
   }, [cliente.id])
+
+  // ← aquí, después del useEffect
+  const fechaVenc = membresiaActiva?.fecha_fin || cliente.fecha_vencimiento_memb || cliente.fecha_venc_plan
+  const diasVenc  = fechaVenc ? Math.ceil((new Date(fechaVenc).getTime() - Date.now()) / (1000*3600*24)) : null
 
   const fetchMembresias = async () => {
     setLoadingMemb(true)
@@ -55,13 +58,19 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const abrirModalPaquete = async () => {
     setLoadingPaq(true)
     setModalPaquete(true)
-    const { data } = await supabase.from('paquetes')
+
+    let q = supabase.from('paquetes')
       .select('id, nombre, vigencia_dias, paquete_precios!inner(sucursal_id, activo)')
       .eq('estatus', 'Activo')
       .eq('visible_en_app', true)
-      .eq('paquete_precios.sucursal_id', cliente.sucursal_id)
       .eq('paquete_precios.activo', true)
       .order('nombre')
+
+    if (cliente.sucursal_id) {
+      q = q.eq('paquete_precios.sucursal_id', cliente.sucursal_id)
+    }
+
+    const { data } = await q
     setPaquetes(data || [])
     setLoadingPaq(false)
   }
@@ -168,7 +177,11 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         isOpen={modalPago}
         cliente={cliente}
         onClose={() => setModalPago(false)}
-        onSuccess={() => setModalPago(false)}
+        onSuccess={() => {
+          setModalPago(false)
+          fetchMembresias()   // ← agrega esto
+          onRefresh?.()       // ← y esto para refrescar el cliente también
+        }}
       />
 
       {/* Modal asignar paquete */}
@@ -231,10 +244,14 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-xs text-gray-400 font-medium mb-1">Plan actual</p>
-            <p className="text-lg font-black text-gray-900">{cliente.plan || '—'}</p>
+            <p className="text-lg font-black text-gray-900">
+              {loadingMemb ? '...' : membresiaActiva?.paquetes?.nombre || cliente.plan || '—'}
+            </p>
           </div>
-          <p className="text-xl font-black text-gray-900">
-            ${cliente.valor_cliente ? Number(cliente.valor_cliente).toLocaleString() : '—'}
+         <p className="text-xl font-black text-gray-900">
+            {membresiaActiva?.precio_pagado
+              ? `$${Number(membresiaActiva.precio_pagado).toLocaleString()}`
+              : '—'}
           </p>
         </div>
 
