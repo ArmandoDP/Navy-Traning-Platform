@@ -263,15 +263,16 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
       {/* Bulk actions */}
       {seleccion.size > 0 && (
         <ReservasBulkActions
-          seleccion={seleccion}
-          onCancelar={async () => {
+          tab={tab}
+          cantidad={seleccion.size}
+          onNoAplicar={() => setSeleccion(new Set())}
+          onContinuar={async () => {
             await Promise.all([...seleccion].map(id =>
-              supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', id)
+              supabase.from('reservas').update({ estatus: 'Confirmada' }).eq('id', id)
             ))
             setSeleccion(new Set())
             onRefresh()
           }}
-          onLimpiar={() => setSeleccion(new Set())}
         />
       )}
 
