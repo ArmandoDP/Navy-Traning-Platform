@@ -53,6 +53,10 @@ export async function crearSlotWellhub(classId: string, params: {
   const opensAt  = new Date(Date.now()).toISOString()
   const closesAt = params.fechaInicio
 
+  const fechaUTC  = new Date(params.fechaInicio)
+  const fechaCDMX = new Date(fechaUTC.getTime() - 6 * 60 * 60 * 1000)
+  const occurDate = fechaCDMX.toISOString().slice(0, 19)
+
   const res = await fetch(url, {
     method:  'POST',
     headers: wellhubHeaders(),
