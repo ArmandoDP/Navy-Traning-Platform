@@ -13,18 +13,20 @@ import {
   BadgeTipo, BadgeImpacto, BadgePenalizacion
 } from './ReservasBadges'
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Reserva {
-  id:           string
-  estatus:      string
-  lista_espera: boolean
-  tipo_llegada: string
-  impacto:      string
-  penalizacion: string
-  reincidencia: number
-  created_at:   string
-  clientes:     { id: string; nombre_completo: string; email: string; telefono?: string }
-  clases:       { id: string; nombre_clase: string; horario: string; tipo_clase: string; sucursales?: { nombre: string } }
+  id:             string
+  estatus:        string
+  lista_espera:   boolean
+  tipo_llegada:   string
+  impacto:        string
+  penalizacion:   string
+  reincidencia:   number
+  created_at:     string
+  origen:         string | null
+  es_clase_muestra: boolean
+  asistencias:    { id: string }[]
+  clientes:       { id: string; nombre_completo: string; email: string; telefono?: string }
+  clases:         { id: string; nombre_clase: string; horario: string; tipo_clase: string; sucursales?: { nombre: string } }
 }
 
 type Tab = 'activas' | 'cancelaciones' | 'no-shows'
@@ -37,24 +39,53 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 
 const POR_PAGINA = 15
 
-// ─── Checkbox Asistencia ──────────────────────────────────────────────────────
-function AsistenciaCheck({ reservaId, estatus, onUpdate }: {
+// ── Badge Canal ───────────────────────────────────────────────────────────────
+function BadgeCanal({ origen, esMuestra }: { origen: string | null; esMuestra: boolean }) {
+  if (esMuestra) return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
+      Muestra
+    </span>
+  )
+  if (origen === 'Wellhub' || origen === 'wellhub') return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-pink-600">
+      Wellhub
+    </span>
+  )
+  if (origen === 'TotalPass' || origen === 'totalpass') return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">
+      TotalPass
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-900 text-white">
+      Navy
+    </span>
+  )
+}
+
+// ── Asistencia ────────────────────────────────────────────────────────────────
+function AsistenciaCheck({ reservaId, estatus, clases, clienteId, onUpdate }: {
   reservaId: string
   estatus:   string
+  clases:    any
+  clienteId: string
   onUpdate:  () => void
 }) {
   const [loading, setLoading] = useState(false)
+  const hizoChekin = (clases?.asistencias || []).some(
+    (a: any) => a.cliente_id === clienteId
+  )
 
   const handleAsistio = async (asistio: boolean) => {
     setLoading(true)
-    const nuevoEstatus = asistio ? 'Confirmada' : 'Cancelada'
+    const nuevoEstatus = asistio ? 'Confirmada' : 'No Show'
     await supabase.from('reservas').update({ estatus: nuevoEstatus }).eq('id', reservaId)
     onUpdate()
     setLoading(false)
   }
 
-  // Ya confirmada = asistió
-  if (estatus === 'Confirmada') {
+  // Hizo checkin → Asistió a clase
+  if (hizoChekin) {
     return (
       <div className="flex items-center gap-1.5 text-green-600 text-xs font-medium">
         <Check size={13}/> Asistió a clase
@@ -62,7 +93,23 @@ function AsistenciaCheck({ reservaId, estatus, onUpdate }: {
     )
   }
 
-  // Pendiente = mostrar checkboxes
+  // Confirmada sin checkin → Pendiente de checkin
+  if (estatus === 'Confirmada') {
+    return (
+      <div className="flex items-center gap-4">
+        <label className="flex items-center gap-1.5 cursor-pointer group" onClick={() => !loading && handleAsistio(true)}>
+          <div className="w-4 h-4 border-2 border-gray-300 rounded group-hover:border-green-500 transition flex-shrink-0" />
+          <span className="text-xs text-gray-500 group-hover:text-gray-700 transition select-none">Asistió</span>
+        </label>
+        <label className="flex items-center gap-1.5 cursor-pointer group" onClick={() => !loading && handleAsistio(false)}>
+          <div className="w-4 h-4 border-2 border-gray-300 rounded group-hover:border-red-400 transition flex-shrink-0" />
+          <span className="text-xs text-gray-500 group-hover:text-gray-700 transition select-none">No asistió</span>
+        </label>
+      </div>
+    )
+  }
+
+  // Cualquier otro estatus
   return (
     <div className="flex items-center gap-4">
       <label className="flex items-center gap-1.5 cursor-pointer group" onClick={() => !loading && handleAsistio(true)}>
@@ -77,7 +124,7 @@ function AsistenciaCheck({ reservaId, estatus, onUpdate }: {
   )
 }
 
-// ─── Filtros dropdown ─────────────────────────────────────────────────────────
+// ── Filtros dropdown ──────────────────────────────────────────────────────────
 function FiltroDropdown({ label, value, onChange, options }: {
   label:    string
   value:    string
@@ -106,16 +153,37 @@ function FiltroDropdown({ label, value, onChange, options }: {
   )
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+function tiempoRelativo(fecha: string): string {
+  const diff = Date.now() - new Date(fecha).getTime()
+  const mins  = Math.floor(diff / 60000)
+  const horas = Math.floor(mins / 60)
+  const dias  = Math.floor(horas / 24)
+  if (dias  > 0) return `Hace ${dias} día${dias > 1 ? 's' : ''}`
+  if (horas > 0) return `Hace ${horas} hora${horas > 1 ? 's' : ''}`
+  return `Hace ${mins} min`
+}
+
+// ── Componente principal ──────────────────────────────────────────────────────
 export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reserva[]; onRefresh: () => void }) {
   const [tab,       setTab]       = useState<Tab>('activas')
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [pagina,    setPagina]    = useState(1)
   const [menuOpen,  setMenuOpen]  = useState<string | null>(null)
   const [orden,     setOrden]     = useState<{ col: string; dir: 'asc'|'desc' }>({ col: '', dir: 'asc' })
-  const [filtros,   setFiltros]   = useState({ sucursal: '', clase: '', fecha: '', hora: '', estado: '' })
+  const [filtros,   setFiltros]   = useState({ sucursal: '', clase: '', fecha: '', hora: '', estado: '', canal: '' })
 
-  // ── Filtrar por tab ──────────────────────────────────────────────────────────
+  const cancelarReserva = async (r: Reserva) => {
+    await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', r.id)
+    setMenuOpen(null)
+    onRefresh()
+  }
+
+  const confirmarReserva = async (id: string) => {
+    await supabase.from('reservas').update({ estatus: 'Confirmada' }).eq('id', id)
+    setMenuOpen(null)
+    onRefresh()
+  }
+
   const porTab = reservas.filter(r => {
     if (tab === 'activas')       return r.estatus !== 'Cancelada' && !r.lista_espera
     if (tab === 'cancelaciones') return r.estatus === 'Cancelada'
@@ -123,20 +191,23 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
     return true
   })
 
-  // ── Filtros ──────────────────────────────────────────────────────────────────
   const filtradas = porTab.filter(r => {
     const suc   = r.clases?.sucursales?.nombre?.toLowerCase() || ''
     const clase = r.clases?.nombre_clase?.toLowerCase() || ''
     const fecha = r.clases?.horario?.slice(0, 10) || ''
+    const canal = r.es_clase_muestra ? 'Muestra'
+                : r.origen === 'Wellhub'   || r.origen === 'wellhub'   ? 'Wellhub'
+                : r.origen === 'TotalPass' || r.origen === 'totalpass' ? 'TotalPass'
+                : 'Navy'
     return (
       (!filtros.sucursal || suc.includes(filtros.sucursal.toLowerCase()))  &&
       (!filtros.clase    || clase.includes(filtros.clase.toLowerCase()))   &&
       (!filtros.fecha    || fecha === filtros.fecha)                        &&
-      (!filtros.estado   || r.estatus === filtros.estado)
+      (!filtros.estado   || r.estatus === filtros.estado)                  &&
+      (!filtros.canal    || canal === filtros.canal)
     )
   })
 
-  // ── Ordenar ──────────────────────────────────────────────────────────────────
   const ordenadas = [...filtradas].sort((a, b) => {
     if (!orden.col) return 0
     const va = orden.col === 'Cliente' ? a.clientes?.nombre_completo || ''
@@ -148,11 +219,9 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
     return orden.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
   })
 
-  // ── Paginación ────────────────────────────────────────────────────────────────
   const totalPags = Math.max(Math.ceil(ordenadas.length / POR_PAGINA), 1)
   const paginadas = ordenadas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA)
 
-  // ── Selección ─────────────────────────────────────────────────────────────────
   const toggleAll = () => {
     if (seleccion.size === paginadas.length) setSeleccion(new Set())
     else setSeleccion(new Set(paginadas.map(r => r.id)))
@@ -163,157 +232,85 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
     setSeleccion(s)
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────────
   const setFiltro = (key: string, val: string) => { setFiltros(p => ({ ...p, [key]: val })); setPagina(1) }
-  const limpiar   = () => { setFiltros({ sucursal:'', clase:'', fecha:'', hora:'', estado:'' }); setPagina(1) }
   const toggleOrden = (col: string) => setOrden(o => ({ col, dir: o.col === col && o.dir === 'asc' ? 'desc' : 'asc' }))
-  const sortIcon  = (col: string) => <span className="text-gray-300 ml-0.5">{orden.col === col ? (orden.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
-  const tiempoRelativo = (fecha: string) => {
-    const diff = Math.floor((Date.now() - new Date(fecha).getTime()) / 60000)
-    if (diff < 60)   return `Hace ${diff} min`
-    if (diff < 1440) return `Hace ${Math.floor(diff/60)} hr`
-    return `Hace ${Math.floor(diff/1440)} días`
-  }
-
-  const hayFiltros = Object.values(filtros).some(v => v !== '')
-
-  // ── Acciones ──────────────────────────────────────────────────────────────────
-  const cancelarReserva = async (r: Reserva) => {
-    await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', r.id)
-    const { data: enEspera } = await supabase.from('reservas').select('*')
-      .eq('clase_id', r.clases?.id).eq('lista_espera', true).eq('estatus', 'Pendiente')
-      .order('created_at', { ascending: true }).limit(1)
-    if (enEspera?.length) await supabase.from('reservas').update({ lista_espera: false, estatus: 'Confirmada' }).eq('id', enEspera[0].id)
-    onRefresh(); setMenuOpen(null)
-  }
-
-  const confirmarReserva = async (id: string) => {
-    await supabase.from('reservas').update({ estatus: 'Confirmada' }).eq('id', id)
-    onRefresh(); setMenuOpen(null)
-  }
-
-  // Sucursales únicas para el filtro
-  const sucursalesUnicas = [...new Set(reservas.map(r => r.clases?.sucursales?.nombre).filter(Boolean))] as string[]
-  const estadosUnicos    = ['Confirmada', 'Pendiente', 'Cancelada']
+  const activas      = reservas.filter(r => r.estatus !== 'Cancelada' && !r.lista_espera).length
+  const cancelaciones = reservas.filter(r => r.estatus === 'Cancelada').length
+  const noShows      = reservas.filter(r => r.lista_espera).length
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-100">
+      <div className="flex items-center border-b border-gray-100 px-4 pt-1">
         {TABS.map(t => (
-          <button key={t.key}
-            onClick={() => { setTab(t.key); setPagina(1); setSeleccion(new Set()) }}
-            className={`flex items-center gap-2 px-6 py-3.5 text-sm font-medium transition border-b-2 ${
-              tab === t.key
-                ? 'border-indigo-600 text-indigo-600 font-bold'
-                : 'border-transparent text-gray-400 hover:text-gray-700'
-            }`}
-          >
-            {t.icon} {t.label}
-            {tab === t.key && filtradas.length > 0 && (
-              <span className="bg-indigo-100 text-indigo-600 text-[10px] font-black px-1.5 py-0.5 rounded-full">
-                {filtradas.length}
-              </span>
-            )}
+          <button key={t.key} onClick={() => { setTab(t.key); setPagina(1); setSeleccion(new Set()) }}
+            className={`flex items-center gap-1.5 px-4 py-3.5 text-xs font-bold border-b-2 transition ${
+              tab === t.key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-400 hover:text-gray-600'
+            }`}>
+            {t.icon}
+            {t.label}
+            <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+              tab === t.key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {t.key === 'activas' ? activas : t.key === 'cancelaciones' ? cancelaciones : noShows}
+            </span>
           </button>
         ))}
       </div>
 
-      {/* Bulk actions bar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 bg-gray-50">
-        <span className="text-xs text-gray-500 font-medium">
-          {filtradas.length} {tab === 'activas' ? 'Reservas activas' : tab === 'cancelaciones' ? 'Cancelaciones' : 'No-Shows'}
-          {seleccion.size > 0 && <span className="text-indigo-600 font-bold ml-1">({seleccion.size} seleccionadas)</span>}
-        </span>
-        {seleccion.size > 0 && (
-          <div className="flex items-center gap-2">
-            {tab === 'activas' && <>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                <Calendar size={12}/> Reagendar
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                <XIcon size={12}/> Cancelar reserva
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                <XIcon size={12}/> No asistió
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                <Check size={12}/> Confirmar asistencia
-              </button>
-            </>}
-            {tab === 'cancelaciones' && <>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                Responder
-              </button>
-              <button onClick={() => seleccion.forEach(id => confirmarReserva(id))}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                Deshacer cancelación
-              </button>
-            </>}
-            {tab === 'no-shows' && <>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                Responder
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                Penalizar
-              </button>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition">
-                Perdonar penalización
-              </button>
-            </>}
-          </div>
-        )}
-      </div>
+      {/* Bulk actions */}
+      {seleccion.size > 0 && (
+        <ReservasBulkActions
+          seleccion={seleccion}
+          onCancelar={async () => {
+            await Promise.all([...seleccion].map(id =>
+              supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', id)
+            ))
+            setSeleccion(new Set())
+            onRefresh()
+          }}
+          onLimpiar={() => setSeleccion(new Set())}
+        />
+      )}
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-gray-100">
-        <FiltroDropdown label="Sucursal" value={filtros.sucursal} onChange={v => setFiltro('sucursal', v)} options={sucursalesUnicas} />
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50 flex-wrap">
+        <FiltroDropdown label="Sucursal" value={filtros.sucursal} onChange={v => setFiltro('sucursal', v)} />
         <FiltroDropdown label="Clase"    value={filtros.clase}    onChange={v => setFiltro('clase', v)} />
-        <div className="flex items-center border border-gray-200 rounded-lg px-3 py-1.5 gap-2 bg-white">
-          <Calendar size={12} className="text-gray-400"/>
-          <input type="date" className="text-xs text-gray-600 outline-none bg-transparent"
-            value={filtros.fecha} onChange={e => setFiltro('fecha', e.target.value)} />
-        </div>
-        <div className="flex items-center border border-gray-200 rounded-lg px-3 py-1.5 gap-2 bg-white">
-          <Clock size={12} className="text-gray-400"/>
-          <input type="time" className="text-xs text-gray-600 outline-none bg-transparent"
-            value={filtros.hora} onChange={e => setFiltro('hora', e.target.value)} />
-        </div>
-        <FiltroDropdown label="Estado" value={filtros.estado} onChange={v => setFiltro('estado', v)} options={estadosUnicos} />
-        {hayFiltros && (
-          <button onClick={limpiar} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition px-2 py-1.5 rounded-lg hover:bg-gray-100">
-            <RotateCcw size={11}/> Eliminar filtros
+        <FiltroDropdown label="Fecha"    value={filtros.fecha}    onChange={v => setFiltro('fecha', v)} />
+        <FiltroDropdown label="Estado"   value={filtros.estado}   onChange={v => setFiltro('estado', v)}
+          options={['Confirmada', 'Cancelada', 'No Show']} />
+        <FiltroDropdown label="Canal"    value={filtros.canal}    onChange={v => setFiltro('canal', v)}
+          options={['Navy', 'Wellhub', 'TotalPass', 'Muestra']} />
+        {(filtros.sucursal || filtros.clase || filtros.fecha || filtros.estado || filtros.canal) && (
+          <button onClick={() => setFiltros({ sucursal: '', clase: '', fecha: '', hora: '', estado: '', canal: '' })}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition px-2 py-1.5 hover:bg-gray-100 rounded-lg">
+            <XIcon size={11}/> Limpiar
           </button>
         )}
+        <span className="ml-auto text-xs text-gray-400">{filtradas.length} resultado{filtradas.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Tabla */}
-      <div className="overflow-x-auto overflow-visible relative">
+      <div className="overflow-x-auto">
         <table className="w-full text-left">
-          <thead className="text-gray-400 text-[11px] font-bold uppercase border-b border-gray-100 bg-white">
-            <tr>
+          <thead>
+            <tr className="text-[11px] font-bold text-gray-400 uppercase tracking-wide border-b border-gray-100">
               <th className="px-4 py-3 w-8">
                 <input type="checkbox"
-                  checked={seleccion.size === paginadas.length && paginadas.length > 0}
+                  checked={paginadas.length > 0 && seleccion.size === paginadas.length}
                   onChange={toggleAll}
                   className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
               </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('Cliente')}>
-                Cliente {sortIcon('Cliente')}
-              </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('Sucursal')}>
-                Sucursal {sortIcon('Sucursal')}
-              </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('Clase')}>
-                Clase {sortIcon('Clase')}
-              </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('Fecha')}>
-                Fecha {sortIcon('Fecha')}
-              </th>
-              <th className="px-4 py-3">Hora</th>
-
+              {['Cliente', 'Sucursal', 'Clase', 'Fecha', 'Hora'].map(col => (
+                <th key={col} className="px-4 py-3 cursor-pointer hover:text-gray-600 transition select-none"
+                  onClick={() => toggleOrden(col)}>
+                  {col} {orden.col === col ? (orden.dir === 'asc' ? '↑' : '↓') : ''}
+                </th>
+              ))}
+              <th className="px-4 py-3">Canal</th>
               {tab === 'activas' && <>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Asistencia</th>
@@ -341,13 +338,11 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
             ) : paginadas.map(r => (
               <tr key={r.id} className={`transition hover:bg-gray-50 ${seleccion.has(r.id) ? 'bg-indigo-50/50' : ''}`}>
 
-                {/* Checkbox */}
                 <td className="px-4 py-3">
                   <input type="checkbox" checked={seleccion.has(r.id)} onChange={() => toggleOne(r.id)}
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
                 </td>
 
-                {/* Cliente */}
                 <td className="px-4 py-3 min-w-[180px]">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
@@ -363,24 +358,20 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
                   </div>
                 </td>
 
-                {/* Sucursal */}
                 <td className="px-4 py-3">
                   <BadgeSucursal nombre={r.clases?.sucursales?.nombre || '—'} />
                 </td>
 
-                {/* Clase */}
                 <td className="px-4 py-3 text-sm text-gray-700 font-medium">
                   {r.clases?.nombre_clase || '—'}
                 </td>
 
-                {/* Fecha */}
                 <td className="px-4 py-3 text-sm text-gray-600">
                   {r.clases?.horario
                     ? new Date(r.clases.horario).toLocaleDateString('es-MX', { day:'2-digit', month:'2-digit', year:'numeric' }).replace(/\//g,'-')
                     : '—'}
                 </td>
 
-                {/* Hora */}
                 <td className="px-4 py-3">
                   <div>
                     <p className="text-sm text-gray-700 font-medium">
@@ -392,13 +383,19 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
                   </div>
                 </td>
 
-                {/* Columnas por tab */}
+                {/* Canal */}
+                <td className="px-4 py-3">
+                  <BadgeCanal origen={r.origen} esMuestra={r.es_clase_muestra} />
+                </td>
+
                 {tab === 'activas' && <>
                   <td className="px-4 py-3"><BadgeEstatus estatus={r.estatus} /></td>
                   <td className="px-4 py-3">
                     <AsistenciaCheck
                       reservaId={r.id}
                       estatus={r.estatus}
+                      clases={r.clases}
+                      clienteId={r.clientes?.id}
                       onUpdate={onRefresh}
                     />
                   </td>
@@ -416,7 +413,6 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
                   <td className="px-4 py-3 text-[11px] text-gray-400">{tiempoRelativo(r.created_at)}</td>
                 </>}
 
-                {/* Menú ··· */}
                 <td className="px-4 py-3 relative">
                   <button onClick={() => setMenuOpen(menuOpen === r.id ? null : r.id)}
                     className="p-1.5 hover:bg-gray-100 rounded-lg transition text-gray-400 hover:text-gray-700">

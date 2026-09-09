@@ -145,6 +145,15 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
         fecha_vencimiento_memb: fechaFin,
       }).eq('id', cliente.id)
 
+      await fetch('/api/correo/bienvenida-cliente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email:  cliente.email,
+          nombre: cliente.nombre_completo,
+        }),
+      })
+
       // 5. Enviar correo comprobante
       await fetch('/api/correo/pago-sucursal', {
         method:  'POST',

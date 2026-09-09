@@ -1,16 +1,19 @@
 'use client'
-import { useState, useEffect }           from 'react'
-import { X, Users, Clock, MapPin,
-         UserCheck, UserX, CheckCircle2,
-         XCircle, Pencil }               from 'lucide-react'
-import { supabase }                      from '@/lib/supabase'
-import ToastExito                        from '@/components/ToastExito'
+import { useState, useEffect } from 'react'
+import {
+  X, Users, Clock, MapPin,
+  UserCheck, UserX, CheckCircle2, Flame,
+  Star, Pencil, Activity
+} from 'lucide-react'
+import { supabase }   from '@/lib/supabase'
+import ToastExito     from '@/components/ToastExito'
+import TabAsistencia from './TabAsistencia'
 
 interface Props {
-  isOpen:   boolean
-  claseId:  string | null
-  onClose:  () => void
-  onSuccess:() => void
+  isOpen:    boolean
+  claseId:   string | null
+  onClose:   () => void
+  onSuccess: () => void
 }
 
 type Tab = 'detalle' | 'asistencia' | 'editar'
@@ -18,16 +21,39 @@ type Tab = 'detalle' | 'asistencia' | 'editar'
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 bg-gray-50 transition"
 const selectCls = `${inputCls} appearance-none cursor-pointer`
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+function getBadgeCanal(origen: string | null, esMuestra: boolean) {
+  if (esMuestra)                                          return { label: 'Muestra',   cls: 'bg-purple-100 text-purple-700' }
+  if (origen === 'Wellhub'   || origen === 'wellhub')    return { label: 'Wellhub',   cls: 'bg-pink-100 text-pink-600' }
+  if (origen === 'TotalPass' || origen === 'totalpass')  return { label: 'TotalPass', cls: 'bg-green-100 text-green-700' }
+  return { label: 'Navy', cls: 'bg-gray-900 text-white' }
+}
+
+function getEtiquetaExperiencia(total: number) {
+  if (total === 1)        return { label: '1ª clase 🌟', cls: 'bg-yellow-100 text-yellow-700' }
+  if (total <= 3)         return { label: 'Nuevo',       cls: 'bg-blue-100 text-blue-600' }
+  if (total <= 10)        return { label: 'Regular',     cls: 'bg-indigo-100 text-indigo-600' }
+  return                         { label: 'Veterano 💪', cls: 'bg-emerald-100 text-emerald-700' }
+}
+
+function getNumClaseLabel(total: number) {
+  if (total === 1) return 'Primera clase'
+  if (total === 2) return '2ª clase'
+  if (total === 3) return '3ª clase'
+  return `Clase #${total}`
+}
+
 export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess }: Props) {
-  const [tab,         setTab]         = useState<Tab>('detalle')
-  const [loading,     setLoading]     = useState(true)
-  const [saving,      setSaving]      = useState(false)
-  const [toast,       setToast]       = useState(false)
-  const [clase,       setClase]       = useState<any>(null)
-  const [reservas,    setReservas]    = useState<any[]>([])
-  const [asistencias, setAsistencias] = useState<any[]>([])
-  const [coaches,     setCoaches]     = useState<any[]>([])
-  const [checkingIn,  setCheckingIn]  = useState<string | null>(null)
+  const [tab,              setTab]              = useState<Tab>('detalle')
+  const [loading,          setLoading]          = useState(true)
+  const [saving,           setSaving]           = useState(false)
+  const [toast,            setToast]            = useState(false)
+  const [clase,            setClase]            = useState<any>(null)
+  const [reservas,         setReservas]         = useState<any[]>([])
+  const [asistencias,      setAsistencias]      = useState<any[]>([])
+  const [coaches,          setCoaches]          = useState<any[]>([])
+  const [checkingIn,       setCheckingIn]       = useState<string | null>(null)
+  const [historialClientes, setHistorialClientes] = useState<Record<string, number>>({})
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -48,8 +74,19 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     setLoading(true)
 
     const [{ data: claseData }, { data: reservasData }, { data: asistData }, { data: coachData }] = await Promise.all([
-      supabase.from('clases').select('*, wellhub_slot_id, totalpass_occurrence_uuid, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)').eq('id', claseId).single(),
-      supabase.from('reservas').select('*, clientes(id, nombre_completo, email)').eq('clase_id', claseId).order('created_at'),
+      supabase.from('clases')
+        .select('*, wellhub_slot_id, totalpass_occurrence_uuid, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)')
+        .eq('id', claseId).single(),
+      supabase.from('reservas')
+        .select(`
+          *,
+          clientes(
+            id, nombre_completo, email, plan, origen,
+            is_founding_member, fecha_alta_original,
+            paquetes(nombre)
+          )
+        `)
+        .eq('clase_id', claseId).order('created_at'),
       supabase.from('asistencias').select('*').eq('clase_id', claseId),
       supabase.from('staff').select('id, nombre, primer_apellido').eq('tipo', 'Coach').eq('estatus', 'Activo').order('nombre'),
     ])
@@ -61,7 +98,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         nombre_clase:     claseData.nombre_clase     || '',
         coach_id:         claseData.coach_id         || '',
         fecha:            h.toISOString().split('T')[0],
-        hora:             h.toTimeString().slice(0,5),
+        hora:             h.toTimeString().slice(0, 5),
         duracion_minutos: claseData.duracion_minutos || 60,
         capacidad_max:    claseData.capacidad_max    || 0,
         descripcion:      claseData.descripcion      || '',
@@ -72,6 +109,22 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     if (reservasData)   setReservas(reservasData)
     if (asistData)      setAsistencias(asistData)
     if (coachData)      setCoaches(coachData)
+
+    // Historial de asistencias totales por cliente
+    const clienteIds = (reservasData || []).map((r: any) => r.clientes?.id).filter(Boolean)
+    if (clienteIds.length > 0) {
+      const { data: historial } = await supabase
+        .from('asistencias')
+        .select('cliente_id')
+        .in('cliente_id', clienteIds)
+
+      const conteo: Record<string, number> = {}
+      for (const a of historial || []) {
+        conteo[a.cliente_id] = (conteo[a.cliente_id] || 0) + 1
+      }
+      setHistorialClientes(conteo)
+    }
+
     setLoading(false)
   }
 
@@ -83,7 +136,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     setCheckingIn(clienteId)
     const yaAsistio = asistencias.some(a => a.cliente_id === clienteId)
     if (yaAsistio) { setCheckingIn(null); return }
-
     await supabase.from('asistencias').insert([{
       cliente_id:    clienteId,
       clase_id:      claseId,
@@ -91,7 +143,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     }])
     await supabase.from('reservas').update({ estatus: 'Confirmada' })
       .eq('clase_id', claseId).eq('cliente_id', clienteId)
-
     fetchData()
     setCheckingIn(null)
   }
@@ -106,7 +157,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     setSaving(true)
     const horario = new Date(`${form.fecha}T${form.hora}`).toISOString()
     const coach   = coaches.find(c => c.id === form.coach_id)
-
     await supabase.from('clases').update({
       nombre_clase:     form.nombre_clase,
       coach_id:         form.coach_id || null,
@@ -118,7 +168,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       salon:            form.salon,
       estado:           form.estado,
     }).eq('id', claseId)
-
     setSaving(false)
     setToast(true)
     onSuccess()
@@ -166,24 +215,21 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         capacidad_max:    clase.capacidad_max,
         coach:            clase.staff ? `${clase.staff.nombre} ${clase.staff.primer_apellido}` : 'Navy Coach',
       }
-      console.log('TotalPass payload:', payload)
-
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/publicar-clase`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
       })
-
       if (!res.ok) {
         const err = await res.json().catch(() => res.text())
         console.error('TotalPass error response:', err)
       }
-
       if (res.ok) fetchData()
     } catch (e) {
       console.error('Error publicando en TotalPass:', e)
     }
   }
+
   if (!isOpen) return null
 
   const totalReservas    = reservas.filter(r => r.estatus !== 'Cancelada').length
@@ -256,11 +302,9 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         {/* Contenido */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* Tab Detalle */}
+          {/* ── Tab Detalle ── */}
           {tab === 'detalle' && !loading && clase && (
             <div className="px-6 py-5 space-y-5">
-
-              {/* Métricas */}
               <div className="grid grid-cols-4 gap-3">
                 {[
                   { label: 'Reservas',    val: `${totalReservas}/${clase.capacidad_max}`, color: 'text-gray-900' },
@@ -274,8 +318,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   </div>
                 ))}
               </div>
-
-              {/* Info */}
               <div className="space-y-3">
                 <div className="flex items-center gap-3 text-sm text-gray-600">
                   <Clock size={15} className="text-gray-400 flex-shrink-0" />
@@ -296,8 +338,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   <span>Coach: {clase.staff ? `${clase.staff.nombre} ${clase.staff.primer_apellido}` : clase.instructor || '—'}</span>
                 </div>
               </div>
-
-              {/* Barra ocupación */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-xs font-bold text-gray-500">Ocupación</p>
@@ -308,46 +348,37 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                     style={{ width: `${Math.min(ocupacion, 100)}%` }} />
                 </div>
               </div>
-
               {clase.descripcion && (
                 <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">{clase.descripcion}</p>
               )}
-
-              {/* Plataformas */}
               <div className="border border-gray-100 rounded-xl overflow-hidden">
                 <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                   <p className="text-xs font-black text-gray-500 uppercase tracking-wide">Plataformas externas</p>
                 </div>
                 <div className="divide-y divide-gray-50">
-                  {/* Wellhub */}
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-gray-900">Wellhub</span>
                       {enWellhub
                         ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500">✓ Publicada · Slot {clase.wellhub_slot_id}</span>
-                        : <span className="text-xs text-gray-400">No publicada</span>
-                      }
+                        : <span className="text-xs text-gray-400">No publicada</span>}
                     </div>
                     {!enWellhub && (
-                      <button
-                        onClick={handlePublicarWellhub}
+                      <button onClick={handlePublicarWellhub}
                         className="text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 transition">
                         Publicar
                       </button>
                     )}
                   </div>
-                  {/* TotalPass */}
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-gray-900">TotalPass</span>
                       {enTotalpass
                         ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">✓ Publicada</span>
-                        : <span className="text-xs text-gray-400">No publicada</span>
-                      }
+                        : <span className="text-xs text-gray-400">No publicada</span>}
                     </div>
                     {!enTotalpass && clase?.sucursal_id && (
-                      <button
-                        onClick={handlePublicarTotalpass}
+                      <button onClick={handlePublicarTotalpass}
                         className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
                         Publicar
                       </button>
@@ -355,8 +386,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   </div>
                 </div>
               </div>
-
-              {/* Estatus + cancelar */}
               <div className="flex items-center justify-between pt-2">
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                   clase.estado === 'Activa' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
@@ -373,56 +402,19 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             </div>
           )}
 
-          {/* Tab Asistencia */}
+          {/* ── Tab Asistencia ── */}
           {tab === 'asistencia' && (
-            <div className="divide-y divide-gray-50">
-              {reservas.length === 0 ? (
-                <div className="p-10 text-center text-gray-400 italic text-sm">
-                  No hay reservas para esta clase
-                </div>
-              ) : reservas.map(r => {
-                const hizoChekin = asistencias.some(a => a.cliente_id === r.clientes?.id)
-                const cancelada  = r.estatus === 'Cancelada'
-                return (
-                  <div key={r.id} className={`flex items-center justify-between px-6 py-3.5 ${cancelada ? 'opacity-40' : 'hover:bg-gray-50'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-black text-gray-500">
-                        {r.clientes?.nombre_completo?.charAt(0) || '?'}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{r.clientes?.nombre_completo}</p>
-                        <p className="text-[11px] text-gray-400">{r.clientes?.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {hizoChekin ? (
-                        <span className="flex items-center gap-1 text-xs font-bold text-emerald-500">
-                          <CheckCircle2 size={13}/> Presente
-                        </span>
-                      ) : !cancelada && (
-                        <div className="flex items-center gap-1.5">
-                          <button onClick={() => handleCheckIn(r.clientes?.id)}
-                            disabled={checkingIn === r.clientes?.id}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition">
-                            <UserCheck size={12}/> Check-in
-                          </button>
-                          <button onClick={() => handleCancelarReserva(r.id)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-400 hover:bg-red-100 transition">
-                            <UserX size={12}/> No-show
-                          </button>
-                        </div>
-                      )}
-                      {cancelada && (
-                        <span className="text-xs text-gray-300 italic">Cancelada</span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <TabAsistencia
+              reservas={reservas}
+              asistencias={asistencias}
+              historialClientes={historialClientes}
+              checkingIn={checkingIn}
+              onCheckIn={handleCheckIn}
+              onCancelar={handleCancelarReserva}
+            />
           )}
 
-          {/* Tab Editar */}
+          {/* ── Tab Editar ── */}
           {tab === 'editar' && (
             <div className="px-6 py-5 space-y-4">
               <div className="space-y-1.5">

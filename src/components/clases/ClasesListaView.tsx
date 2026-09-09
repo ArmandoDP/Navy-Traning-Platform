@@ -174,13 +174,13 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-1.5">
                     {enWellhub && (
-                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 border border-orange-100">
-                        WH
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-pink-100 text-pink-600">
+                        Wellhub
                       </span>
                     )}
                     {enTotalpass && (
-                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-500 border border-blue-100">
-                        TP
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                        TotalPass
                       </span>
                     )}
                     {!enWellhub && !enTotalpass && (

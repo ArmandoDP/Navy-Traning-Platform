@@ -212,7 +212,10 @@ export default function ClasesPage() {
       <DrawerDetalleClase
         isOpen={!!claseActivaId}
         claseId={claseActivaId}
-        onClose={() => setClaseActivaId(null)}
+        onClose={() => {
+          setClaseActivaId(null)
+          fetchClases()
+        }}
         onSuccess={fetchClases}
       />
 

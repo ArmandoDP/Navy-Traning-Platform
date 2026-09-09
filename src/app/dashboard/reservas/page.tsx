@@ -19,7 +19,13 @@ export default function ReservasPage() {
     setLoading(true)
     let q = supabase
       .from('reservas')
-      .select('*, clientes(id, nombre_completo, email, telefono), clases(id, nombre_clase, horario, tipo_clase, sucursal_id, sucursales(nombre, ciudad))')
+      .select(`
+        *,
+        clientes(id, nombre_completo, email, telefono),
+        clases(id, nombre_clase, horario, tipo_clase, sucursal_id, sucursales(nombre, ciudad),
+          asistencias(id, cliente_id)
+        )
+      `)
       .order('created_at', { ascending: false })
 
     // Filtrar por sucursal via clases

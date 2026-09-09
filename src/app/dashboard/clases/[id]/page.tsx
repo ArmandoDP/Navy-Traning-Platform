@@ -49,6 +49,7 @@ export default function DetalleClase() {
   const [clase,       setClase]       = useState<Clase | null>(null)
   const [reservas,    setReservas]    = useState<Reserva[]>([])
   const [asistencias, setAsistencias] = useState<Asistencia[]>([])
+  const [historialClientes, setHistorialClientes] = useState<Record<string, number>>({})
   const [loading,     setLoading]     = useState(true)
   const [checkingIn,  setCheckingIn]  = useState<string | null>(null) // id del cliente procesando
 
@@ -62,20 +63,46 @@ export default function DetalleClase() {
         .select('*, staff(nombre, primer_apellido)')
         .eq('id', id)
         .single(),
-      supabase
-        .from('reservas')
-        .select('*, clientes(id, nombre_completo, email)')
-        .eq('clase_id', id)
+      supabase.from('reservas')
+        .select(`
+          *,
+          room_spots(numero, tipo, fila),
+          clientes(
+            id, nombre_completo, email, plan, origen,
+            is_founding_member, fecha_alta_original,
+            paquetes(nombre)
+          )
+        `)
+        .eq('clase_id', id).order('created_at')
         .order('created_at', { ascending: true }),
       supabase
         .from('asistencias')
         .select('*')
-        .eq('clase_id' , id) // filtramos por clase
+        .eq('clase_id', id),
     ])
 
-    if (claseData)      setClase(claseData)
-    if (reservasData)   setReservas(reservasData)
+    if (claseData)       setClase(claseData)
+    if (reservasData)    setReservas(reservasData)
     if (asistenciasData) setAsistencias(asistenciasData)
+
+    // Jalar historial de asistencias totales por cliente
+    const clienteIds = (reservasData || [])
+      .map((r: any) => r.clientes?.id)
+      .filter(Boolean)
+
+    if (clienteIds.length > 0) {
+      const { data: historial } = await supabase
+        .from('asistencias')
+        .select('cliente_id')
+        .in('cliente_id', clienteIds)
+
+      // Conteo por cliente
+      const conteo: Record<string, number> = {}
+      for (const a of historial || []) {
+        conteo[a.cliente_id] = (conteo[a.cliente_id] || 0) + 1
+      }
+      setHistorialClientes(conteo)
+    }
 
     setLoading(false)
   }

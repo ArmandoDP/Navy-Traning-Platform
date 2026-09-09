@@ -85,6 +85,21 @@ export async function POST(req: NextRequest) {
         .eq('email', user.email)
         .single()
 
+      // ← AQUÍ, ya tenemos clase y cliente
+      if (clase && clienteExistente) {
+        const { data: reservaExistente } = await supabase
+          .from('reservas')
+          .select('id')
+          .eq('cliente_id', clienteExistente.id)
+          .eq('clase_id', clase.id)
+          .maybeSingle()
+
+        if (reservaExistente) {
+          console.log('Reserva duplicada ignorada:', clienteExistente.id, clase.id)
+          return NextResponse.json({ ok: true, duplicado: true })
+        }
+      }
+
       let clienteId = clienteExistente?.id
       if (!clienteExistente) {
         const { data: nuevoCliente } = await supabase.from('clientes').insert({
