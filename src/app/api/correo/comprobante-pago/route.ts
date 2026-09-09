@@ -64,8 +64,7 @@ export async function POST(req: NextRequest) {
     </table>
 
     <!-- Logo -->
-    <img src="https://crm.navytrainingcenter.com/email/navy-icon-white.png" alt="NAVY" width="140" style="display:block;width:140px;height:auto;border:0;margin:0 0 40px;filter:brightness(0) invert(1);">
-    
+    <img src="https://crm.navytrainingcenter.com/email/navy-icon-white.png" alt="NAVY" width="140" style="display:block;width:140px;height:auto;border:0;margin:0 auto 40px;filter:brightness(0) invert(1);">
 
     <!-- Badge -->
     <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px;">
