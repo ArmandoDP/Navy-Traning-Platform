@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       from:    'Navy Training Center <noreply@navytrainingcenter.com>',
       to:      email,
-      subject: `💪 ${nombre1}, tu acceso a NAVY está listo`,
+      subject: `${nombre1}, tu acceso a NAVY está listo`,
       html,
     }),
   })

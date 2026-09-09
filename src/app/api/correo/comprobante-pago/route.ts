@@ -59,13 +59,12 @@ export async function POST(req: NextRequest) {
   <tr><td style="background:linear-gradient(145deg,#0f172a 0%,#171B24 40%,#1e2d40 70%,#0f172a 100%);border-radius:28px 28px 0 0;padding:52px 52px 44px;text-align:center;">
 
     <!-- Línea decorativa top -->
-    <table width="80" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 32px;">
+    <table width="100" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 32px;">
       <tr><td style="height:3px;background:linear-gradient(90deg,transparent,#6366f1,#818cf8,#6366f1,transparent);border-radius:2px;"></td></tr>
     </table>
 
     <!-- Logo -->
-    <img src="https://crm.navytrainingcenter.com/email/logo-navy.png" alt="NAVY" width="140" style="display:block;width:140px;height:auto;border:0;margin:0 auto 6px;filter:brightness(0) invert(1);">
-    <p style="font-family:Arial,sans-serif;font-size:8px;color:#475569;letter-spacing:9px;margin:0 0 40px;text-transform:uppercase;">TRAINING CENTER</p>
+    <img src="https://crm.navytrainingcenter.com/email/navy-icon-white.png" alt="NAVY" width="140" style="display:block;width:140px;height:auto;border:0;margin:0 auto 6px;filter:brightness(0) invert(1);">
 
     <!-- Badge -->
     <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px;">
@@ -250,7 +249,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       from:    'Navy Training Center <noreply@navytrainingcenter.com>',
       to:      email,
-      subject: `🏋️ ${nombre1}, tu membresía ${paquete_nombre} está activa`,
+      subject: `${nombre1}, tu membresía ${paquete_nombre} está activa`,
       html,
     }),
   })
