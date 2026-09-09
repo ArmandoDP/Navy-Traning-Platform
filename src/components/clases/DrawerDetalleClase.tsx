@@ -54,6 +54,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [coaches,          setCoaches]          = useState<any[]>([])
   const [checkingIn,       setCheckingIn]       = useState<string | null>(null)
   const [historialClientes, setHistorialClientes] = useState<Record<string, number>>({})
+  const [sincronizado, setSincronizado] = useState(false)
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -179,6 +180,27 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     await supabase.from('clases').update({ estado: 'Cancelada' }).eq('id', claseId)
     fetchData()
     onSuccess()
+  }
+
+  const handleActualizarHorarioWellhub = async () => {
+    if (!clase || !claseId) return
+    try {
+      const res = await fetch('/api/wellhub/actualizar-slot', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          slotId:      clase.wellhub_slot_id,
+          horario:     clase.horario,
+          sucursalId:  clase.sucursal_id,
+        }),
+      })
+      const data = await res.json()
+      console.log('Horario actualizado:', data)
+      fetchData()
+      if (res.ok) setSincronizado(true)
+    } catch (e) {
+      console.error('Error actualizando horario Wellhub:', e)
+    }
   }
 
   const handlePublicarWellhub = async () => {
@@ -367,6 +389,17 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                       <button onClick={handlePublicarWellhub}
                         className="text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 transition">
                         Publicar
+                      </button>
+                    )}
+                    {enWellhub && (
+                      <button onClick={handleActualizarHorarioWellhub}
+                        disabled={sincronizado}
+                        className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
+                          sincronizado 
+                            ? 'bg-emerald-50 text-emerald-600 cursor-default' 
+                            : 'bg-pink-50 text-pink-600 hover:bg-pink-100'
+                        }`}>
+                        {sincronizado ? '✓ Horario sincronizado' : 'Sincronizar horario'}
                       </button>
                     )}
                   </div>

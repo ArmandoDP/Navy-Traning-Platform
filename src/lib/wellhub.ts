@@ -134,6 +134,26 @@ export async function actualizarCapacidadSlotWellhub(slotId: string, totalCapaci
   return data
 }
 
+export async function actualizarHorarioSlotWellhub(slotId: string, fechaInicio: string, sucursalId?: string) {
+  const gymId = getGymId(sucursalId)
+  const url   = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/slots/${slotId}`
+
+  // Convertir UTC a CDMX (UTC-6)
+  const fechaUTC  = new Date(fechaInicio)
+  const fechaCDMX = new Date(fechaUTC.getTime() - 6 * 60 * 60 * 1000)
+  const occurDate = fechaCDMX.toISOString().slice(0, 19)
+
+  const res = await fetch(url, {
+    method:  'PATCH',
+    headers: wellhubHeaders(),
+    body: JSON.stringify({ occur_date: occurDate }),
+  })
+  const text = await res.text()
+  let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
+  if (!res.ok) throw new Error(data?.message || `Error ${res.status}: ${text}`)
+  return data
+}
+
 export async function actualizarCuposSlotWellhub(slotId: string, totalBooked: number, classId: string, sucursalId?: string) {
   const gymId = getGymId(sucursalId)
   const url   = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots/${slotId}`
