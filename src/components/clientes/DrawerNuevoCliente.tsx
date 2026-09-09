@@ -113,7 +113,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   useEffect(() => {
     const paquete = paquetes.find(p => p.id === form.paquete_id)
     if (paquete?.vigencia_dias && form.fecha_inicio_membresia) {
-      setForm(p => ({ ...p, fecha_fin_membresia: calcularFechaFin(form.fecha_inicio_membresia, paquete.vigencia_dias) }))
+      setForm(p => ({ ...p, fecha_fin_membresia: calcularFechaFin(form.fecha_inicio_membresia, paquete.vigencia_dias ?? 30) }))
     }
   }, [form.paquete_id, form.fecha_inicio_membresia, paquetes])
 
