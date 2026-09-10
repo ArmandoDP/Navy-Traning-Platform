@@ -66,24 +66,36 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
   const [horarioFiltro,  setHorarioFiltro]  = useState('Cualquiera')
   const [yaReservado,    setYaReservado]    = useState(false)
 
-  // ── Fetch inicial ────────────────────────────────────────────────────────────
+  // Al abrir — solo clases y sucursales
   useEffect(() => {
     if (!isOpen) return
     Promise.all([
-      supabase.from('clientes').select('id, nombre_completo, email, telefono, plan, nombre_plan, clases_restantes, estatus')
-        .eq('estatus', 'Activo').order('nombre_completo'),
       supabase.from('clases').select('*, staff(nombre, primer_apellido), reservas(id, estatus), sucursales(id, nombre, color)')
         .eq('estado', 'Activa').gte('horario', new Date().toISOString()).order('horario'),
       supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa').order('nombre'),
-    ]).then(([{ data: clis }, { data: cls }, { data: sucs }]) => {
-      if (clis) setClientes(clis)
-      if (cls)  setClases(cls.map((c: any) => ({
+    ]).then(([{ data: cls }, { data: sucs }]) => {
+      if (cls) setClases(cls.map((c: any) => ({
         ...c,
         total_reservas: c.reservas?.filter((r: any) => r.estatus !== 'Cancelada').length || 0,
       })))
       if (sucs) setSucursales(sucs)
     })
   }, [isOpen])
+
+  // Buscar clientes con debounce
+  useEffect(() => {
+    if (!busCliente || busCliente.length < 2) { setClientes([]); return }
+    const timer = setTimeout(async () => {
+      const { data } = await supabase.from('clientes')
+        .select('id, nombre_completo, email, telefono, plan, nombre_plan, clases_restantes, estatus')
+        .eq('estatus', 'Activo')
+        .or(`nombre_completo.ilike.%${busCliente}%,email.ilike.%${busCliente}%`)
+        .order('nombre_completo')
+        .limit(10)
+      if (data) setClientes(data)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [busCliente])
 
   // ── Cargar spots cuando se selecciona clase ───────────────────────────────────
   useEffect(() => {
@@ -217,12 +229,12 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
 
             {/* Contador */}
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
-              Cliente · {clientesFiltrados.length} totales
+              Cliente · {clientes.length} resultados
             </p>
 
             {/* Lista de clientes */}
             <div className="space-y-1 max-h-72 overflow-y-auto">
-              {clientesFiltrados.slice(0, 20).map(c => {
+              {clientes.map(c => {
                 const selected = clienteSeleccionado?.id === c.id
                 return (
                   <button key={c.id} onClick={() => setClienteSeleccionado(selected ? null : c)}
