@@ -4,17 +4,19 @@ import { supabase } from '@/lib/supabase'
 import { RefreshCw, AlertTriangle, Plus } from 'lucide-react'
 import ModalCompraInsumo from './ModalCompraInsumo'
 import ModalMerma from './ModalMerma'
+import ModalNuevoInsumo from './ModalNuevoInsumo'
 
 interface Props { sucursalId: string | null }
 
-const CATEGORIAS = ['Todas', 'Frutas', 'Lacteos', 'Proteinas', 'Grasas', 'Panes y Granos', 'Otros', 'Empaques']
+const CATEGORIAS = ['Todas', 'Frutas', 'Lacteos', 'Proteinas', 'Grasas', 'Panes y Granos', 'MERCH', 'Otros', 'Empaques']
 
 export default function InventarioTabla({ sucursalId }: Props) {
-  const [insumos,        setInsumos]        = useState<any[]>([])
-  const [loading,        setLoading]        = useState(true)
-  const [categoria,      setCategoria]      = useState('Todas')
-  const [modalCompra,    setModalCompra]    = useState<any>(null)
-  const [modalMerma,     setModalMerma]     = useState<any>(null)
+  const [insumos, setInsumos] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [categoria, setCategoria] = useState('Todas')
+  const [modalCompra, setModalCompra] = useState<any>(null)
+  const [modalMerma, setModalMerma] = useState<any>(null)
+  const [modalNuevo, setModalNuevo] = useState(false)
 
   useEffect(() => {
     if (!sucursalId) return
@@ -51,7 +53,7 @@ export default function InventarioTabla({ sucursalId }: Props) {
         </div>
       )}
 
-      {/* Filtros */}
+      {/* Filtros y Acción de Nuevo Insumo */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex gap-2 flex-wrap">
           {CATEGORIAS.map(c => (
@@ -63,9 +65,16 @@ export default function InventarioTabla({ sucursalId }: Props) {
             </button>
           ))}
         </div>
-        <button onClick={fetchInsumos} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
-          <RefreshCw size={14} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => setModalNuevo(true)}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-gray-700 transition">
+            <Plus size={14} /> Nuevo Insumo
+          </button>
+          <button onClick={fetchInsumos} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition">
+            <RefreshCw size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Tabla */}
@@ -136,6 +145,14 @@ export default function InventarioTabla({ sucursalId }: Props) {
           </table>
         )}
       </div>
+
+      {modalNuevo && (
+        <ModalNuevoInsumo
+          sucursalId={sucursalId}
+          onClose={() => setModalNuevo(false)}
+          onSuccess={() => { setModalNuevo(false); fetchInsumos() }}
+        />
+      )}
 
       {modalCompra && (
         <ModalCompraInsumo

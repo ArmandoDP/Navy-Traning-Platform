@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" class="container" style="width:600px; max-width:600px; background-color:#ffffff;">
 
   <tr><td align="center" style="padding:36px 48px 28px 48px;">
-    <img src="https://crm.navytrainingcenter.com/email/logo-navy.png" alt="NAVY Training" width="150" style="display:block; width:150px; height:auto; border:0;">
+    <img src="https://crm.navytrainingcenter.com/email/navy-icon-white.png" alt="NAVY Training" width="150" style="display:block; width:150px; height:auto; border:0;">
   </td></tr>
 
   <tr><td style="line-height:0;">
