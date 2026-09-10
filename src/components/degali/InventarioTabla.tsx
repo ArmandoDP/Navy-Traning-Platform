@@ -8,7 +8,7 @@ import ModalNuevoInsumo from './ModalNuevoInsumo'
 
 interface Props { sucursalId: string | null }
 
-const CATEGORIAS = ['Todas', 'Frutas', 'Lacteos', 'Proteinas', 'Grasas', 'Panes y Granos', 'MERCH', 'Otros', 'Empaques']
+const CATEGORIAS = ['Todas', 'Frutas', 'Lacteos', 'Proteinas', 'Grasas', 'Panes y Granos', 'Merch', 'Otros', 'Empaques']
 
 export default function InventarioTabla({ sucursalId }: Props) {
   const [insumos, setInsumos] = useState<any[]>([])

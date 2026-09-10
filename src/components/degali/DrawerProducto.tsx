@@ -11,7 +11,7 @@ interface Props {
   onSuccess:  () => void
 }
 
-const CATEGORIAS  = ['Smoothie', 'Alimento', 'Bebida', 'Snack', 'Suplemento']
+const CATEGORIAS  = ['Smoothie', 'Alimento', 'Bebida', 'Snack', 'Suplemento', 'Merch']
 const SUCURSALES_NAMES: Record<string, string> = {
   'f8f798a8-d89b-4874-a53a-cdcb6325ad2a': 'Condesa',
   '74ca16d9-3ac6-4a7b-ad91-149004bcda64': 'Interlomas Gym',

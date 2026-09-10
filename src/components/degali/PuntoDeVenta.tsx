@@ -1,28 +1,20 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase }            from '@/lib/supabase'
-import { Search, Plus, Minus, Trash2, ShoppingCart, User } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { Search, Plus, Minus, Trash2, ShoppingCart } from 'lucide-react'
 import ModalNuevaVenta from './ModalNuevaVenta'
 
 interface Props { sucursalId: string | null }
 
-function hexSoftBg(hex: string) {
-  if (!hex || hex.length < 7) return '#f3f4f6'
-  const r = parseInt(hex.slice(1,3),16)
-  const g = parseInt(hex.slice(3,5),16)
-  const b = parseInt(hex.slice(5,7),16)
-  return `rgba(${r},${g},${b},0.12)`
-}
-
-const CATEGORIAS = ['Todos', 'Smoothie', 'Alimento', 'Bebida', 'Snack', 'Suplemento']
+const CATEGORIAS = ['Todos', 'Smoothie', 'Alimento', 'Bebida', 'Snack', 'Suplemento', 'Merch']
 
 export default function PuntoDeVenta({ sucursalId }: Props) {
-  const [productos,   setProductos]   = useState<any[]>([])
-  const [carrito,     setCarrito]     = useState<any[]>([])
-  const [busqueda,    setBusqueda]    = useState('')
-  const [categoria,   setCategoria]   = useState('Todos')
-  const [modal,       setModal]       = useState(false)
-  const [loading,     setLoading]     = useState(true)
+  const [productos, setProductos] = useState<any[]>([])
+  const [carrito, setCarrito] = useState<any[]>([])
+  const [busqueda, setBusqueda] = useState('')
+  const [categoria, setCategoria] = useState('Todos')
+  const [modal, setModal] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!sucursalId) return
@@ -46,19 +38,31 @@ export default function PuntoDeVenta({ sucursalId }: Props) {
       .order('categoria')
 
     if (data) {
-      // Filtrar solo los que tienen precio en esta sucursal
       const filtrados = data.map(p => {
-        const precio = p.producto_precios?.find((pp: any) => pp.sucursal_id === sucursalId)
-        return { ...p, precio_sucursal: precio?.precio_venta || 0, costo_sucursal: precio?.costo_total || 0 }
+        const precioSucursal = p.producto_precios?.find((pp: any) => pp.sucursal_id === sucursalId)
+        
+        // Asigna el precio de la sucursal o toma el precio base del producto
+        const precioFinal = precioSucursal?.precio_venta ?? p.precio_venta ?? p.precio ?? 0
+        const costoFinal = precioSucursal?.costo_total ?? p.costo_total ?? p.costo ?? 0
+
+        return { 
+          ...p, 
+          precio_sucursal: Number(precioFinal), 
+          costo_sucursal: Number(costoFinal) 
+        }
       }).filter(p => p.precio_sucursal > 0)
+
       setProductos(filtrados)
     }
     setLoading(false)
   }
 
+  // Filtrado flexible por categoría (insensible a mayúsculas/minúsculas)
   const productosFiltrados = productos.filter(p => {
-    const matchBusqueda  = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    const matchCategoria = categoria === 'Todos' || p.categoria === categoria
+    const matchBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const matchCategoria = categoria === 'Todos' || 
+      (p.categoria && p.categoria.toLowerCase() === categoria.toLowerCase())
+    
     return matchBusqueda && matchCategoria
   })
 

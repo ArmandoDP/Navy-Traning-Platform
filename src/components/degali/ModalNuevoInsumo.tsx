@@ -73,10 +73,42 @@ export default function ModalNuevoInsumo({ sucursalId, onClose, onSuccess }: Pro
 
     if (errInv) {
       alert('Error al vincular con el inventario de la sucursal: ' + errInv.message)
-    } else {
-      onSuccess()
+      setLoading(false)
+      return
     }
 
+    // 3. SI LA CATEGORÍA ES 'MERCH', CREAR AUTOMÁTICAMENTE EL REGISTRO DE VENTA EN PRODUCTOS
+    if (categoria.toLowerCase() === 'merch' && insumo) {
+      // Insertar en la tabla de productos para visibilidad en Punto de Venta
+      const { data: nuevoProducto, error: errProd } = await supabase
+        .from('productos')
+        .insert([
+          {
+            nombre: insumo.nombre,
+            categoria: 'Merch',
+            tipo: 'simple',
+            activo: true
+          }
+        ])
+        .select()
+        .single()
+
+      if (!errProd && nuevoProducto) {
+        // Insertar precio de venta y costo asignado a esta sucursal
+        await supabase
+          .from('producto_precios')
+          .insert([
+            {
+              producto_id: nuevoProducto.id,
+              sucursal_id: sucursalId,
+              precio_venta: costoUnitarioCalculado,
+              costo_total: costoUnitarioCalculado
+            }
+          ])
+      }
+    }
+
+    onSuccess()
     setLoading(false)
   }
 

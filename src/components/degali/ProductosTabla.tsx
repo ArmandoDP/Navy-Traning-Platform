@@ -6,7 +6,7 @@ import DrawerProducto from './DrawerProducto'
 
 interface Props { sucursalId: string | null }
 
-const CATEGORIAS = ['Todas', 'Smoothie', 'Alimento', 'Bebida', 'Snack', 'Suplemento']
+const CATEGORIAS = ['Todas', 'Smoothie', 'Alimento', 'Bebida', 'Snack', 'Suplemento', 'Merch']
 
 export default function ProductosTabla({ sucursalId }: Props) {
   const [productos,      setProductos]      = useState<any[]>([])
