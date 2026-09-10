@@ -55,6 +55,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [checkingIn,       setCheckingIn]       = useState<string | null>(null)
   const [historialClientes, setHistorialClientes] = useState<Record<string, number>>({})
   const [sincronizado, setSincronizado] = useState(false)
+  const [toastError, setToastError] = useState(false)
+  const [toastMsg, setToastMsg]  = useState('')
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -76,7 +78,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
 
     const [{ data: claseData }, { data: reservasData }, { data: asistData }, { data: coachData }] = await Promise.all([
       supabase.from('clases')
-        .select('*, wellhub_slot_id, totalpass_occurrence_uuid, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)')
+        .select('*, totalpass_occurrence_uuid, wellhub_slot_id, totalpass_occurrence_uuid, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)')
         .eq('id', claseId).single(),
       supabase.from('reservas')
         .select(`
@@ -242,11 +244,17 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => res.text())
-        console.error('TotalPass error response:', err)
+      if (res.ok) {
+        setClase(null)
+        await fetchData()
+        setToast(true)
+        setToastMsg('Clase publicada en TotalPass')
       }
-      if (res.ok) fetchData()
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }))
+        setToastError(true)
+        setToastMsg(err.detail || 'Error al publicar en TotalPass')
+      }
     } catch (e) {
       console.error('Error publicando en TotalPass:', e)
     }
@@ -258,7 +266,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const totalAsistencias = asistencias.length
   const ocupacion        = clase?.capacidad_max > 0 ? Math.round((totalReservas / clase.capacidad_max) * 100) : 0
   const enWellhub        = !!clase?.wellhub_slot_id
-  const enTotalpass      = !!clase?.totalpass_occurrence_uuid
+  const enTotalpass =   !!clase?.totalpass_occurrence_uuid
 
   return (
     <>
@@ -533,6 +541,20 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </div>
+        )}
+        {toast && (
+          <ToastExito
+            titulo="TotalPass"
+            mensaje={toastMsg}
+            onClose={() => setToast(false)}
+          />
+        )}
+        {toastError && (
+          <ToastExito
+            titulo="Error en TotalPass"
+            mensaje={toastMsg}
+            onClose={() => setToastError(false)}
+          />
         )}
       </div>
     </>

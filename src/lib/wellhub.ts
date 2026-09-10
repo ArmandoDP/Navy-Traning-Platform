@@ -72,30 +72,24 @@ export async function crearSlotWellhub(classId: string, sucursalId: string, para
   room?:       string
 }) {
   const { gymId, productId } = getWellhubConfig(sucursalId)
-  const url       = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots`
-  const opensAt   = new Date(Date.now()).toISOString()
-  const closesAt  = params.fechaInicio
+  const url = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots`
 
-  const fechaUTC  = new Date(params.fechaInicio)
-  const fechaCDMX = new Date(fechaUTC.getTime() - 6 * 60 * 60 * 1000)
-  const occurDate = fechaCDMX.toISOString().slice(0, 19)
+  const occurDate = new Date(params.fechaInicio).toISOString() // con Z, UTC completo
+
+  const payload = {
+    occur_date:        occurDate,
+    status:            1,
+    room:              params.room || 'Sala Principal',
+    length_in_minutes: params.duracionMin,
+    total_capacity:    params.capacidad,
+    total_booked:      0,
+    product_id:        productId,
+  }
 
   const res = await fetch(url, {
     method:  'POST',
     headers: wellhubHeaders(),
-    body: JSON.stringify({
-      occur_date:        occurDate,
-      status:            1,
-      room:              params.room || 'Sala Principal',
-      length_in_minutes: params.duracionMin,
-      total_capacity:    params.capacidad,
-      total_booked:      0,
-      product_id:        productId,
-      booking_window:    { opens_at: opensAt, closes_at: closesAt },
-      cancellable_until: closesAt,
-      instructors:       [],
-      rate:              0,
-    }),
+    body:    JSON.stringify(payload),
   })
   const text = await res.text()
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }

@@ -79,6 +79,16 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
     }
     setLoading(true)
 
+    const horaNormalizada = form.hora
+      .replace('a.m.', 'AM')
+      .replace('p.m.', 'PM')
+      .replace(/(\d+):(\d+)\s*(AM|PM)/i, (_, h, m, period) => {
+        let hour = parseInt(h)
+        if (period.toUpperCase() === 'PM' && hour !== 12) hour += 12
+        if (period.toUpperCase() === 'AM' && hour === 12) hour = 0
+        return `${String(hour).padStart(2, '0')}:${m}`
+      })
+
     const horario = form.fecha && form.hora
       ? new Date(`${form.fecha}T${form.hora}`).toISOString()
       : new Date().toISOString()
