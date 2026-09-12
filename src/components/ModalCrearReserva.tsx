@@ -13,6 +13,9 @@ interface Clase {
   id: string; nombre_clase: string; horario: string
   capacidad_max: number; tipo_clase: string; salon: string
   sucursal_id?: string; total_reservas?: number
+  wellhub_slot_id?: string | null
+  wellhub_class_id?: string | null
+  totalpass_occurrence_uuid?: string | null
   staff?: { nombre: string; primer_apellido: string }
   sucursales?: { id: string; nombre: string; color: string }
 }
