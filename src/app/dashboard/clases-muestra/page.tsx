@@ -2,15 +2,16 @@
 import { useState, useEffect } from 'react'
 import { supabase }            from '@/lib/supabase'
 import { useSucursal }         from '@/context/SucursalContext'
-import { Plus, Search, User, Calendar, MapPin, Mail } from 'lucide-react'
-import DrawerClaseMuestra from '@/components/clases-muestra/DrawerClaseMuestra'
+import { Plus, Search, User, Calendar, MapPin, Mail, RefreshCw } from 'lucide-react'
+import DrawerClaseMuestra, { ReservaAEditar } from '@/components/clases-muestra/DrawerClaseMuestra'
 
 export default function ClasesMuestraPage() {
   const { sucursalId } = useSucursal()
-  const [prospectos,  setProspectos]  = useState<any[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [busqueda,    setBusqueda]    = useState('')
-  const [drawerOpen,  setDrawerOpen]  = useState(false)
+  const [prospectos, setProspectos]               = useState<any[]>([])
+  const [loading, setLoading]                     = useState(true)
+  const [busqueda, setBusqueda]                   = useState('')
+  const [drawerOpen, setDrawerOpen]               = useState(false)
+  const [reservaAEditar, setReservaAEditar]       = useState<ReservaAEditar | null>(null)
 
   const fetchProspectos = async () => {
     setLoading(true)
@@ -19,8 +20,8 @@ export default function ClasesMuestraPage() {
       .select(`
         *,
         reservas!inner(
-          id, estatus, es_clase_muestra,
-          clases(nombre_clase, horario, sucursales(nombre))
+          id, estatus, es_clase_muestra, clase_id,
+          clases(id, nombre_clase, horario, sucursales(nombre))
         )
       `)
       .eq('origen', 'Clase Muestra')
@@ -43,6 +44,25 @@ export default function ClasesMuestraPage() {
     p.email?.toLowerCase().includes(busqueda.toLowerCase())
   )
 
+  const handleAbrirReagendar = (p: any, reserva: any) => {
+    setReservaAEditar({
+      id: reserva?.id,
+      clase_id_anterior: reserva?.clase_id,
+      prospecto: {
+        nombre: p.nombre_completo,
+        email: p.email,
+        telefono: p.telefono,
+        clienteId: p.id,
+      },
+    })
+    setDrawerOpen(true)
+  }
+
+  const handleNuevoRegistro = () => {
+    setReservaAEditar(null)
+    setDrawerOpen(true)
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -53,7 +73,7 @@ export default function ClasesMuestraPage() {
             Registra prospectos para una clase de muestra gratuita
           </p>
         </div>
-        <button onClick={() => setDrawerOpen(true)}
+        <button onClick={handleNuevoRegistro}
           className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-700 transition">
           <Plus size={15}/> Nueva clase muestra
         </button>
@@ -87,6 +107,7 @@ export default function ClasesMuestraPage() {
                 <th className="text-left px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Clase</th>
                 <th className="text-left px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Sucursal</th>
                 <th className="text-left px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Estatus</th>
+                <th className="text-right px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -107,9 +128,9 @@ export default function ClasesMuestraPage() {
                           <p className="text-sm font-bold text-gray-900">{clase.nombre_clase}</p>
                           <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
                             <Calendar size={11}/>
-                            {new Date(clase.horario).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                            {new Date(clase.horario).toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City', day: 'numeric', month: 'short' })}
                             {' · '}
-                            {new Date(clase.horario).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(clase.horario).toLocaleTimeString('es-MX', { timeZone: 'America/Mexico_City', hour: '2-digit', minute: '2-digit', hour12: true })}
                           </p>
                         </>
                       ) : <span className="text-xs text-gray-300">—</span>}
@@ -130,6 +151,15 @@ export default function ClasesMuestraPage() {
                         {reserva?.estatus || 'Pendiente'}
                       </span>
                     </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        onClick={() => handleAbrirReagendar(p, reserva)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-100 transition"
+                      >
+                        <RefreshCw size={12} />
+                        Reagendar
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
@@ -138,10 +168,11 @@ export default function ClasesMuestraPage() {
         </div>
       )}
 
-      <DrawerClaseMuestra
+      <DrawerClaseMuestra 
         isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSuccess={() => { setDrawerOpen(false); fetchProspectos() }}
+        onClose={() => { setDrawerOpen(false); setReservaAEditar(null); }}
+        onSuccess={() => { setDrawerOpen(false); setReservaAEditar(null); fetchProspectos(); }}
+        reservaAEditar={reservaAEditar}
       />
     </div>
   )
