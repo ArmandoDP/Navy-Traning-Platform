@@ -64,7 +64,9 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
   const [sucursalFiltro, setSucursalFiltro] = useState('Todas')
   const [fechaActiva,    setFechaActiva]    = useState(new Date())
   const [horarioFiltro,  setHorarioFiltro]  = useState('Cualquiera')
-  const [yaReservado,    setYaReservado]    = useState(false)
+  const [yaReservado, setYaReservado] = useState(false)
+  
+  const [modalLlena, setModalLlena] = useState(false)
 
   // Al abrir — solo clases y sucursales
   useEffect(() => {
@@ -134,16 +136,56 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     if (!clienteSeleccionado || !claseSeleccionada) return
     setLoading(true)
 
-    const llena = (claseSeleccionada.total_reservas || 0) >= claseSeleccionada.capacidad_max
+    // Verificar cupo
+    const reservasActivas = claseSeleccionada.total_reservas || 0
+    if (reservasActivas >= claseSeleccionada.capacidad_max) {
+      setModalLlena(true) 
+      setLoading(false)
+      return
+    }
+
+    const llena = reservasActivas >= claseSeleccionada.capacidad_max
 
     const { data: reserva, error } = await supabase.from('reservas').insert([{
       cliente_id:   clienteSeleccionado.id,
       clase_id:     claseSeleccionada.id,
       estatus:      'Pendiente',
       lista_espera: llena,
+      origen:       'CRM',
     }]).select().single()
 
     if (error) { alert('Error: ' + error.message); setLoading(false); return }
+
+    // Actualizar Wellhub
+    if (claseSeleccionada.wellhub_slot_id && claseSeleccionada.wellhub_class_id) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/actualizar-cupos`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slot_id:      claseSeleccionada.wellhub_slot_id,
+            clase_id:     claseSeleccionada.wellhub_class_id,
+            total_booked: reservasActivas + 1,
+            sucursal_id:  claseSeleccionada.sucursal_id,
+          }),
+        })
+      } catch (e) { console.warn('Error actualizando Wellhub:', e) }
+    }
+
+    // Actualizar TotalPass
+    if (claseSeleccionada.totalpass_occurrence_uuid) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/actualizar-cupos`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            occurrence_uuid: claseSeleccionada.totalpass_occurrence_uuid,
+            sucursal_id:     claseSeleccionada.sucursal_id,
+            slots:           claseSeleccionada.capacidad_max - (reservasActivas + 1),
+          }),
+        })
+      } catch (e) { console.warn('Error actualizando TotalPass:', e) }
+    }
 
     // Si eligió spot, guardarlo
     if (spotSeleccionado && reserva) {
@@ -153,6 +195,21 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
         estatus:    'ocupado',
         cliente_id: clienteSeleccionado.id,
       }, { onConflict: 'clase_id,numero' })
+    }
+
+    // Notificación + correo + QR
+    if (reserva) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/reservas/confirmar-notificacion`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reserva_id: reserva.id,
+            cliente_id: clienteSeleccionado.id,
+            clase_id:   claseSeleccionada.id,
+          }),
+        })
+      } catch (e) { console.warn('Error enviando notificación:', e) }
     }
 
     onSuccess(); onClose(); resetForm()
@@ -479,6 +536,51 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
         </div>
 
       </div>
+      {/* Modal clase llena */}
+      {modalLlena && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-gray-900 px-6 py-8 flex flex-col items-center text-center">
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4">
+                <span className="text-3xl">🚫</span>
+              </div>
+              <h3 className="text-xl font-black text-white mb-2">Clase llena</h3>
+              <p className="text-gray-400 text-sm">No hay cupos disponibles para esta clase.</p>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm text-gray-600">
+                <p className="font-bold text-gray-900">{claseSeleccionada?.nombre_clase}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {claseSeleccionada?.total_reservas}/{claseSeleccionada?.capacidad_max} reservas · Clase llena
+                </p>
+              </div>
+              <p className="text-xs text-gray-400 text-center">
+                Puedes agregar al cliente a lista de espera o elegir otra clase.
+              </p>
+              <button onClick={() => setModalLlena(false)}
+                className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition">
+                Elegir otra clase
+              </button>
+              <button onClick={async () => {
+                setModalLlena(false)
+                setLoading(true)
+                await supabase.from('reservas').insert([{
+                  cliente_id:   clienteSeleccionado!.id,
+                  clase_id:     claseSeleccionada!.id,
+                  estatus:      'Pendiente',
+                  lista_espera: true,
+                  origen:       'CRM',
+                }])
+                onSuccess(); onClose(); resetForm()
+                setLoading(false)
+              }}
+                className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition">
+                Agregar a lista de espera
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
