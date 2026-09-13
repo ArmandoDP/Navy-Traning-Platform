@@ -11,13 +11,20 @@ export async function POST(req: NextRequest) {
     duracion = 60, 
     qr_token, 
     spot_numero,
-    es_reagendado = false // Nuevo flag para saber si es un cambio de fecha
+    es_reagendado = false
   } = await req.json()
 
-  const nombre1   = nombre?.split(' ')[0] || ''
-  const fechaDate = new Date(horario)
+  const nombre1 = nombre?.split(' ')[0] || ''
 
-  // Corregido: Se especifica la zona horaria de México (America/Mexico_City) para evitar el desfase de UTC
+  // 1. FORZAR OFFSET DE MÉXICO (-06:00) SI EL STRING NO TIENE ZONA HORARIA
+  let horarioNormalized = String(horario).trim().replace(' ', 'T')
+  if (!horarioNormalized.includes('Z') && !horarioNormalized.includes('+') && !horarioNormalized.includes('-')) {
+    horarioNormalized += '-06:00'
+  }
+
+  const fechaDate = new Date(horarioNormalized)
+
+  // 2. FORMATEO DE FECHA Y HORA EN TIEMPO LOCAL
   const fecha = fechaDate.toLocaleDateString('es-MX', { 
     timeZone: 'America/Mexico_City', 
     weekday: 'long', 
@@ -37,9 +44,10 @@ export async function POST(req: NextRequest) {
   const qrDataUrl = await QRCode.toDataURL(qr_token, { width: 200, margin: 1 })
   const qrBase64  = qrDataUrl.split(',')[1]
 
-  // Generar .ics para calendario
+  // 3. GENERAR ARCHIVO .ICS PARA CALENDARIO (CONVERTIDO CORRECTAMENTE A UTC)
   const dtStart   = fechaDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const dtEnd     = new Date(fechaDate.getTime() + duracion * 60000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  
   const icsContent = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',

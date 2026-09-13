@@ -5,8 +5,8 @@ import FinanzasResumen       from '@/components/finanzas/FinanzasResumen'
 import FinanzasIngresos      from '@/components/finanzas/FinanzasIngresos'
 import FinanzasTransacciones from '@/components/finanzas/FinanzasTransacciones'
 import FinanzasPagosFallidos from '@/components/finanzas/FinanzasPagosFallidos'
-import FinanzasNomina from '@/components/finanzas/FinanzasNomina'
-import { useSucursal } from '@/context/SucursalContext'
+import FinanzasNomina        from '@/components/finanzas/FinanzasNomina'
+import { useSucursal }       from '@/context/SucursalContext'
 
 type Tab = 'resumen' | 'ingresos' | 'transacciones' | 'fallidos' | 'nomina'
 
@@ -45,12 +45,19 @@ export default function FinanzasPage() {
           {/* Selector mes */}
           <div className="flex items-center gap-2 border border-gray-200 bg-white rounded-xl px-3 py-2">
             <Calendar size={14} className="text-gray-400" />
-            <select className="text-sm font-medium text-gray-700 outline-none bg-transparent"
+            <select className="text-sm font-medium text-gray-700 outline-none bg-transparent cursor-pointer"
               value={mes} onChange={e => setMes(Number(e.target.value))}>
               {MESES.map((m, i) => <option key={i} value={i}>{m} {anio}</option>)}
             </select>
           </div>
-          <button className="flex items-center gap-2 bg-gray-900 text-white font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-800 transition">
+          <button 
+            onClick={() => {
+              if (tab === 'transacciones') {
+                window.dispatchEvent(new Event('exportar-transacciones-excel'))
+              }
+            }}
+            className="flex items-center gap-2 bg-gray-900 text-white font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-800 transition cursor-pointer"
+          >
             <Download size={15} /> Exportar
           </button>
         </div>
@@ -60,7 +67,7 @@ export default function FinanzasPage() {
       <div className="bg-white border border-gray-200 rounded-2xl p-1 flex gap-1 shadow-sm">
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition cursor-pointer ${
               tab === t.key ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-700'
             }`}>
             <span>{t.icon}</span>
@@ -71,7 +78,7 @@ export default function FinanzasPage() {
 
       {/* Contenido */}
       {tab === 'resumen'       && <FinanzasResumen       fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
-      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} />}
+      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
       {tab === 'transacciones' && <FinanzasTransacciones fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
       {tab === 'fallidos'      && <FinanzasPagosFallidos fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
       {tab === 'nomina'        && <FinanzasNomina        fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}

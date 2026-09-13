@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { supabase }            from '@/lib/supabase'
+import { useState, useEffect, useMemo } from 'react'
+import { supabase } from '@/lib/supabase'
 import { Calendar as CalendarIcon, MapPin, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { ClaseData } from './DrawerClaseMuestra'
 
@@ -16,11 +16,27 @@ export default function PasoClase({ onContinuar, onBack }: Props) {
   const [loadingClases, setLoadingClases] = useState(false)
   const [claseSel,      setClaseSel]      = useState<any>(null)
 
-  // Selector de fecha (Por defecto el día de hoy)
+  // Selector de fecha (Por defecto hoy)
   const [fechaSel, setFechaSel] = useState(() => {
     const d = new Date()
     return d.toISOString().split('T')[0]
   })
+
+  // Generar tira de accesos rápidos para los próximos 14 días
+  const proximosDias = useMemo(() => {
+    const dias = []
+    const hoy = new Date()
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(hoy)
+      d.setDate(hoy.getDate() + i)
+      const dateString = d.toISOString().split('T')[0]
+      const diaSemana = d.toLocaleDateString('es-MX', { weekday: 'short' })
+      const numDia = d.getDate()
+      const mes = d.toLocaleDateString('es-MX', { month: 'short' })
+      dias.push({ dateString, diaSemana, numDia, mes })
+    }
+    return dias
+  }, [])
 
   useEffect(() => {
     supabase.from('sucursales').select('id, nombre, color')
@@ -85,7 +101,7 @@ export default function PasoClase({ onContinuar, onBack }: Props) {
         <div className="flex flex-wrap gap-2">
           {sucursales.map(s => (
             <button key={s.id} onClick={() => setSucursalSel(s.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
                 sucursalSel === s.id ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
               }`}>
               <MapPin size={12}/> {s.nombre}
@@ -96,12 +112,36 @@ export default function PasoClase({ onContinuar, onBack }: Props) {
 
       {/* Selector de Fecha */}
       {sucursalSel && (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Fecha de la clase *</label>
+          
+          {/* Tira horizontal de selección rápida de días */}
+          <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+            {proximosDias.map(d => {
+              const esSeleccionado = fechaSel === d.dateString
+              return (
+                <button
+                  key={d.dateString}
+                  onClick={() => setFechaSel(d.dateString)}
+                  className={`flex-shrink-0 flex flex-col items-center justify-center w-13 py-2 rounded-xl border text-xs transition cursor-pointer ${
+                    esSeleccionado 
+                      ? 'bg-gray-900 text-white border-gray-900 shadow-sm' 
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  <span className="text-[10px] font-medium uppercase opacity-80">{d.diaSemana}</span>
+                  <span className="text-sm font-black">{d.numDia}</span>
+                  <span className="text-[9px] capitalize opacity-70">{d.mes}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Navegador y selector nativo de calendario */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => cambiarDia(-1)}
-              className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition"
+              className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer"
               title="Día anterior"
             >
               <ChevronLeft size={16} className="text-gray-600" />
@@ -111,12 +151,12 @@ export default function PasoClase({ onContinuar, onBack }: Props) {
               type="date"
               value={fechaSel}
               onChange={(e) => setFechaSel(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-white focus:outline-none focus:border-gray-900"
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-900 bg-white focus:outline-none focus:border-gray-900 cursor-pointer"
             />
 
             <button
               onClick={() => cambiarDia(1)}
-              className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition"
+              className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition cursor-pointer"
               title="Día siguiente"
             >
               <ChevronRight size={16} className="text-gray-600" />
@@ -132,7 +172,10 @@ export default function PasoClase({ onContinuar, onBack }: Props) {
           {loadingClases ? (
             <p className="text-xs text-gray-400 py-4">Cargando clases...</p>
           ) : clases.length === 0 ? (
-            <p className="text-xs text-gray-400 py-4">Sin clases disponibles con cupo para este día</p>
+            <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-4 text-center">
+              <p className="text-xs text-gray-500 font-medium">Sin clases disponibles con cupo para este día</p>
+              <p className="text-[11px] text-gray-400 mt-1">Intenta seleccionando otra fecha en los botones superiores</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {clases.map(c => {
@@ -140,7 +183,7 @@ export default function PasoClase({ onContinuar, onBack }: Props) {
                 const seleccionada = claseSel?.id === c.id
                 return (
                   <button key={c.id} onClick={() => setClaseSel(c)}
-                    className={`w-full text-left px-4 py-3.5 rounded-xl border transition ${
+                    className={`w-full text-left px-4 py-3.5 rounded-xl border transition cursor-pointer ${
                       seleccionada ? 'bg-gray-900 border-gray-900' : 'bg-white border-gray-200 hover:border-gray-400'
                     }`}>
                     <div className="flex items-start justify-between">
@@ -179,11 +222,11 @@ export default function PasoClase({ onContinuar, onBack }: Props) {
       {/* Footer */}
       <div className="px-6 py-4 border-t border-gray-100 fixed bottom-0 left-0 right-0 bg-white flex gap-3" style={{ maxWidth: '576px', right: 0, left: 'auto', width: '100%' }}>
         <button onClick={onBack}
-          className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
+          className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition cursor-pointer">
           ← Atrás
         </button>
         <button onClick={handleContinuar} disabled={!claseSel}
-          className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-700 transition disabled:opacity-40">
+          className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-700 transition disabled:opacity-40 cursor-pointer">
           Siguiente → Elegir spot
         </button>
       </div>

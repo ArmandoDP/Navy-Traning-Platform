@@ -1,10 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { RefreshCw, AlertTriangle, Plus } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Plus, Pencil } from 'lucide-react'
 import ModalCompraInsumo from './ModalCompraInsumo'
 import ModalMerma from './ModalMerma'
 import ModalNuevoInsumo from './ModalNuevoInsumo'
+import ModalEditarInsumo from './ModalEditarInsumo'
 
 interface Props { sucursalId: string | null }
 
@@ -17,6 +18,7 @@ export default function InventarioTabla({ sucursalId }: Props) {
   const [modalCompra, setModalCompra] = useState<any>(null)
   const [modalMerma, setModalMerma] = useState<any>(null)
   const [modalNuevo, setModalNuevo] = useState(false)
+  const [modalEditar, setModalEditar] = useState<any>(null)
 
   useEffect(() => {
     if (!sucursalId) return
@@ -58,7 +60,7 @@ export default function InventarioTabla({ sucursalId }: Props) {
         <div className="flex gap-2 flex-wrap">
           {CATEGORIAS.map(c => (
             <button key={c} onClick={() => setCategoria(c)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
                 categoria === c ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}>
               {c}
@@ -68,10 +70,10 @@ export default function InventarioTabla({ sucursalId }: Props) {
         <div className="flex items-center gap-2">
           <button 
             onClick={() => setModalNuevo(true)}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-gray-700 transition">
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-gray-700 transition cursor-pointer">
             <Plus size={14} /> Nuevo Insumo
           </button>
-          <button onClick={fetchInsumos} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition">
+          <button onClick={fetchInsumos} className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 transition cursor-pointer">
             <RefreshCw size={14} />
           </button>
         </div>
@@ -128,13 +130,19 @@ export default function InventarioTabla({ sucursalId }: Props) {
                       <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => setModalCompra(inv)}
-                          className="text-xs font-bold px-2.5 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-700 transition">
+                          className="text-xs font-bold px-2.5 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-700 transition cursor-pointer">
                           + Compra
                         </button>
                         <button
                           onClick={() => setModalMerma(inv)}
-                          className="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+                          className="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition cursor-pointer">
                           Merma
+                        </button>
+                        <button
+                          onClick={() => setModalEditar(inv)}
+                          title="Editar o eliminar insumo"
+                          className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-900 hover:bg-gray-50 transition cursor-pointer">
+                          <Pencil size={13} />
                         </button>
                       </div>
                     </td>
@@ -151,6 +159,15 @@ export default function InventarioTabla({ sucursalId }: Props) {
           sucursalId={sucursalId}
           onClose={() => setModalNuevo(false)}
           onSuccess={() => { setModalNuevo(false); fetchInsumos() }}
+        />
+      )}
+
+      {modalEditar && (
+        <ModalEditarInsumo
+          insumo={modalEditar}
+          sucursalId={sucursalId}
+          onClose={() => setModalEditar(null)}
+          onSuccess={() => { setModalEditar(null); fetchInsumos() }}
         />
       )}
 

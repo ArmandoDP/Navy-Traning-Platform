@@ -2,23 +2,24 @@
 import { useEffect, useState } from 'react'
 import { supabase }            from '@/lib/supabase'
 import { X, ChevronRight, ChevronLeft, ShoppingBag, CreditCard } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 interface Props { fechaInicio: string; fechaFin: string; sucursalId: string | null }
 
 const selectCls = "border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none bg-white focus:border-gray-400 appearance-none cursor-pointer"
 
 type Transaccion = {
-  id:          string
-  tipo:        'membresia' | 'galley'
-  fecha:       string
-  cliente:     string
-  concepto:    string
-  sucursal:    string
+  id:            string
+  tipo:          'membresia' | 'galley'
+  fecha:         string
+  cliente:       string
+  concepto:      string
+  sucursal:      string
   sucursalColor: string
-  metodo:      string
-  monto:       number
-  estatus:     string
-  raw:         any
+  metodo:        string
+  monto:         number
+  estatus:       string
+  raw:           any
 }
 
 export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalId }: Props) {
@@ -48,7 +49,7 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
           return q
         })(),
 
-        // Ventas de Gali
+        // Ventas de Galley
         (() => {
           let q = supabase.from('ventas')
             .select('id, total, metodo_pago, numero_operacion, estatus, created_at, sucursal_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
@@ -128,6 +129,34 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
     (!filtros.origen   || p.tipo === filtros.origen)
   )
 
+  // Escuchar el evento de clic desde el botón principal de la cabecera
+  useEffect(() => {
+    const handleExport = () => {
+      if (filtrados.length === 0) return
+
+      const datosExcel = filtrados.map(item => ({
+        'Fecha': new Date(item.fecha).toLocaleDateString('es-MX'),
+        'Hora': new Date(item.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }),
+        'Origen': item.tipo === 'galley' ? 'The Galley' : 'Membresía',
+        'Cliente': item.cliente,
+        'Concepto': item.concepto,
+        'Sucursal': item.sucursal,
+        'Método de Pago': item.metodo,
+        'Monto': item.monto,
+        'Estatus': item.estatus
+      }))
+
+      const worksheet = XLSX.utils.json_to_sheet(datosExcel)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Transacciones')
+
+      XLSX.writeFile(workbook, `Transacciones_Navy_${fechaInicio}_a_${fechaFin}.xlsx`)
+    }
+
+    window.addEventListener('exportar-transacciones-excel', handleExport)
+    return () => window.removeEventListener('exportar-transacciones-excel', handleExport)
+  }, [filtrados, fechaInicio, fechaFin])
+
   const totalPages = Math.ceil(filtrados.length / PER_PAGE)
   const paginated  = filtrados.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
@@ -159,7 +188,7 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
                 <p className="text-sm font-black text-gray-900">Detalle de transacción</p>
                 <p className="text-xs text-gray-400">txn_{activo.id?.slice(0,7)}</p>
               </div>
-              <button onClick={() => setActivo(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
+              <button onClick={() => setActivo(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 cursor-pointer">
                 <X size={16}/>
               </button>
             </div>
@@ -198,7 +227,7 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
                 ))}
               </div>
 
-              {/* Desglose productos Gali */}
+              {/* Desglose productos Galley */}
               {activo.tipo === 'galley' && (
                 <div className="border-t border-gray-100 pt-4 space-y-3">
                   <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Productos</p>
@@ -255,9 +284,10 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
               <option value="">Estado</option>
               {['Completado','Fallido','Pendiente'].map(e => <option key={e} value={e}>{e}</option>)}
             </select>
+
             {(filtros.sucursal || filtros.tipo || filtros.estado || filtros.origen) && (
               <button onClick={() => { setFiltros({ sucursal: '', tipo: '', estado: '', origen: '' }); setPage(1) }}
-                className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1">
+                className="text-xs text-gray-400 hover:text-gray-700 flex items-center gap-1 cursor-pointer">
                 <X size={12}/> Limpiar
               </button>
             )}
@@ -323,12 +353,12 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
 
         <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
           <button onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}
-            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 disabled:opacity-30 transition">
+            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 disabled:opacity-30 transition cursor-pointer">
             <ChevronLeft size={16}/>
           </button>
           <span className="text-xs text-gray-400">Página {page} de {totalPages || 1}</span>
           <button onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page >= totalPages}
-            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 disabled:opacity-30 transition">
+            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 disabled:opacity-30 transition cursor-pointer">
             <ChevronRight size={16}/>
           </button>
         </div>
