@@ -123,6 +123,7 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
               </td>
             </tr>
           ) : filtradas.map(c => {
+            console.log('estado:', c.id, c.nombre_clase, c.estado, c.estado_actual)
             const hora        = new Date(c.horario).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false })
             const totalReservas = c.reservas?.filter((r: any) => r.estatus !== 'Cancelada').length || 0
             const tipo        = c.tipo_display || c.tipo_clase || 'General'
@@ -191,12 +192,13 @@ export default function ClasesListaView({ clases, fechaActiva, onVerClase }: Pro
 
                 <td className="px-5 py-3.5">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                    c.estado_actual === 'En curso'    ? 'bg-blue-100 text-blue-700' :
-                    c.estado_actual === 'Finalizada'  ? 'bg-black text-white' :
-                    c.estado === 'Activa'             ? 'bg-green-100 text-green-700'
-                                                      : 'bg-red-100 text-red-600'
+                    c.estado === 'Cancelada'         ? 'bg-red-100 text-red-600 line-through' :
+                    c.estado_actual === 'En curso'   ? 'bg-blue-100 text-blue-700' :
+                    c.estado_actual === 'Finalizada' ? 'bg-black text-white' :
+                    c.estado === 'Activa'            ? 'bg-green-100 text-green-700'
+                                                    : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {c.estado_actual || c.estado || 'Programada'}
+                    {c.estado === 'Cancelada' ? 'Cancelada' : c.estado_actual || c.estado || 'Programada'}
                   </span>
                 </td>
 

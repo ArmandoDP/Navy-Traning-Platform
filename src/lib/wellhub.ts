@@ -190,3 +190,16 @@ export async function simularCheckinConBooking(gympassUserId: string, productId:
   if (!res.ok) throw new Error(data?.message || `Error ${res.status}: ${text}`)
   return data
 }
+
+export async function cancelarSlotWellhub(slotId: string, classId: string, sucursalId: string) {
+  const { gymId } = getWellhubConfig(sucursalId)
+  const url = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots/${slotId}`
+  const res = await fetch(url, {
+    method:  'DELETE',
+    headers: wellhubHeaders(),
+  })
+  const text = await res.text()
+  let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
+  if (!res.ok) throw new Error(data?.message || `Error ${res.status}: ${text}`)
+  return data
+}

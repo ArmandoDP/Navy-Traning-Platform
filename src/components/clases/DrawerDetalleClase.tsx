@@ -179,7 +179,17 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
 
   const handleCancelarClase = async () => {
     if (!claseId) return
-    await supabase.from('clases').update({ estado: 'Cancelada' }).eq('id', claseId)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clases/cancelar`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ clase_id: claseId }),
+      })
+      const data = await res.json()
+      console.log('Clase cancelada:', data)
+    } catch (e) {
+      console.error('Error cancelando clase:', e)
+    }
     fetchData()
     onSuccess()
   }
