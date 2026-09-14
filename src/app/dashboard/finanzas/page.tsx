@@ -11,7 +11,7 @@ import { useSucursal }       from '@/context/SucursalContext'
 type Tab = 'resumen' | 'ingresos' | 'transacciones' | 'fallidos' | 'nomina'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'resumen',        label: 'Resumen',          icon: '▦' },
+  { key: 'resumen',        label: 'Resumen',           icon: '▦' },
   { key: 'ingresos',       label: 'Ingresos · Detalle', icon: '↗' },
   { key: 'transacciones',  label: 'Transacciones',    icon: '▤' },
   { key: 'fallidos',       label: 'Pagos fallidos',   icon: '⚠' },
@@ -31,6 +31,12 @@ export default function FinanzasPage() {
   const fechaInicio = new Date(anio, mes, 1).toISOString().split('T')[0]
   const fechaFin    = new Date(anio, mes + 1, 0).toISOString().split('T')[0]
   const { sucursalId } = useSucursal()
+
+  const subProps: any = {
+    fechaInicio,
+    fechaFin,
+    sucursalId: sucursalId || undefined
+  }
 
   return (
     <div className="space-y-5">
@@ -77,11 +83,11 @@ export default function FinanzasPage() {
       </div>
 
       {/* Contenido */}
-      {tab === 'resumen'       && <FinanzasResumen       fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
-      {tab === 'ingresos'      && <FinanzasIngresos      fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
-      {tab === 'transacciones' && <FinanzasTransacciones fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
-      {tab === 'fallidos'      && <FinanzasPagosFallidos fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
-      {tab === 'nomina'        && <FinanzasNomina        fechaInicio={fechaInicio} fechaFin={fechaFin} sucursalId={sucursalId} />}
+      {tab === 'resumen'       && <FinanzasResumen       {...subProps} />}
+      {tab === 'ingresos'      && <FinanzasIngresos      {...subProps} />}
+      {tab === 'transacciones' && <FinanzasTransacciones {...subProps} />}
+      {tab === 'fallidos'      && <FinanzasPagosFallidos {...subProps} />}
+      {tab === 'nomina'        && <FinanzasNomina        {...subProps} />}
     </div>
   )
 }
