@@ -21,7 +21,7 @@ export default function ClasesMuestraPage() {
     let q = supabase
       .from('clientes')
       .select(`
-        *,
+        *, registrado_por_staff:registrado_por(id, nombre, primer_apellido, email, tipo),
         reservas!inner(
           id, estatus, es_clase_muestra, clase_id,
           clases(id, nombre_clase, horario, sucursales(nombre))
@@ -110,7 +110,8 @@ export default function ClasesMuestraPage() {
                 <th className="text-left px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Clase</th>
                 <th className="text-left px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Sucursal</th>
                 <th className="text-left px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Estatus</th>
-                <th className="text-right px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Acciones</th>
+                <th className="text-center px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Acciones</th>
+                <th className="text-center px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Registrado por</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -153,6 +154,19 @@ export default function ClasesMuestraPage() {
                       }`}>
                         {reserva?.estatus || 'Pendiente'}
                       </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      {p.registrado_por_staff ? (
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">
+                            {p.registrado_por_staff.nombre} {p.registrado_por_staff.primer_apellido}
+                          </p>
+                          <p className="text-xs text-gray-400">{p.registrado_por_staff.email}</p>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 mt-1 inline-block">
+                            {p.registrado_por_staff.tipo}
+                          </span>
+                        </div>
+                      ) : <span className="text-xs text-gray-300">—</span>}
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button

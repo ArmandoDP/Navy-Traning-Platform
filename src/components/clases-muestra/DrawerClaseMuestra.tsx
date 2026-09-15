@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import PasoProspecto from './PasoProspecto'
 import PasoClase from './PasoClase'
 import PasoSpot from './PasoSpot'
+import { useAuth } from '@/context/AuthContext'
 
 export type ReservaAEditar = {
   id: string
@@ -49,6 +50,7 @@ export default function DrawerClaseMuestra({ isOpen, onClose, onSuccess, reserva
   const [prospecto, setProspecto] = useState<ProspectoData | null>(null)
   const [clase, setClase] = useState<ClaseData | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const { staff } = useAuth()
 
   // Cargar datos predeterminados en modo edición/reagendamiento
   useEffect(() => {
@@ -83,13 +85,14 @@ export default function DrawerClaseMuestra({ isOpen, onClose, onSuccess, reserva
           .from('clientes')
           .insert({
             nombre_completo: prospecto.nombre,
-            email: prospecto.email,
-            telefono: prospecto.telefono,
-            estatus: 'Prospecto',
-            origen: 'Clase Muestra',
-            origen_detalle: 'Clase muestra presencial',
-            sucursal_id: clase.sucursalId,
+            email:           prospecto.email,
+            telefono:        prospecto.telefono,
+            estatus:         'Prospecto',
+            origen:          'Clase Muestra',
+            origen_detalle:  'Clase muestra presencial',
+            sucursal_id:     clase.sucursalId,
             acepto_terminos: false,
+            registrado_por:  staff?.id || null,  // ← agrega esto
           })
           .select()
           .single()
