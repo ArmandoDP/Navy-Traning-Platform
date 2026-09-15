@@ -115,7 +115,7 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
   }
 
   const setFiltro = (k: string, v: string) => { setFiltros(p => ({ ...p, [k]: v })); setPagina(1) }
-  const limpiar   = () => { setFiltros({ nombre:'', sucursal:'', plan:'', fecha:'', estado:'' }); setPagina(1) }
+  const limpiar = () => { setFiltros({ nombre:'', sucursal:'', plan:'', fecha:'', estado:'', canal:'' }); setPagina(1) }
   const toggleOrden = (col: string) => setOrden(o => ({ col, dir: o.col === col && o.dir === 'asc' ? 'desc' : 'asc' }))
   const sortIcon = (col: string) => <span className="text-gray-300 ml-0.5 text-[10px]">{orden.col === col ? (orden.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
