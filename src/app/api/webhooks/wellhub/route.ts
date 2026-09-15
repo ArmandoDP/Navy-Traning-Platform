@@ -102,14 +102,7 @@ export async function POST(req: NextRequest) {
 
       let clienteId = clienteExistente?.id
       if (!clienteExistente) {
-        const { data: nuevoCliente } = await supabase.from('clientes').insert({
-          nombre_completo: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
-          email:            user.email,
-          telefono:         user.phone_number,
-          estatus:          'Activo',
-          plan:             'Wellhub',
-        }).select().single()
-        clienteId = nuevoCliente?.id
+        clienteId = null  // no crear cliente
       }
 
       const { data: booking } = await supabase.from('wellhub_bookings').insert({

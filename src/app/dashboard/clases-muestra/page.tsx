@@ -2,15 +2,18 @@
 import { useState, useEffect } from 'react'
 import { supabase }            from '@/lib/supabase'
 import { useSucursal }         from '@/context/SucursalContext'
-import { Plus, Search, User, Calendar, MapPin, Mail, RefreshCw } from 'lucide-react'
+import { Plus, Search, User, Calendar, MapPin, Mail, RefreshCw, Star } from 'lucide-react'
 import DrawerClaseMuestra, { ReservaAEditar } from '@/components/clases-muestra/DrawerClaseMuestra'
+import DrawerConvertirProspecto from '@/components/clases-muestra/DrawerConvertirProspecto'
 
 export default function ClasesMuestraPage() {
   const { sucursalId } = useSucursal()
   const [prospectos, setProspectos]               = useState<any[]>([])
   const [loading, setLoading]                     = useState(true)
   const [busqueda, setBusqueda]                   = useState('')
-  const [drawerOpen, setDrawerOpen]               = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerConvertir, setDrawerConvertir] = useState(false)
+  const [prospectoAConvertir, setProspectoAConvertir] = useState<any | null>(null)
   const [reservaAEditar, setReservaAEditar]       = useState<ReservaAEditar | null>(null)
 
   const fetchProspectos = async () => {
@@ -159,6 +162,11 @@ export default function ClasesMuestraPage() {
                         <RefreshCw size={12} />
                         Reagendar
                       </button>
+                      <button
+                        onClick={() => { setProspectoAConvertir(p); setDrawerConvertir(true) }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 ml-4 rounded-lg bg-amber-50 border border-amber-200 text-xs font-bold text-amber-700 hover:bg-amber-100 transition">
+                        <Star size={12} fill="currentColor"/> Convertir a Navy
+                      </button>
                     </td>
                   </tr>
                 )
@@ -173,6 +181,12 @@ export default function ClasesMuestraPage() {
         onClose={() => { setDrawerOpen(false); setReservaAEditar(null); }}
         onSuccess={() => { setDrawerOpen(false); setReservaAEditar(null); fetchProspectos(); }}
         reservaAEditar={reservaAEditar}
+      />
+      <DrawerConvertirProspecto
+        isOpen={drawerConvertir}
+        prospecto={prospectoAConvertir}
+        onClose={() => { setDrawerConvertir(false); setProspectoAConvertir(null) }}
+        onSuccess={() => { setDrawerConvertir(false); setProspectoAConvertir(null); fetchProspectos() }}
       />
     </div>
   )

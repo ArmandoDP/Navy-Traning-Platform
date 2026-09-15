@@ -50,7 +50,7 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [pagina,    setPagina]    = useState(1)
   const [orden,     setOrden]     = useState<{ col: string; dir: 'asc'|'desc' }>({ col: '', dir: 'asc' })
-  const [filtros,   setFiltros]   = useState({ nombre: '', sucursal: '', plan: '', fecha: '', estado: '' })
+  const [filtros, setFiltros] = useState({ nombre: '', sucursal: '', plan: '', fecha: '', estado: '', canal: '' })
 
   const hoy = new Date()
 
@@ -73,13 +73,22 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
     const email    = c.email?.toLowerCase() || ''
     const sucursal = c.sucursales?.nombre?.toLowerCase() || ''
     const plan     = c.plan?.toLowerCase() || ''
-    const fecha    = c.created_at?.slice(0,10) || ''
+    const fecha = c.created_at?.slice(0, 10) || ''
+    const getCanal = (c: Cliente) => {
+      if (c.plan === 'Wellhub')   return 'Wellhub'
+      if (c.plan === 'TotalPass') return 'TotalPass'
+      if (c.estatus === 'Prospecto' || (!c.plan && (!c.membresias || c.membresias.length === 0))) return 'Prospecto'
+      return 'Navy'
+    }
+    
     return (
       (!filtros.nombre   || nombre.includes(filtros.nombre.toLowerCase()) || email.includes(filtros.nombre.toLowerCase())) &&
       (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase())) &&
       (!filtros.plan     || plan.includes(filtros.plan.toLowerCase()))          &&
       (!filtros.fecha    || fecha === filtros.fecha)                             &&
-      (!filtros.estado   || c.estatus === filtros.estado)
+      (!filtros.canal || getCanal(c) === filtros.canal) &&
+      (!filtros.estado || c.estatus === filtros.estado)
+      
     )
   })
 
