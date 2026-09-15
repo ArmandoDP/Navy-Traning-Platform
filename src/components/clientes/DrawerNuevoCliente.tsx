@@ -151,7 +151,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
 
     // 2. Insertar en clientes
     const { data: cli, error } = await supabase.from('clientes').insert([{
-      id:                    supabaseUserId || undefined,
+      // id:                    supabaseUserId || undefined,
       nombre_completo:       `${form.nombre} ${form.primer_apellido} ${form.segundo_apellido}`.trim(),
       primer_apellido:       form.primer_apellido,
       segundo_apellido:      form.segundo_apellido,
