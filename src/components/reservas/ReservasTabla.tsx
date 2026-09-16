@@ -24,8 +24,8 @@ interface Reserva {
   created_at:     string
   origen:         string | null
   es_clase_muestra: boolean
-  wellhub_bookings?:   { nombre: string; gympass_user_id: string }[]
-  totalpass_bookings?: { nombre: string; email: string }[]
+  nombre_externo?: string | null
+  email_externo?:  string | null
   asistencias:    { id: string }[]
   clientes:       { id: string; nombre_completo: string; email: string; telefono?: string }
   clases:         { id: string; nombre_clase: string; horario: string; tipo_clase: string; sucursales?: { nombre: string } }
@@ -349,9 +349,7 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
                 <td className="px-4 py-3 min-w-[180px]">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
-                      {r.clientes?.nombre_completo?.charAt(0) || 
-                      r.wellhub_bookings?.[0]?.nombre?.charAt(0) ||
-                      r.totalpass_bookings?.[0]?.nombre?.charAt(0) || '?'}
+                      {r.clientes?.nombre_completo?.charAt(0) || r.nombre_externo?.charAt(0) || '?'}
                     </div>
                     <div className="min-w-0">
                       {r.clientes?.id ? (
@@ -361,11 +359,11 @@ export default function ReservasTabla({ reservas, onRefresh }: { reservas: Reser
                         </Link>
                       ) : (
                         <p className="text-sm font-semibold text-gray-900 truncate">
-                          {r.wellhub_bookings?.[0]?.nombre || r.totalpass_bookings?.[0]?.nombre || 'Sin cliente'}
+                          {r.nombre_externo || 'Sin cliente'}
                         </p>
                       )}
                       <p className="text-[11px] text-gray-400 truncate">
-                        {r.clientes?.email || r.totalpass_bookings?.[0]?.email || '—'}
+                        {r.clientes?.email || r.email_externo || '—'}
                       </p>
                     </div>
                   </div>

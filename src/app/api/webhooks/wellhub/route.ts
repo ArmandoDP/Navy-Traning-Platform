@@ -132,10 +132,12 @@ export async function POST(req: NextRequest) {
             const nuevosOcupados = (clase.espacios_ocupados || 0) + 1
 
             await supabase.from('reservas').insert({
-              clase_id:   clase.id,
-              cliente_id: clienteId,
-              estatus:    'Confirmada',
-              origen:     'Wellhub',
+              clase_id:       clase.id,
+              cliente_id:     clienteId,
+              estatus:        'Confirmada',
+              origen:         'Wellhub',
+              nombre_externo: !clienteId ? (user.name || `${user.first_name} ${user.last_name}`.trim()) : null,
+              email_externo:  !clienteId ? user.email : null,
             })
 
             await supabase.from('clases')
