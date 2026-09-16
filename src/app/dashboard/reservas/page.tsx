@@ -24,7 +24,9 @@ export default function ReservasPage() {
         clientes(id, nombre_completo, email, telefono),
         clases(id, nombre_clase, horario, tipo_clase, sucursal_id, sucursales(nombre, ciudad),
           asistencias(id, cliente_id)
-        )
+        ),
+        wellhub_bookings(nombre, gympass_user_id),
+        totalpass_bookings(nombre, email)
       `)
       .order('created_at', { ascending: false })
 
