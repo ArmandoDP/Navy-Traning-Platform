@@ -159,7 +159,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     if (!claseId) return
     setSaving(true)
     const horario = new Date(`${form.fecha}T${form.hora}`).toISOString()
-    const coach   = coaches.find(c => c.id === form.coach_id)
+    const coach = coaches.find(c => c.id === form.coach_id)
+    
+    console.log('form.fecha:', form.fecha)
+    console.log('form.hora:', form.hora)
+    console.log('horario ISO:', new Date(`${form.fecha}T${form.hora}`).toISOString())
     
     await supabase.from('clases').update({
       nombre_clase:     form.nombre_clase,
