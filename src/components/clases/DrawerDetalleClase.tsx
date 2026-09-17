@@ -160,6 +160,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     setSaving(true)
     const horario = new Date(`${form.fecha}T${form.hora}`).toISOString()
     const coach   = coaches.find(c => c.id === form.coach_id)
+    
     await supabase.from('clases').update({
       nombre_clase:     form.nombre_clase,
       coach_id:         form.coach_id || null,
@@ -171,6 +172,44 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       salon:            form.salon,
       estado:           form.estado,
     }).eq('id', claseId)
+
+    // Actualizar en Wellhub
+    if (clase?.wellhub_slot_id && clase?.wellhub_class_id) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/actualizar-slot`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            slot_id:          clase.wellhub_slot_id,
+            clase_id:         clase.wellhub_class_id,
+            sucursal_id:      clase.sucursal_id,
+            horario,
+            duracion_minutos: form.duracion_minutos,
+            capacidad_max:    form.capacidad_max,
+          }),
+        })
+      } catch (e) { console.warn('Error actualizando Wellhub:', e) }
+    }
+
+    // Actualizar en TotalPass
+    if (clase?.totalpass_occurrence_uuid) {
+      try {
+        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/actualizar-clase`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            occurrence_uuid:  clase.totalpass_occurrence_uuid,
+            sucursal_id:      clase.sucursal_id,
+            horario,
+            duracion_minutos: form.duracion_minutos,
+            capacidad_max:    form.capacidad_max,
+            nombre:           form.nombre_clase,
+            coach:            coach ? `${coach.nombre} ${coach.primer_apellido}` : 'Navy Coach',
+          }),
+        })
+      } catch (e) { console.warn('Error actualizando TotalPass:', e) }
+    }
+
     setSaving(false)
     setToast(true)
     onSuccess()
