@@ -53,6 +53,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setStaff(null); setLoading(false); return }
 
+    // -------------------------------------------------------------
+    // ACTUALIZACIÓN AUTOMÁTICA DE CLIENTE (supabase_user_id y ultima_sesion)
+    // -------------------------------------------------------------
+    if (session.user?.email) {
+      supabase
+        .from('clientes')
+        .update({
+          supabase_user_id: session.user.id,
+          ultima_sesion: new Date().toISOString(),
+        })
+        .eq('email', session.user.email)
+        .then(() => {})
+    }
+    // -------------------------------------------------------------
+
     // Intentar cargar desde localStorage primero
     const cached = localStorage.getItem('navy_staff')
     if (cached) {

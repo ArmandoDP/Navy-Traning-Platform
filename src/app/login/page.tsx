@@ -105,6 +105,18 @@ export default function LoginPage() {
       return
     }
 
+    // -------------------------------------------------------------
+    // ACTUALIZACIÓN: Vincular supabase_user_id y registrar ultima_sesion
+    // -------------------------------------------------------------
+    await supabase
+      .from('clientes')
+      .update({
+        supabase_user_id: data.user.id,
+        ultima_sesion: new Date().toISOString(),
+      })
+      .eq('email', email)
+    // -------------------------------------------------------------
+
     const { data: staffData } = await supabase
       .from('staff').select('rol').eq('email', email).maybeSingle()
 
@@ -159,7 +171,6 @@ export default function LoginPage() {
       ) : (
         <div className="space-y-6">
           <div className="text-center">
-            {/* Icono animado */}
             <div className="relative w-16 h-16 mx-auto mb-4">
               <div className="w-16 h-16 bg-gradient-to-br from-gray-900 to-gray-600 rounded-2xl flex items-center justify-center shadow-lg">
                 <span className="text-2xl">✉️</span>
@@ -175,7 +186,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Inputs OTP */}
           <div className="space-y-3">
             <div className="flex gap-2 justify-center" onPaste={handlePaste}>
               {otp.map((digit, i) => (
