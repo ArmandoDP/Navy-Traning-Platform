@@ -21,11 +21,26 @@ export default function ConfirmarEmailPage() {
 
       // Si es signup — confirmar email
       if (accessToken && type === 'signup') {
-        const { error } = await supabase.auth.setSession({
+        const { data, error } = await supabase.auth.setSession({
           access_token:  accessToken,
           refresh_token: refreshToken || '',
         })
         if (error) { setStatus('error'); return }
+
+        // -------------------------------------------------------------
+        // Sincronización automática de cliente tras confirmar email
+        // -------------------------------------------------------------
+        if (data.user?.email) {
+          await supabase
+            .from('clientes')
+            .update({
+              supabase_user_id: data.user.id,
+              ultima_sesion: new Date().toISOString(),
+            })
+            .eq('email', data.user.email)
+        }
+        // -------------------------------------------------------------
+
         setStatus('success')
         return
       }
