@@ -99,13 +99,13 @@ export async function crearSlotWellhub(classId: string, sucursalId: string, para
 
 export async function confirmarBookingWellhub(bookingNumber: string, classId: number, confirmar: boolean, sucursalId?: string) {
   const gymId = getGymId(sucursalId)
-  const url   = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/bookings/${bookingNumber}`
+  const url   = `${WELLHUB_BASE_URL}/booking/v2/gyms/${gymId}/bookings/${bookingNumber}`
   const res   = await fetch(url, {
     method:  'PATCH',
     headers: wellhubHeaders(),
     body: JSON.stringify({
-      class_id: classId,
-      status:   confirmar ? 2 : 3, // 2 = Reserved | 3 = Rejected
+      status: confirmar ? "RESERVED" : "REJECTED",
+      ...(confirmar ? {} : { reason_category: "CLASS_IS_FULL" }),
     }),
   })
   const text = await res.text()
