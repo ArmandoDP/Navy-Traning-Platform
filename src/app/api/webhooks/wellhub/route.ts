@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
 
       if (hayCupo) {
         try {
-          const resultado = await confirmarBookingWellhub(slot.booking_number, slot.class_id, true)
+          const resultado = await confirmarBookingWellhub(slot.booking_number, slot.class_id, true, String(slot.gym_id))
           console.log('Booking confirmado en Wellhub:', resultado)
 
           await supabase.from('wellhub_bookings')
