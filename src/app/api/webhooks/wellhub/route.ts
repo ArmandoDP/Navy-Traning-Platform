@@ -115,15 +115,19 @@ export async function POST(req: NextRequest) {
         metadata:         body,
       }).select().single()
 
-      const { count } = await supabase
-        .from('reservas')
-        .select('id', { count: 'exact' })
-        .eq('clase_id', clase.id)
-        .neq('estatus', 'Cancelada')
+      let count = 0
+        if (clase) {
+          const { count: reservasCount } = await supabase
+            .from('reservas')
+            .select('id', { count: 'exact' })
+            .eq('clase_id', clase.id)
+            .neq('estatus', 'Cancelada')
+          count = reservasCount || 0
+        }
 
-      const hayCupo = clase
-        ? (count || 0) < clase.capacidad_max
-        : true
+        const hayCupo = clase
+          ? count < clase.capacidad_max
+          : true
 
       if (hayCupo) {
         try {
