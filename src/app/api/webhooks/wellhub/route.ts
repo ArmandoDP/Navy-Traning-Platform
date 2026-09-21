@@ -115,8 +115,14 @@ export async function POST(req: NextRequest) {
         metadata:         body,
       }).select().single()
 
+      const { count } = await supabase
+        .from('reservas')
+        .select('id', { count: 'exact' })
+        .eq('clase_id', clase.id)
+        .neq('estatus', 'Cancelada')
+
       const hayCupo = clase
-        ? (clase.espacios_ocupados || 0) < clase.capacidad_max
+        ? (count || 0) < clase.capacidad_max
         : true
 
       if (hayCupo) {
@@ -136,7 +142,7 @@ export async function POST(req: NextRequest) {
               cliente_id:     clienteId,
               estatus:        'Confirmada',
               origen:         'Wellhub',
-              nombre_externo: !clienteId ? (user.name || `${user.first_name} ${user.last_name}`.trim()) : null,
+              nombre_externo: !clienteId ? (user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim()) : null,
               email_externo:  !clienteId ? user.email : null,
             })
 
@@ -147,7 +153,7 @@ export async function POST(req: NextRequest) {
             try {
               await actualizarCuposSlotWellhub(
                 String(slot.id),
-                nuevosOcupados,
+                count || 0,  // ← conteo real
                 String(slot.class_id)
               )
             } catch (e: any) {

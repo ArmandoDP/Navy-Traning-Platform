@@ -57,6 +57,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [sincronizado, setSincronizado] = useState(false)
   const [toastError, setToastError] = useState(false)
   const [toastMsg, setToastMsg]  = useState('')
+  const [modalEliminar, setModalEliminar] = useState(false)
+  const [eliminando, setEliminando] = useState(false)
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -153,6 +155,54 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const handleCancelarReserva = async (reservaId: string) => {
     await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', reservaId)
     fetchData()
+  }
+
+  const handleEliminarClase = async () => {
+    if (!claseId) return
+    setEliminando(true)
+    try {
+      // Borrar reservas
+      await supabase.from('reservas').delete().eq('clase_id', claseId)
+      
+      // Borrar slot en Wellhub
+      if (clase?.wellhub_slot_id && clase?.wellhub_class_id) {
+        try {
+          await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/eliminar-slot`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slot_id:    clase.wellhub_slot_id,
+              clase_id:   clase.wellhub_class_id,
+              sucursal_id: clase.sucursal_id,
+            }),
+          })
+        } catch (e) { console.warn('Error borrando Wellhub:', e) }
+      }
+
+      // Borrar en TotalPass
+      if (clase?.totalpass_occurrence_uuid) {
+        try {
+          await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clases/eliminar-totalpass`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              occurrence_uuid: clase.totalpass_occurrence_uuid,
+              sucursal_id:     clase.sucursal_id,
+            }),
+          })
+        } catch (e) { console.warn('Error borrando TotalPass:', e) }
+      }
+
+      // Borrar clase en Supabase
+      await supabase.from('clases').delete().eq('id', claseId)
+      
+      setModalEliminar(false)
+      onSuccess()
+      onClose()
+    } catch (e: any) {
+      alert('Error eliminando clase: ' + e.message)
+    }
+    setEliminando(false)
   }
 
   const handleGuardar = async () => {
@@ -486,12 +536,18 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                 }`}>
                   {clase.estado}
                 </span>
-                {clase.estado === 'Activa' && (
-                  <button onClick={handleCancelarClase}
-                    className="text-xs font-bold text-red-400 hover:text-red-600 transition">
-                    Cancelar clase
+                <div className="flex items-center gap-2">
+                  {clase.estado === 'Activa' && (
+                    <button onClick={handleCancelarClase}
+                      className="text-xs font-bold text-red-400 hover:text-red-600 transition">
+                      Cancelar clase
+                    </button>
+                  )}
+                  <button onClick={() => setModalEliminar(true)}
+                    className="text-xs font-bold text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition">
+                    🗑️ Eliminar
                   </button>
-                )}
+                </div>
               </div>
             </div>
           )}
@@ -610,6 +666,63 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           />
         )}
       </div>
+      {modalEliminar && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            {reservas.filter(r => r.estatus !== 'Cancelada').length > 0 ? (
+              <>
+                <div className="bg-amber-50 px-6 py-5 border-b border-amber-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-xl">⚠️</div>
+                    <div>
+                      <h3 className="text-sm font-black text-amber-700">Clase con reservas activas</h3>
+                      <p className="text-xs text-amber-600">{reservas.filter(r => r.estatus !== 'Cancelada').length} reservas pendientes</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-6 py-5 space-y-3">
+                  <p className="text-sm text-gray-600">Primero cancela la clase para notificar a los clientes que ya reservaron y después podrás eliminarla.</p>
+                  <button onClick={() => { setModalEliminar(false); handleCancelarClase() }}
+                    className="w-full py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition">
+                    Cancelar clase y notificar clientes
+                  </button>
+                  <button onClick={() => setModalEliminar(false)}
+                    className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition">
+                    Volver
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-red-50 px-6 py-5 border-b border-red-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-xl">🗑️</div>
+                    <div>
+                      <h3 className="text-sm font-black text-red-700">Eliminar clase</h3>
+                      <p className="text-xs text-red-500">Esta acción no se puede deshacer</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-6 py-5 space-y-3">
+                  <div className="bg-gray-50 rounded-xl px-4 py-3">
+                    <p className="text-sm font-bold text-gray-900">{clase?.nombre_clase}</p>
+                    <p className="text-xs text-gray-400">{clase?.horario ? new Date(clase.horario).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }) : ''}</p>
+                  </div>
+                  <p className="text-xs text-gray-400 text-center">Se eliminará de Wellhub, TotalPass y el CRM.</p>
+                  <button onClick={handleEliminarClase} disabled={eliminando}
+                    className="w-full py-3 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 disabled:opacity-40 transition">
+                    {eliminando ? 'Eliminando...' : 'Sí, eliminar clase'}
+                  </button>
+                  <button onClick={() => setModalEliminar(false)}
+                    className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-bold text-sm hover:bg-gray-50 transition">
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }

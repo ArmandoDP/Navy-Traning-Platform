@@ -76,7 +76,8 @@ export default function TabAsistencia({
     const origenLabel = getOrigen(cliente?.origen, cliente?.is_founding_member)
     const spotNum     = r.room_spots?.numero
     const paqueteNom  = cliente?.paquetes?.nombre || cliente?.plan
-    const iniciales   = (cliente?.nombre_completo || '?').split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
+    const iniciales = (cliente?.nombre_completo || r.nombre_externo || '?')
+      .split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
 
     return (
       <div key={r.id} className={`px-5 py-4 transition ${cancelada ? 'opacity-30' : 'hover:bg-gray-50/80'}`}>
@@ -102,7 +103,9 @@ export default function TabAsistencia({
             {/* Nombre + spot */}
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="flex items-center gap-2 min-w-0">
-                <p className="text-sm font-black text-gray-900 truncate">{cliente?.nombre_completo}</p>
+                <p className="text-sm font-black text-gray-900 truncate">
+                  {cliente?.nombre_completo || r.nombre_externo || '—'}
+                </p>
                 {cliente?.is_founding_member && (
                   <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-yellow-100 text-yellow-700 flex-shrink-0">⭐ FM</span>
                 )}
@@ -116,7 +119,9 @@ export default function TabAsistencia({
             </div>
 
             {/* Email */}
-            <p className="text-[11px] text-gray-400 mb-2.5 truncate">{cliente?.email}</p>
+           <p className="text-[11px] text-gray-400 mb-2.5 truncate">
+              {cliente?.email || r.email_externo || '—'}
+            </p>
 
             {/* Badges informativos */}
             <div className="flex flex-wrap gap-1.5 mb-3">

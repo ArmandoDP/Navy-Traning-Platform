@@ -64,6 +64,8 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   const [titularId,     setTitularId]     = useState<string | null>(null)
   const [adquirirPaquete, setAdquirirPaquete] = useState(false)
   const [tipoRegistro,  setTipoRegistro]  = useState<'nuevo' | 'migracion'>('nuevo')
+  const [clienteExistente, setClienteExistente] = useState<any | null>(null)
+  const [modalEmailDuplicado, setModalEmailDuplicado] = useState(false)
 
   const [form, setForm] = useState({
     nombre:                 '',
@@ -203,6 +205,20 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   const handleCrear = async () => {
     if (!form.nombre || !form.email) return
     setLoading(true)
+
+    // Verificar si el correo ya existe
+    const { data: existente } = await supabase
+      .from('clientes')
+      .select('id, nombre_completo, email, plan, sucursales(nombre)')
+      .eq('email', form.email)
+      .maybeSingle()
+
+    if (existente) {
+      setClienteExistente(existente)
+      setModalEmailDuplicado(true)
+      setLoading(false)
+      return
+    }
 
     try {
       const cli = await crearClienteEnBD()
@@ -477,6 +493,43 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
           </button>
         </div>
       </div>
+      {modalEmailDuplicado && clienteExistente && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-red-50 px-6 py-5 border-b border-red-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <span className="text-red-600 text-lg">⚠️</span>
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-red-700">Correo duplicado</h3>
+                  <p className="text-xs text-red-500">Este correo ya está registrado</p>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-5 space-y-3">
+              <div className="bg-gray-50 rounded-xl px-4 py-3">
+                <p className="text-sm font-bold text-gray-900">{clienteExistente.nombre_completo}</p>
+                <p className="text-xs text-gray-500">{clienteExistente.email}</p>
+                {clienteExistente.plan && (
+                  <p className="text-xs text-indigo-600 font-bold mt-1">{clienteExistente.plan}</p>
+                )}
+                {clienteExistente.sucursales?.nombre && (
+                  <p className="text-xs text-gray-400">{clienteExistente.sucursales.nombre}</p>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 text-center">
+                Si quieres editar este cliente, búscalo en el módulo de Clientes.
+              </p>
+              <button
+                onClick={() => { setModalEmailDuplicado(false); setClienteExistente(null) }}
+                className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm hover:bg-gray-800 transition">
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
