@@ -571,7 +571,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
             Cancelar
           </button>
           <button onClick={handleCrear}
-            disabled={loading || !form.nombre || !form.email || !canCreate || emailEstado === 'checking'}
+            disabled={loading || !form.nombre || !form.email || emailEstado === 'duplicado' || emailEstado === 'invalido' || emailEstado === 'checking'}
             className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition flex items-center justify-center gap-2"
             style={{ backgroundColor: '#171B24' }}>
             {loading ? (
