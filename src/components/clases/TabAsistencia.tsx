@@ -5,7 +5,7 @@ interface Props {
   reservas:          any[]
   asistencias:       any[]
   historialClientes: Record<string, number>
-  checkingIn:        string | null
+  checkingIn:        string | boolean | null
   onCheckIn:         (reserva: any) => void
   onCancelar:        (reservaId: string) => void
 }
@@ -84,7 +84,14 @@ export default function TabAsistencia({
     const iniciales   = (cliente?.nombre_completo || r.nombre_externo || '?')
       .split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
 
-    const isChecking = checkingIn === keyUnica || checkingIn === r.id || checkingIn === clienteId
+    // Comparación robusta contra ID de reserva o cliente para evitar falsos positivos
+    const isChecking = typeof checkingIn === 'boolean' 
+      ? checkingIn 
+      : Boolean(checkingIn && (
+          String(checkingIn) === String(r.id) || 
+          String(checkingIn) === String(keyUnica) || 
+          (clienteId && String(checkingIn) === String(clienteId))
+        ))
 
     return (
       <div key={r.id} className={`px-5 py-4 transition ${cancelada ? 'opacity-30' : 'hover:bg-gray-50/80'}`}>

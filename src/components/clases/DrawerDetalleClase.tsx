@@ -22,21 +22,21 @@ const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm 
 const selectCls = `${inputCls} appearance-none cursor-pointer`
 
 export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess }: Props) {
-  const [tab,              setTab]              = useState<Tab>('detalle')
-  const [loading,          setLoading]          = useState(true)
-  const [saving,           setSaving]           = useState(false)
-  const [toast,            setToast]            = useState(false)
-  const [clase,            setClase]            = useState<any>(null)
-  const [reservas,         setReservas]         = useState<any[]>([])
-  const [asistencias,      setAsistencias]      = useState<any[]>([])
-  const [coaches,          setCoaches]          = useState<any[]>([])
-  const [checkingIn,       setCheckingIn]       = useState<string | null>(null)
+  const [tab,               setTab]               = useState<Tab>('detalle')
+  const [loading,           setLoading]           = useState(true)
+  const [saving,            setSaving]            = useState(false)
+  const [toast,             setToast]             = useState(false)
+  const [clase,             setClase]             = useState<any>(null)
+  const [reservas,          setReservas]          = useState<any[]>([])
+  const [asistencias,       setAsistencias]       = useState<any[]>([])
+  const [coaches,           setCoaches]           = useState<any[]>([])
+  const [checkingIn,        setCheckingIn]        = useState<string | null>(null)
   const [historialClientes, setHistorialClientes] = useState<Record<string, number>>({})
-  const [sincronizado, setSincronizado] = useState(false)
-  const [toastError, setToastError] = useState(false)
-  const [toastMsg, setToastMsg]  = useState('')
-  const [modalEliminar, setModalEliminar] = useState(false)
-  const [eliminando, setEliminando] = useState(false)
+  const [sincronizado,      setSincronizado]      = useState(false)
+  const [toastError,        setToastError]        = useState(false)
+  const [toastMsg,          setToastMsg]          = useState('')
+  const [modalEliminar,     setModalEliminar]     = useState(false)
+  const [eliminando,        setEliminando]        = useState(false)
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -122,11 +122,12 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   // ── CHECK-IN ROBUSTO ─────────────────────────────────────────────────────────
   const handleCheckIn = async (param: any) => {
     const reservaObj = typeof param === 'object' ? param : null
-    const clienteId  = typeof param === 'object' ? (param.clientes?.id || param.cliente_id) : param
-    const reservaId  = reservaObj?.id
+    const reservaId  = reservaObj?.id || (typeof param === 'string' ? param : null)
+    const clienteId  = reservaObj?.clientes?.id || reservaObj?.cliente_id || (!reservaObj ? param : null)
     const origen     = (reservaObj?.origen || reservaObj?.clientes?.origen || '').toLowerCase()
 
-    const checkKey = clienteId || reservaId
+    // Usar la reservaId o en su defecto clienteId para que coincida con keyUnica en TabAsistencia
+    const checkKey = reservaId || clienteId
     setCheckingIn(checkKey)
 
     try {
