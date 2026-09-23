@@ -2,20 +2,20 @@
 import { UserCheck, UserX, CheckCircle2 } from 'lucide-react'
 
 interface Props {
-  reservas:         any[]
-  asistencias:      any[]
+  reservas:          any[]
+  asistencias:       any[]
   historialClientes: Record<string, number>
-  checkingIn:       string | null
-  onCheckIn:        (clienteId: string) => void
-  onCancelar:       (reservaId: string) => void
+  checkingIn:        string | null
+  onCheckIn:         (reserva: any) => void
+  onCancelar:        (reservaId: string) => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getCanal(origen: string | null, esMuestra: boolean) {
-  if (esMuestra)                                         return { label: 'Clase Muestra',  bg: '#f3e8ff', color: '#7c3aed' }
+  if (esMuestra)                                         return { label: 'Clase Muestra',   bg: '#f3e8ff', color: '#7c3aed' }
   if (origen === 'Wellhub'   || origen === 'wellhub')   return { label: 'Wellhub',         bg: '#fce7f3', color: '#be185d' }
-  if (origen === 'TotalPass' || origen === 'totalpass') return { label: 'TotalPass',        bg: '#dcfce7', color: '#15803d' }
-  return                                                        { label: 'Navy',             bg: '#111827', color: '#ffffff' }
+  if (origen === 'TotalPass' || origen === 'totalpass') return { label: 'TotalPass',       bg: '#dcfce7', color: '#15803d' }
+  return                                                 { label: 'Navy',             bg: '#111827', color: '#ffffff' }
 }
 
 function getNivelExperiencia(total: number): { label: string; descripcion: string; bg: string; color: string } {
@@ -41,18 +41,21 @@ export default function TabAsistencia({
   reservas, asistencias, historialClientes, checkingIn, onCheckIn, onCancelar
 }: Props) {
 
-    // 1. Deduplicar reservas por cliente_id
-    const reservasUnicas = reservas.filter((r, i, arr) =>
-    arr.findIndex(x => x.clientes?.id === r.clientes?.id) === i
-    )
+  // Deduplicar reservas por cliente_id o por reserva id
+  const reservasUnicas = reservas.filter((r, i, arr) =>
+    arr.findIndex(x => (x.clientes?.id && x.clientes?.id === r.clientes?.id) || x.id === r.id) === i
+  )
 
-    // 2. Filtrar los que no tienen cliente
-    const reservasFiltradas = reservasUnicas.filter(r => r.clientes?.id)
-
-  const activos   = reservas.filter(r => r.estatus !== 'Cancelada')
-  const cancelados = reservas.filter(r => r.estatus === 'Cancelada')
-  const presentes  = activos.filter(r => asistencias.some(a => a.cliente_id === r.clientes?.id))
-  const pendientes = activos.filter(r => !asistencias.some(a => a.cliente_id === r.clientes?.id))
+  const activos    = reservasUnicas.filter(r => r.estatus !== 'Cancelada')
+  const cancelados = reservasUnicas.filter(r => r.estatus === 'Cancelada')
+  
+  // Se considera presente si existe en la tabla asistencias o si la reserva dice 'Asistió'
+  const presentes  = activos.filter(r => 
+    r.estatus === 'Asistió' || asistencias.some(a => (r.clientes?.id && a.cliente_id === r.clientes?.id) || a.reserva_id === r.id)
+  )
+  const pendientes = activos.filter(r => 
+    r.estatus !== 'Asistió' && !asistencias.some(a => (r.clientes?.id && a.cliente_id === r.clientes?.id) || a.reserva_id === r.id)
+  )
 
   if (reservas.length === 0) {
     return (
@@ -68,16 +71,20 @@ export default function TabAsistencia({
 
   const renderAlumno = (r: any) => {
     const cliente     = r.clientes
-    const hizoChekin  = asistencias.some(a => a.cliente_id === cliente?.id)
+    const clienteId   = cliente?.id || r.cliente_id
+    const keyUnica    = clienteId || r.id
+    const hizoChekin  = r.estatus === 'Asistió' || asistencias.some(a => (clienteId && a.cliente_id === clienteId) || a.reserva_id === r.id)
     const cancelada   = r.estatus === 'Cancelada'
-    const totalPrev   = (historialClientes[cliente?.id] || 1) - 1 // previas (sin contar esta)
+    const totalPrev   = (historialClientes[clienteId] || 1) - 1
     const canal       = getCanal(r.origen, r.es_clase_muestra)
-    const nivel       = getNivelExperiencia(totalPrev)
+    const nivel       = getNivelExperiencia(totalPrev < 0 ? 0 : totalPrev)
     const origenLabel = getOrigen(cliente?.origen, cliente?.is_founding_member)
     const spotNum     = r.room_spots?.numero
     const paqueteNom  = cliente?.paquetes?.nombre || cliente?.plan
-    const iniciales = (cliente?.nombre_completo || r.nombre_externo || '?')
+    const iniciales   = (cliente?.nombre_completo || r.nombre_externo || '?')
       .split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
+
+    const isChecking = checkingIn === keyUnica || checkingIn === r.id || checkingIn === clienteId
 
     return (
       <div key={r.id} className={`px-5 py-4 transition ${cancelada ? 'opacity-30' : 'hover:bg-gray-50/80'}`}>
@@ -119,33 +126,28 @@ export default function TabAsistencia({
             </div>
 
             {/* Email */}
-           <p className="text-[11px] text-gray-400 mb-2.5 truncate">
+            <p className="text-[11px] text-gray-400 mb-2.5 truncate">
               {cliente?.email || r.email_externo || '—'}
             </p>
 
             {/* Badges informativos */}
             <div className="flex flex-wrap gap-1.5 mb-3">
-
-              {/* Canal */}
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black"
                 style={{ backgroundColor: canal.bg, color: canal.color }}>
                 {canal.label}
               </span>
 
-              {/* Nivel experiencia */}
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black"
                 style={{ backgroundColor: nivel.bg, color: nivel.color }}>
                 {nivel.label}
               </span>
 
-              {/* Paquete */}
               {paqueteNom && paqueteNom !== canal.label && (
                 <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold bg-indigo-50 text-indigo-600">
                   {paqueteNom}
                 </span>
               )}
 
-              {/* Origen */}
               {origenLabel && (
                 <span className="inline-flex items-center px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700">
                   {origenLabel}
@@ -166,10 +168,12 @@ export default function TabAsistencia({
                     </span>
                   ) : (
                     <>
-                      <button onClick={() => onCheckIn(cliente?.id)}
-                        disabled={checkingIn === cliente?.id}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-black bg-emerald-500 text-white hover:bg-emerald-600 transition disabled:opacity-40 shadow-sm shadow-emerald-200">
-                        <UserCheck size={11}/> Check-in
+                      <button 
+                        onClick={() => onCheckIn(r)}
+                        disabled={isChecking}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-black bg-emerald-500 text-white hover:bg-emerald-600 transition disabled:opacity-40 shadow-sm shadow-emerald-200"
+                      >
+                        <UserCheck size={11}/> {isChecking ? 'Guardando...' : 'Check-in'}
                       </button>
                       <button onClick={() => onCancelar(r.id)}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500 transition">

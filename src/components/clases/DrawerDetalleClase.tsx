@@ -21,28 +21,6 @@ type Tab = 'detalle' | 'asistencia' | 'editar'
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 bg-gray-50 transition"
 const selectCls = `${inputCls} appearance-none cursor-pointer`
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-function getBadgeCanal(origen: string | null, esMuestra: boolean) {
-  if (esMuestra)                                          return { label: 'Muestra',   cls: 'bg-purple-100 text-purple-700' }
-  if (origen === 'Wellhub'   || origen === 'wellhub')    return { label: 'Wellhub',   cls: 'bg-pink-100 text-pink-600' }
-  if (origen === 'TotalPass' || origen === 'totalpass')  return { label: 'TotalPass', cls: 'bg-green-100 text-green-700' }
-  return { label: 'Navy', cls: 'bg-gray-900 text-white' }
-}
-
-function getEtiquetaExperiencia(total: number) {
-  if (total === 1)        return { label: '1ª clase 🌟', cls: 'bg-yellow-100 text-yellow-700' }
-  if (total <= 3)         return { label: 'Nuevo',       cls: 'bg-blue-100 text-blue-600' }
-  if (total <= 10)        return { label: 'Regular',     cls: 'bg-indigo-100 text-indigo-600' }
-  return                         { label: 'Veterano 💪', cls: 'bg-emerald-100 text-emerald-700' }
-}
-
-function getNumClaseLabel(total: number) {
-  if (total === 1) return 'Primera clase'
-  if (total === 2) return '2ª clase'
-  if (total === 3) return '3ª clase'
-  return `Clase #${total}`
-}
-
 export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess }: Props) {
   const [tab,              setTab]              = useState<Tab>('detalle')
   const [loading,          setLoading]          = useState(true)
@@ -78,93 +56,155 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     if (!claseId) return
     setLoading(true)
 
-    const [{ data: claseData }, { data: reservasData }, { data: asistData }, { data: coachData }] = await Promise.all([
-      supabase.from('clases')
-        .select('*, totalpass_occurrence_uuid, wellhub_slot_id, totalpass_occurrence_uuid, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)')
-        .eq('id', claseId).single(),
-      supabase.from('reservas')
-        .select(`
-          *,
-          clientes(
-            id, nombre_completo, email, plan, origen,
-            is_founding_member, fecha_alta_original,
-            paquetes(nombre)
-          )
-        `)
-        .eq('clase_id', claseId).order('created_at'),
-      supabase.from('asistencias').select('*').eq('clase_id', claseId),
-      supabase.from('staff').select('id, nombre, primer_apellido').eq('tipo', 'Coach').eq('estatus', 'Activo').order('nombre'),
-    ])
+    try {
+      const [{ data: claseData }, { data: reservasData }, { data: asistData }, { data: coachData }] = await Promise.all([
+        supabase.from('clases')
+          .select('*, totalpass_occurrence_uuid, wellhub_slot_id, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)')
+          .eq('id', claseId).single(),
+        supabase.from('reservas')
+          .select(`
+            *,
+            clientes(
+              id, nombre_completo, email, plan, origen,
+              is_founding_member, fecha_alta_original,
+              paquetes(nombre)
+            )
+          `)
+          .eq('clase_id', claseId).order('created_at'),
+        supabase.from('asistencias').select('*').eq('clase_id', claseId),
+        supabase.from('staff').select('id, nombre, primer_apellido').eq('tipo', 'Coach').eq('estatus', 'Activo').order('nombre'),
+      ])
 
-    if (claseData) {
-      setClase(claseData)
-      const h = new Date(claseData.horario)
-      setForm({
-        nombre_clase:     claseData.nombre_clase     || '',
-        coach_id:         claseData.coach_id         || '',
-        fecha:            h.toISOString().split('T')[0],
-        hora:             h.toTimeString().slice(0, 5),
-        duracion_minutos: claseData.duracion_minutos || 60,
-        capacidad_max:    claseData.capacidad_max    || 0,
-        descripcion:      claseData.descripcion      || '',
-        salon:            claseData.salon            || '',
-        estado:           claseData.estado           || 'Activa',
-      })
-    }
-    if (reservasData)   setReservas(reservasData)
-    if (asistData)      setAsistencias(asistData)
-    if (coachData)      setCoaches(coachData)
-
-    // Historial de asistencias totales por cliente
-    const clienteIds = (reservasData || []).map((r: any) => r.clientes?.id).filter(Boolean)
-    if (clienteIds.length > 0) {
-      const { data: historial } = await supabase
-        .from('asistencias')
-        .select('cliente_id')
-        .in('cliente_id', clienteIds)
-
-      const conteo: Record<string, number> = {}
-      for (const a of historial || []) {
-        conteo[a.cliente_id] = (conteo[a.cliente_id] || 0) + 1
+      if (claseData) {
+        setClase(claseData)
+        const h = new Date(claseData.horario)
+        setForm({
+          nombre_clase:     claseData.nombre_clase     || '',
+          coach_id:         claseData.coach_id         || '',
+          fecha:            h.toISOString().split('T')[0],
+          hora:             h.toTimeString().slice(0, 5),
+          duracion_minutos: claseData.duracion_minutos || 60,
+          capacidad_max:    claseData.capacidad_max    || 0,
+          descripcion:      claseData.descripcion      || '',
+          salon:            claseData.salon            || '',
+          estado:           claseData.estado           || 'Activa',
+        })
       }
-      setHistorialClientes(conteo)
-    }
+      if (reservasData)   setReservas(reservasData)
+      if (asistData)      setAsistencias(asistData)
+      if (coachData)      setCoaches(coachData)
 
-    setLoading(false)
+      // Historial de asistencias totales por cliente
+      const clienteIds = (reservasData || []).map((r: any) => r.clientes?.id || r.cliente_id).filter(Boolean)
+      if (clienteIds.length > 0) {
+        const { data: historial } = await supabase
+          .from('asistencias')
+          .select('cliente_id')
+          .in('cliente_id', clienteIds)
+
+        const conteo: Record<string, number> = {}
+        for (const a of historial || []) {
+          if (a.cliente_id) conteo[a.cliente_id] = (conteo[a.cliente_id] || 0) + 1
+        }
+        setHistorialClientes(conteo)
+      }
+    } catch (e) {
+      console.error('Error cargando datos de la clase:', e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
     if (isOpen && claseId) { setTab('detalle'); fetchData() }
   }, [isOpen, claseId])
 
-  const handleCheckIn = async (clienteId: string) => {
-    setCheckingIn(clienteId)
-    const yaAsistio = asistencias.some(a => a.cliente_id === clienteId)
-    if (yaAsistio) { setCheckingIn(null); return }
-    await supabase.from('asistencias').insert([{
-      cliente_id:    clienteId,
-      clase_id:      claseId,
-      fecha_checkin: new Date().toISOString(),
-    }])
-    await supabase.from('reservas').update({ estatus: 'Confirmada' })
-      .eq('clase_id', claseId).eq('cliente_id', clienteId)
-    fetchData()
-    setCheckingIn(null)
+  // ── CHECK-IN ROBUSTO ─────────────────────────────────────────────────────────
+  const handleCheckIn = async (param: any) => {
+    const reservaObj = typeof param === 'object' ? param : null
+    const clienteId  = typeof param === 'object' ? (param.clientes?.id || param.cliente_id) : param
+    const reservaId  = reservaObj?.id
+    const origen     = (reservaObj?.origen || reservaObj?.clientes?.origen || '').toLowerCase()
+
+    const checkKey = clienteId || reservaId
+    setCheckingIn(checkKey)
+
+    try {
+      // 1. Insertar en tabla asistencias
+      if (clienteId) {
+        const payloadAsistencia: any = {
+          cliente_id:       clienteId,
+          clase_id:         claseId,
+          reserva_id:       reservaId || null,
+          fecha_checkin:    new Date().toISOString(),
+          sucursal_id:      clase?.sucursal_id || null,
+          staff_id:         clase?.coach_id || null,
+          es_clase_muestra: reservaObj?.es_clase_muestra || false,
+        }
+
+        const { error: errAsistencia } = await supabase
+          .from('asistencias')
+          .insert([payloadAsistencia])
+
+        if (errAsistencia) {
+          console.warn('Advertencia en asistencias:', errAsistencia.message)
+        }
+      }
+
+      // 2. Actualizar estatus en la tabla reservas
+      if (reservaId) {
+        const { error: errRes } = await supabase
+          .from('reservas')
+          .update({ estatus: 'Asistió' })
+          .eq('id', reservaId)
+          
+        if (errRes) console.error('Error actualizando reserva:', errRes)
+      } else if (clienteId && claseId) {
+        await supabase
+          .from('reservas')
+          .update({ estatus: 'Asistió' })
+          .eq('clase_id', claseId)
+          .eq('cliente_id', clienteId)
+      }
+
+      // 3. Notificar a Wellhub si el canal es Wellhub
+      if (origen === 'wellhub') {
+        const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+        if (baseUrl) {
+          fetch(`${baseUrl}/wellhub/checkin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reserva_id:         reservaId,
+              wellhub_booking_id: reservaObj?.wellhub_booking_id || reservaObj?.booking_id,
+              cliente_id:         clienteId,
+              clase_id:           claseId,
+            }),
+          }).catch(e => console.warn('Error al comunicar con API Wellhub:', e))
+        }
+      }
+
+    } catch (err) {
+      console.error('Error general en check-in:', err)
+    } finally {
+      setCheckingIn(null)
+      await fetchData()
+      onSuccess()
+    }
   }
 
   const handleCancelarReserva = async (reservaId: string) => {
     await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', reservaId)
-    fetchData()
+    await fetchData()
+    onSuccess()
   }
 
   const handleEliminarClase = async () => {
     if (!claseId) return
     setEliminando(true)
     try {
-      // Borrar reservas
       await supabase.from('reservas').delete().eq('clase_id', claseId)
       
-      // Borrar slot en Wellhub
       if (clase?.wellhub_slot_id && clase?.wellhub_class_id) {
         try {
           await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/eliminar-slot`, {
@@ -179,7 +219,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         } catch (e) { console.warn('Error borrando Wellhub:', e) }
       }
 
-      // Borrar en TotalPass
       if (clase?.totalpass_occurrence_uuid) {
         try {
           await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clases/eliminar-totalpass`, {
@@ -193,7 +232,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         } catch (e) { console.warn('Error borrando TotalPass:', e) }
       }
 
-      // Borrar clase en Supabase
       await supabase.from('clases').delete().eq('id', claseId)
       
       setModalEliminar(false)
@@ -211,10 +249,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     const horario = new Date(`${form.fecha}T${form.hora}`).toISOString()
     const coach = coaches.find(c => c.id === form.coach_id)
     
-    console.log('form.fecha:', form.fecha)
-    console.log('form.hora:', form.hora)
-    console.log('horario ISO:', new Date(`${form.fecha}T${form.hora}`).toISOString())
-    
     await supabase.from('clases').update({
       nombre_clase:     form.nombre_clase,
       coach_id:         form.coach_id || null,
@@ -227,7 +261,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       estado:           form.estado,
     }).eq('id', claseId)
 
-    // Actualizar en Wellhub
     if (clase?.wellhub_slot_id && clase?.wellhub_class_id) {
       try {
         await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/actualizar-slot`, {
@@ -245,7 +278,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       } catch (e) { console.warn('Error actualizando Wellhub:', e) }
     }
 
-    // Actualizar en TotalPass
     if (clase?.totalpass_occurrence_uuid) {
       try {
         await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/actualizar-clase`, {
@@ -273,13 +305,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const handleCancelarClase = async () => {
     if (!claseId) return
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clases/cancelar`, {
+      await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clases/cancelar`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ clase_id: claseId }),
       })
-      const data = await res.json()
-      console.log('Clase cancelada:', data)
     } catch (e) {
       console.error('Error cancelando clase:', e)
     }
@@ -299,8 +329,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           sucursalId:  clase.sucursal_id,
         }),
       })
-      const data = await res.json()
-      console.log('Horario actualizado:', data)
       fetchData()
       if (res.ok) setSincronizado(true)
     } catch (e) {
@@ -348,12 +376,10 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         body:    JSON.stringify(payload),
       })
       if (res.ok) {
-        setClase(null)
         await fetchData()
         setToast(true)
         setToastMsg('Clase publicada en TotalPass')
-      }
-      if (!res.ok) {
+      } else {
         const err = await res.json().catch(() => ({ detail: res.statusText }))
         setToastError(true)
         setToastMsg(err.detail || 'Error al publicar en TotalPass')
@@ -369,12 +395,12 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const totalAsistencias = asistencias.length
   const ocupacion        = clase?.capacidad_max > 0 ? Math.round((totalReservas / clase.capacidad_max) * 100) : 0
   const enWellhub        = !!clase?.wellhub_slot_id
-  const enTotalpass =   !!clase?.totalpass_occurrence_uuid
+  const enTotalpass      = !!clase?.totalpass_occurrence_uuid
 
   return (
     <>
       {toast && (
-        <ToastExito titulo="Clase actualizada" mensaje="Los cambios se guardaron correctamente." onClose={() => setToast(false)} />
+        <ToastExito titulo="Operación exitosa" mensaje={toastMsg || "Los cambios se guardaron correctamente."} onClose={() => setToast(false)} />
       )}
 
       <div onClick={onClose} className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" />
@@ -435,7 +461,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
         {/* Contenido */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* ── Tab Detalle ── */}
+          {/* Tab Detalle */}
           {tab === 'detalle' && !loading && clase && (
             <div className="px-6 py-5 space-y-5">
               <div className="grid grid-cols-4 gap-3">
@@ -552,7 +578,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             </div>
           )}
 
-          {/* ── Tab Asistencia ── */}
+          {/* Tab Asistencia */}
           {tab === 'asistencia' && (
             <TabAsistencia
               reservas={reservas}
@@ -564,7 +590,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             />
           )}
 
-          {/* ── Tab Editar ── */}
+          {/* Tab Editar */}
           {tab === 'editar' && (
             <div className="px-6 py-5 space-y-4">
               <div className="space-y-1.5">
@@ -651,13 +677,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             </button>
           </div>
         )}
-        {toast && (
-          <ToastExito
-            titulo="TotalPass"
-            mensaje={toastMsg}
-            onClose={() => setToast(false)}
-          />
-        )}
         {toastError && (
           <ToastExito
             titulo="Error en TotalPass"
@@ -666,6 +685,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           />
         )}
       </div>
+
       {modalEliminar && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">
