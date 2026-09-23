@@ -73,6 +73,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'booking_number faltante' }, { status: 400 })
       }
 
+      // Anti-duplicado por booking_number — antes de todo
+      const { data: existenteBooking } = await supabase
+        .from('wellhub_bookings')
+        .select('id')
+        .eq('booking_number', slot.booking_number)
+        .maybeSingle()
+
+      if (existenteBooking) {
+        console.log(`Booking ${slot.booking_number} ya procesado — ignorando duplicado`)
+        return NextResponse.json({ received: true, duplicado: true })
+      }
+
       const { data: clase } = await supabase
         .from('clases')
         .select('id, capacidad_max, espacios_ocupados, nombre_clase, horario')
@@ -85,7 +97,6 @@ export async function POST(req: NextRequest) {
         .eq('email', user.email)
         .single()
 
-      // ← AQUÍ, ya tenemos clase y cliente
       if (clase && clienteExistente) {
         const { data: reservaExistente } = await supabase
           .from('reservas')
@@ -100,10 +111,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      let clienteId = clienteExistente?.id
-      if (!clienteExistente) {
-        clienteId = null  // no crear cliente
-      }
+      let clienteId = clienteExistente?.id ?? null
 
       const { data: booking } = await supabase.from('wellhub_bookings').insert({
         booking_number:   slot.booking_number,
@@ -116,18 +124,16 @@ export async function POST(req: NextRequest) {
       }).select().single()
 
       let count = 0
-        if (clase) {
-          const { count: reservasCount } = await supabase
-            .from('reservas')
-            .select('id', { count: 'exact' })
-            .eq('clase_id', clase.id)
-            .neq('estatus', 'Cancelada')
-          count = reservasCount || 0
-        }
+      if (clase) {
+        const { count: reservasCount } = await supabase
+          .from('reservas')
+          .select('id', { count: 'exact' })
+          .eq('clase_id', clase.id)
+          .neq('estatus', 'Cancelada')
+        count = reservasCount || 0
+      }
 
-        const hayCupo = clase
-          ? count < clase.capacidad_max
-          : true
+      const hayCupo = clase ? count < clase.capacidad_max : true
 
       if (hayCupo) {
         try {
@@ -139,9 +145,8 @@ export async function POST(req: NextRequest) {
             .eq('id', booking?.id)
 
           if (clase) {
-            const nuevosOcupados = (clase.espacios_ocupados || 0) + 1
-
-            await supabase.from('reservas').insert({
+            // Insert protegido — si falla por duplicado no incrementa cupos
+            const { error: insertError } = await supabase.from('reservas').insert({
               clase_id:       clase.id,
               cliente_id:     clienteId,
               estatus:        'Confirmada',
@@ -150,18 +155,24 @@ export async function POST(req: NextRequest) {
               email_externo:  !clienteId ? user.email : null,
             })
 
-            await supabase.from('clases')
-              .update({ espacios_ocupados: nuevosOcupados })
-              .eq('id', clase.id)
+            if (insertError) {
+              console.warn('Reserva duplicada o error al insertar — no se incrementan cupos:', insertError.message)
+            } else {
+              // Solo incrementar si el insert fue exitoso
+              const nuevosOcupados = count + 1
+              await supabase.from('clases')
+                .update({ espacios_ocupados: nuevosOcupados })
+                .eq('id', clase.id)
 
-            try {
-              await actualizarCuposSlotWellhub(
-                String(slot.id),
-                count || 0,  // ← conteo real
-                String(slot.class_id)
-              )
-            } catch (e: any) {
-              console.error('Error actualizando cupos en Wellhub:', e.message)
+              try {
+                await actualizarCuposSlotWellhub(
+                  String(slot.id),
+                  nuevosOcupados,
+                  String(slot.class_id)
+                )
+              } catch (e: any) {
+                console.error('Error actualizando cupos en Wellhub:', e.message)
+              }
             }
           }
 
