@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase }                  from '@/lib/supabase'
-import { crearClaseWellhub, crearSlotWellhub } from '@/lib/wellhub'
+import { actualizarCuposSlotWellhub, crearClaseWellhub, crearSlotWellhub } from '@/lib/wellhub'
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +23,13 @@ export async function POST(req: NextRequest) {
     const claseData      = await crearClaseWellhub(nombre, descripcion || nombre, sucursalId)
     const wellhubClassId = claseData.classes[0].id
 
+    // Obtener reservas activas de la clase
+    const { count: reservasActivas } = await supabase
+      .from('reservas')
+      .select('id', { count: 'exact' })
+      .eq('clase_id', claseId)
+      .neq('estatus', 'Cancelada')
+
     // 2. Crear el slot
     const slotData = await crearSlotWellhub(String(wellhubClassId), sucursalId, {
       fechaInicio: horario,
@@ -30,7 +37,18 @@ export async function POST(req: NextRequest) {
       capacidad:   capacidadMax,
       room:        clase.salon || 'Sala Principal',
     })
+
     const wellhubSlotId = slotData.results[0].id
+    
+    // Actualizar total_booked con reservas existentes
+    if (reservasActivas && reservasActivas > 0) {
+      await actualizarCuposSlotWellhub(
+        String(wellhubSlotId),
+        reservasActivas,
+        String(wellhubClassId),
+        sucursalId
+      )
+    }
 
     // 3. Guardar referencias en Supabase
     await supabase.from('clases').update({
