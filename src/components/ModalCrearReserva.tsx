@@ -159,6 +159,11 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
 
     if (error) { alert('Error: ' + error.message); setLoading(false); return }
 
+    // Actualizar espacios_ocupados en Supabase
+    await supabase.from('clases')
+      .update({ espacios_ocupados: reservasActivas + 1 })
+      .eq('id', claseSeleccionada.id)
+
     // Actualizar Wellhub
     if (claseSeleccionada.wellhub_slot_id && claseSeleccionada.wellhub_class_id) {
       try {
