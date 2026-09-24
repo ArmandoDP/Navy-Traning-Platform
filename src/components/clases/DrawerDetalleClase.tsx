@@ -16,7 +16,7 @@ interface Props {
   onSuccess: () => void
 }
 
-type Tab = 'detalle' | 'asistencia' | 'editar'
+type Tab = 'detalle' | 'asistencia' 
 
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 bg-gray-50 transition"
 const selectCls = `${inputCls} appearance-none cursor-pointer`
@@ -448,7 +448,6 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           {([
             { key: 'detalle',    label: '📋 Detalle' },
             { key: 'asistencia', label: `👥 Asistencia (${totalReservas})` },
-            { key: 'editar',     label: '✏️ Editar' },
           ] as { key: Tab; label: string }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex-1 py-3 text-xs font-bold transition border-b-2 ${
@@ -592,7 +591,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           )}
 
           {/* Tab Editar */}
-          {tab === 'editar' && (
+          {/* {tab === 'editar' && (
             <div className="px-6 py-5 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-gray-700">Nombre de la clase</label>
@@ -661,11 +660,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   value={form.descripcion} onChange={e => set('descripcion', e.target.value)} />
               </div>
             </div>
-          )}
+          )} */}
         </div>
 
         {/* Footer */}
-        {tab === 'editar' && (
+        {/* {tab === 'editar' && (
           <div className="flex gap-3 px-6 py-4 border-t border-gray-100">
             <button onClick={onClose}
               className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
@@ -677,7 +676,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </div>
-        )}
+        )} */}
         {toastError && (
           <ToastExito
             titulo="Error en TotalPass"

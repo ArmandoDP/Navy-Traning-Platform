@@ -145,7 +145,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     const { data: reserva, error } = await supabase.from('reservas').insert([{
       cliente_id:   clienteSeleccionado.id,
       clase_id:     claseSeleccionada.id,
-      estatus:      'Pendiente',
+      estatus:      'Confirmada',
       lista_espera: llena,
       origen:       'CRM',
     }]).select().single()

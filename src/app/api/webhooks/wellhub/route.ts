@@ -41,11 +41,12 @@ export async function POST(req: NextRequest) {
 
         if (!clienteExistente) {
           await supabase.from('clientes').insert({
-            nombre_completo: `${user.first_name} ${user.last_name}`,
+            nombre_completo: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || 'Usuario Wellhub',
             email:            user.email,
-            telefono:         user.phone_number,
+            telefono:         user.phone_number || null,
             estatus:          'Activo',
             plan:             'Wellhub',
+            origen:           'Wellhub',  // ← agrega esto
           })
         }
 
@@ -91,27 +92,44 @@ export async function POST(req: NextRequest) {
         .eq('wellhub_slot_id', String(slot.id))
         .single()
 
-      const { data: clienteExistente } = await supabase
+      // Buscar cliente existente
+      let { data: clienteExistente } = await supabase
         .from('clientes')
         .select('id')
         .eq('email', user.email)
-        .single()
+        .maybeSingle()
 
-      if (clase && clienteExistente) {
+      // Crear cliente si no existe
+      if (!clienteExistente && user.email) {
+        const nombreCompleto = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || 'Usuario Wellhub'
+        const { data: nuevoCliente } = await supabase.from('clientes').insert({
+          nombre_completo: nombreCompleto,
+          email:           user.email,
+          telefono:        user.phone_number || null,
+          estatus:         'Activo',
+          plan:            'Wellhub',
+          origen:          'Wellhub',
+        }).select('id').single()
+        clienteExistente = nuevoCliente
+        console.log(`Cliente Wellhub creado: ${user.email}`)
+      }
+
+      let clienteId = clienteExistente?.id ?? null
+
+      // Anti-duplicado por cliente + clase
+      if (clase && clienteId) {
         const { data: reservaExistente } = await supabase
           .from('reservas')
           .select('id')
-          .eq('cliente_id', clienteExistente.id)
+          .eq('cliente_id', clienteId)
           .eq('clase_id', clase.id)
           .maybeSingle()
 
         if (reservaExistente) {
-          console.log('Reserva duplicada ignorada:', clienteExistente.id, clase.id)
+          console.log('Reserva duplicada ignorada:', clienteId, clase.id)
           return NextResponse.json({ ok: true, duplicado: true })
         }
       }
-
-      let clienteId = clienteExistente?.id ?? null
 
       const { data: booking } = await supabase.from('wellhub_bookings').insert({
         booking_number:   slot.booking_number,
@@ -145,20 +163,18 @@ export async function POST(req: NextRequest) {
             .eq('id', booking?.id)
 
           if (clase) {
-            // Insert protegido — si falla por duplicado no incrementa cupos
             const { error: insertError } = await supabase.from('reservas').insert({
               clase_id:       clase.id,
               cliente_id:     clienteId,
               estatus:        'Confirmada',
               origen:         'Wellhub',
-              nombre_externo: !clienteId ? (user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim()) : null,
-              email_externo:  !clienteId ? user.email : null,
+              nombre_externo: null,
+              email_externo:  null,
             })
 
             if (insertError) {
               console.warn('Reserva duplicada o error al insertar — no se incrementan cupos:', insertError.message)
             } else {
-              // Solo incrementar si el insert fue exitoso
               const nuevosOcupados = count + 1
               await supabase.from('clases')
                 .update({ espacios_ocupados: nuevosOcupados })
