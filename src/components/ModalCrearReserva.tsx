@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { X, Search, Check, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Search, Check, AlertCircle } from 'lucide-react'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Cliente {
@@ -107,7 +107,6 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     if (!claseSeleccionada) { setSpots([]); return }
     const cargarSpots = async () => {
       const { data } = await supabase.from('spots').select('*').eq('clase_id', claseSeleccionada.id)
-      // Generar spots del 1 al capacidad_max si no existen
       const spotsExistentes = data || []
       const todosSpots = Array.from({ length: claseSeleccionada.capacidad_max }, (_, i) => {
         const existe = spotsExistentes.find((s: Spot) => s.numero === i + 1)
@@ -141,12 +140,6 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
 
     // Verificar cupo
     const reservasActivas = claseSeleccionada.total_reservas || 0
-    if (reservasActivas >= claseSeleccionada.capacidad_max) {
-      setModalLlena(true) 
-      setLoading(false)
-      return
-    }
-
     const llena = reservasActivas >= claseSeleccionada.capacidad_max
 
     const { data: reserva, error } = await supabase.from('reservas').insert([{
@@ -189,14 +182,14 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
           body: JSON.stringify({
             occurrence_uuid: claseSeleccionada.totalpass_occurrence_uuid,
             sucursal_id:     claseSeleccionada.sucursal_id,
-            slots:           claseSeleccionada.capacidad_max - (reservasActivas + 1),
+            slots:           Math.max(0, claseSeleccionada.capacidad_max - (reservasActivas + 1)),
           }),
         })
       } catch (e) { console.warn('Error actualizando TotalPass:', e) }
     }
 
-    // Si eligió spot, guardarlo
-    if (spotSeleccionado && reserva) {
+    // Si eligió spot y la clase no está llena, guardarlo
+    if (spotSeleccionado && reserva && !llena) {
       await supabase.from('spots').upsert({
         clase_id:   claseSeleccionada.id,
         numero:     spotSeleccionado,
@@ -237,11 +230,6 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     return mismaFecha && sucOk && horOk
   })
 
-  const clientesFiltrados = clientes.filter(c =>
-    !busCliente || c.nombre_completo.toLowerCase().includes(busCliente.toLowerCase()) ||
-    c.email.toLowerCase().includes(busCliente.toLowerCase())
-  )
-
   // ── Spot colors ───────────────────────────────────────────────────────────────
   const getSpotStyle = (spot: Spot, num: number) => {
     if (spot.estatus === 'coach')     return 'bg-gray-800 text-white'
@@ -254,7 +242,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
   const DIAS_SHORT = ['dom','lun','mar','mié','jue','vie','sáb']
   const MESES_SHORT = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
 
-  const llena = claseSeleccionada && (claseSeleccionada.total_reservas || 0) >= claseSeleccionada.capacidad_max
+  const llena = claseSeleccionada ? (claseSeleccionada.total_reservas || 0) >= claseSeleccionada.capacidad_max : false
 
   if (!isOpen) return null
 
@@ -280,7 +268,6 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
         {/* ── PASO 1: Cliente ── */}
         {step === 1 && (
           <div className="px-6 pb-4">
-            {/* Buscador */}
             <div className="relative mb-3">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
               <input
@@ -292,12 +279,10 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
               />
             </div>
 
-            {/* Contador */}
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
               Cliente · {clientes.length} resultados
             </p>
 
-            {/* Lista de clientes */}
             <div className="space-y-1 max-h-72 overflow-y-auto">
               {clientes.map(c => {
                 const selected = clienteSeleccionado?.id === c.id
@@ -321,7 +306,6 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
               })}
             </div>
 
-            {/* Cliente seleccionado — card verde */}
             {clienteSeleccionado && (
               <div className="mt-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
                 <Check size={14} className="text-green-600 flex-shrink-0"/>
@@ -342,10 +326,9 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
         {/* ── PASO 2: Clase ── */}
         {step === 2 && (
           <div className="px-6 pb-4 space-y-4">
-            {/* Resumen cliente */}
             <p className="text-sm font-bold text-gray-900">{clienteSeleccionado?.nombre_completo}</p>
 
-            {/* Filtro sucursales */}
+            {/* Sucursales */}
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Sucursal</p>
               <div className="flex gap-2 flex-wrap">
@@ -366,7 +349,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
               </div>
             </div>
 
-            {/* Selector de fecha */}
+            {/* Fecha */}
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Fecha</p>
               <div className="flex gap-1.5 overflow-x-auto pb-1">
@@ -388,7 +371,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
               </div>
             </div>
 
-            {/* Filtro horario */}
+            {/* Horario */}
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Horario</p>
               <div className="flex gap-2">
@@ -403,7 +386,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
               </div>
             </div>
 
-            {/* Lista de clases */}
+            {/* Lista de clases con bloqueo por sobrecupo */}
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
                 {clasesFiltradas.length} clases disponibles
@@ -414,13 +397,25 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
                 ) : clasesFiltradas.map(c => {
                   const hora      = new Date(c.horario).toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', hour12: false })
                   const reservas  = c.total_reservas || 0
+                  const estaLlena = reservas >= c.capacidad_max
                   const selected  = claseSeleccionada?.id === c.id
                   const tipo      = c.tipo_clase || 'General'
                   const color     = c.sucursales?.color || '#6366f1'
+                  
                   return (
-                    <button key={c.id} onClick={() => setClaseSeleccionada(selected ? null : c)}
+                    <button 
+                      key={c.id} 
+                      disabled={estaLlena}
+                      onClick={() => {
+                        if (estaLlena) return
+                        setClaseSeleccionada(selected ? null : c)
+                      }}
                       className={`w-full text-left px-4 py-3 rounded-xl border-2 transition flex items-center gap-3 ${
-                        selected ? 'border-gray-900 bg-gray-50' : 'border-gray-100 hover:border-gray-300 bg-white'
+                        estaLlena 
+                          ? 'opacity-50 bg-gray-50 border-red-200 cursor-not-allowed' 
+                          : selected 
+                          ? 'border-gray-900 bg-gray-50 cursor-pointer' 
+                          : 'border-gray-100 hover:border-gray-300 bg-white cursor-pointer'
                       }`}>
                       <span className="text-sm font-black text-gray-900 w-12 flex-shrink-0">{hora}</span>
                       <div className="w-0.5 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: color }}/>
@@ -429,7 +424,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
                         <p className="text-xs text-gray-400">{tipo} · {c.salon} · {(c as any).duracion_minutos || 60} min</p>
                       </div>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                        reservas >= c.capacidad_max ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
+                        estaLlena ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
                       }`}>
                         {reservas}/{c.capacidad_max}
                       </span>
@@ -451,7 +446,6 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
         {/* ── PASO 3: Spot ── */}
         {step === 3 && (
           <div className="px-6 pb-4 space-y-4">
-            {/* Resumen */}
             <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
               <span className="font-bold text-gray-900">{clienteSeleccionado?.nombre_completo}</span>
               <span>·</span>
@@ -468,7 +462,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
             <div className="grid grid-cols-5 gap-2">
               {spots.map(spot => {
                 const esCoach    = spot.estatus === 'coach'
-                const bloqueado  = spot.estatus === 'bloqueado' || spot.estatus === 'ocupado'
+                const bloqueado  = spot.estatus === 'bloqueado' || spot.estatus === 'ocupado' || llena
                 return (
                   <div key={spot.numero} className="relative">
                     {esCoach && (
@@ -491,7 +485,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
             {/* Leyenda */}
             <div className="flex items-center gap-4 flex-wrap">
               {[
-                { label: `Disponible · ${spots.filter(s => s.estatus === 'disponible').length}`, cls: 'border-2 border-gray-200 bg-white' },
+                { label: `Disponible · ${llena ? 0 : spots.filter(s => s.estatus === 'disponible').length}`, cls: 'border-2 border-gray-200 bg-white' },
                 { label: `Seleccionado`, cls: 'bg-gray-900' },
                 { label: `Ocupado · ${spots.filter(s => s.estatus === 'ocupado').length}`, cls: 'bg-gray-700' },
                 { label: `Bloqueado · ${spots.filter(s => s.estatus === 'bloqueado').length}`, cls: 'bg-gray-200' },
@@ -529,22 +523,23 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
               onClick={() => setStep(s => (s + 1) as 1|2|3)}
               disabled={
                 (step === 1 && !clienteSeleccionado) ||
-                (step === 2 && (!claseSeleccionada || yaReservado))
+                (step === 2 && (!claseSeleccionada || yaReservado || (claseSeleccionada.total_reservas || 0) >= claseSeleccionada.capacidad_max))
               }
-              className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition">
+              className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition cursor-pointer">
               Continuar
             </button>
           ) : (
             <button onClick={handleSubmit} disabled={loading}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition">
+              className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition cursor-pointer">
               <Check size={15}/>
-              {loading ? 'Creando...' : 'Crear reserva'}
+              {loading ? 'Procesando...' : llena ? 'Agregar a lista de espera' : 'Crear reserva'}
             </button>
           )}
         </div>
 
       </div>
-      {/* Modal clase llena */}
+
+      {/* Modal suplementario de sobrecupo */}
       {modalLlena && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden">

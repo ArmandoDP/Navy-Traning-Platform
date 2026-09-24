@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { supabase }            from '@/lib/supabase'
+import { supabase }           from '@/lib/supabase'
 import type { ClaseData }      from './DrawerClaseMuestra'
 
 interface Props {
@@ -28,20 +28,15 @@ export default function PasoSpot({ clase, guardando, onConfirmar, onBack }: Prop
       const { data: room } = await supabase.from('rooms')
         .select('layout, ancho, alto, room_spots(id, numero, tipo, fila, columna, bloqueado)')
         .eq('id', clase.roomId).single()
-        
-        console.log('room data:', room)
 
       const { data: reservas } = await supabase.from('reservas')
         .select('spot_id').eq('clase_id', clase.claseId)
-        .in('estatus', ['Confirmada', 'Asistida'])  // ← agrega Asistida
+        .in('estatus', ['Confirmada', 'Asistida'])
         .not('spot_id', 'is', null)
 
       setLayoutCeldas(Array.isArray(room?.layout) ? room.layout : [])
       setRoomSpots(room?.room_spots || [])
-      console.log('render roomSpots:', roomSpots, 'layoutCeldas:', layoutCeldas.length)
       setOcupados(reservas?.map((r: any) => r.spot_id).filter(Boolean) || [])
-      console.log('ocupados:', ocupados)
-        console.log('roomSpots:', roomSpots)
       setLoading(false)
     }
     fetchRoom()
@@ -56,12 +51,26 @@ export default function PasoSpot({ clase, guardando, onConfirmar, onBack }: Prop
   const gridW  = (maxCol + 1) * (CELL + GAP)
   const gridH  = (maxFil + 1) * (CELL + GAP)
 
+  // Cálculo de disponibilidad real del salón
+  const totalSpots = roomSpots.filter((rs: any) => !rs.bloqueado).length
+  const disponiblesCount = Math.max(0, totalSpots - ocupados.length)
+  const sinLugares = disponiblesCount === 0
+
   return (
     <div className="px-6 py-5 space-y-5 pb-28">
       <div>
         <p className="text-sm font-black text-gray-900 mb-1">Elige el spot</p>
         <p className="text-xs text-gray-400">Selecciona el lugar disponible para el prospecto</p>
       </div>
+
+      {/* Alerta de clase llena */}
+      {sinLugares && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-xs font-bold text-amber-800">
+            ⚠️ Esta clase alcanzó su límite de capacidad ({ocupados.length}/{totalSpots} ocupados).
+          </p>
+        </div>
+      )}
 
       {/* Leyenda */}
       <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -96,7 +105,6 @@ export default function PasoSpot({ clase, guardando, onConfirmar, onBack }: Prop
                 </div>
               )
 
-              // Buscar el room_spot correspondiente
               const spot = roomSpots.find((rs: any) => rs.fila === celda.fila && rs.columna === celda.columna)
               if (!spot) return null
 
@@ -139,8 +147,10 @@ export default function PasoSpot({ clase, guardando, onConfirmar, onBack }: Prop
           className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
           ← Atrás
         </button>
-        <button onClick={() => onConfirmar(spotSel, spotSelNum)} disabled={guardando}
-          className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-700 transition disabled:opacity-40">
+        <button 
+          onClick={() => onConfirmar(spotSel, spotSelNum)} 
+          disabled={guardando || !spotSel}
+          className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
           {guardando ? 'Confirmando...' : 'Confirmar y enviar correo →'}
         </button>
       </div>
