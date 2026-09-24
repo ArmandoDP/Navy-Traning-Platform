@@ -28,7 +28,54 @@ export default function ClientesPage() {
       .order('created_at', { ascending: false })
     if (sucursalId) q = q.eq('sucursal_id', sucursalId)
     const { data, error } = await q
-    if (!error && data) setClientes(data)
+    if (!error && data) {
+      
+      // Calcular inicio del mes
+      const inicioMes = new Date()
+      inicioMes.setDate(1)
+      inicioMes.setHours(0, 0, 0, 0)
+
+      // Traer asistencias
+      const { data: asistencias } = await supabase
+        .from('asistencias')
+        .select('cliente_id, fecha_checkin')
+
+      // Traer reservas para calcular asistencia %
+      const { data: reservas } = await supabase
+        .from('reservas')
+        .select('cliente_id, estatus')
+        .neq('estatus', 'Cancelada')
+
+      // Enriquecer clientes con datos calculados
+      const enriquecidos = data.map(c => {
+        const asistCliente = asistencias?.filter(a => a.cliente_id === c.id) || []
+        const reservasCliente = reservas?.filter(r => r.cliente_id === c.id) || []
+        
+        // Clases este mes
+        const clasesMes = asistCliente.filter(a => 
+          a.fecha_checkin && new Date(a.fecha_checkin) >= inicioMes
+        ).length
+
+        // Última visita
+        const ultimaVisita = asistCliente.length > 0
+          ? asistCliente.sort((a, b) => new Date(b.fecha_checkin).getTime() - new Date(a.fecha_checkin).getTime())[0].fecha_checkin
+          : undefined
+
+        // Asistencia %
+        const asistenciaPct = reservasCliente.length > 0
+          ? Math.round((asistCliente.length / reservasCliente.length) * 100)
+          : 0
+
+        return {
+          ...c,
+          clases_mes:    clasesMes,
+          ultima_visita: ultimaVisita,
+          asistencia_pct: asistenciaPct,
+        }
+      })
+
+      setClientes(enriquecidos)
+    }
     setLoading(false)
   }
 
