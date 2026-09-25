@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
         if (!clienteExistente) {
           await supabase.from('clientes').insert({
-            nombre_completo: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || 'Usuario Wellhub',
+            nombre_completo: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Usuario Wellhub',
             email:            user.email,
             telefono:         user.phone_number || null,
             estatus:          'Activo',
@@ -98,10 +98,16 @@ export async function POST(req: NextRequest) {
         .select('id')
         .eq('email', user.email)
         .maybeSingle()
+      
+      // Obtener sucursal por gym_id
+      const GYM_SUCURSAL: Record<string, string> = {
+        '848637': '1b2032dc-f5da-40c6-8c4e-e227be14673b', // Condesa Gym
+        '848638': 'f8f798a8-d89b-4874-a53a-cdcb6325ad2a', // Condesa Studio
+      }
 
       // Crear cliente si no existe
       if (!clienteExistente && user.email) {
-        const nombreCompleto = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || 'Usuario Wellhub'
+        const nombreCompleto = user.name || 'Usuario Wellhub'
         const { data: nuevoCliente } = await supabase.from('clientes').insert({
           nombre_completo: nombreCompleto,
           email:           user.email,
@@ -109,11 +115,13 @@ export async function POST(req: NextRequest) {
           estatus:         'Activo',
           plan:            'Wellhub',
           origen:          'Wellhub',
+          sucursal_id:     GYM_SUCURSAL[String(slot.gym_id)] || null,
         }).select('id').single()
         clienteExistente = nuevoCliente
         console.log(`Cliente Wellhub creado: ${user.email}`)
       }
 
+      const sucursalId = GYM_SUCURSAL[String(slot.gym_id)] || null
       let clienteId = clienteExistente?.id ?? null
 
       // Anti-duplicado por cliente + clase
