@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     // 0. Obtener la sucursal de la clase para usar el gym_id y product_id correctos
     const { data: clase } = await supabase
       .from('clases')
-      .select('sucursal_id, salon')
+      .select('sucursal_id, salon, coach_id, staff(nombre, primer_apellido)')
       .eq('id', claseId)
       .single()
 
@@ -30,12 +30,17 @@ export async function POST(req: NextRequest) {
       .eq('clase_id', claseId)
       .neq('estatus', 'Cancelada')
 
+    const coachNombre = clase.staff && Array.isArray(clase.staff) && clase.staff.length > 0
+      ? `${clase.staff[0].nombre} ${clase.staff[0].primer_apellido}`.trim()
+      : undefined
+
     // 2. Crear el slot
     const slotData = await crearSlotWellhub(String(wellhubClassId), sucursalId, {
       fechaInicio: horario,
       duracionMin: duracionMinutos,
       capacidad:   capacidadMax,
       room:        clase.salon || 'Sala Principal',
+      coach:       coachNombre,
     })
 
     const wellhubSlotId = slotData.results[0].id

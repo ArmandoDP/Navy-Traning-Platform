@@ -70,13 +70,14 @@ export async function crearSlotWellhub(classId: string, sucursalId: string, para
   duracionMin: number
   capacidad:   number
   room?:       string
+  coach?:      string  // ← agrega esto
 }) {
   const { gymId, productId } = getWellhubConfig(sucursalId)
   const url = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots`
 
-  const occurDate = new Date(params.fechaInicio).toISOString() // con Z, UTC completo
+  const occurDate = new Date(params.fechaInicio).toISOString()
 
-  const payload = {
+  const payload: any = {
     occur_date:        occurDate,
     status:            1,
     room:              params.room || 'Sala Principal',
@@ -84,6 +85,10 @@ export async function crearSlotWellhub(classId: string, sucursalId: string, para
     total_capacity:    params.capacidad,
     total_booked:      0,
     product_id:        productId,
+  }
+
+  if (params.coach) {
+    payload.instructors = [{ name: params.coach, substitute: false }]
   }
 
   const res = await fetch(url, {
@@ -156,6 +161,23 @@ export async function actualizarCuposSlotWellhub(slotId: string, totalBooked: nu
     method:  'PATCH',
     headers: wellhubHeaders(),
     body: JSON.stringify({ total_booked: totalBooked }),
+  })
+  const text = await res.text()
+  let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
+  if (!res.ok) throw new Error(data?.message || `Error ${res.status}: ${text}`)
+  return data
+}
+
+// Actualizar el coach de un slot existente
+export async function actualizarCoachSlotWellhub(slotId: string, classId: string, coach: string, sucursalId?: string) {
+  const gymId = getGymId(sucursalId)
+  const url   = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots/${slotId}`
+  const res   = await fetch(url, {
+    method:  'PATCH',
+    headers: wellhubHeaders(),
+    body: JSON.stringify({
+      instructors: [{ name: coach, substitute: false }]
+    }),
   })
   const text = await res.text()
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }

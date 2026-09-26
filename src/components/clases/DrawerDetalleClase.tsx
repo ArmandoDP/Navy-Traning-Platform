@@ -274,6 +274,9 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             horario,
             duracion_minutos: form.duracion_minutos,
             capacidad_max:    form.capacidad_max,
+            coach:            coaches.find(c => c.id === form.coach_id)
+              ? `${coaches.find(c => c.id === form.coach_id)?.nombre} ${coaches.find(c => c.id === form.coach_id)?.primer_apellido}`.trim()
+              : undefined,
           }),
         })
       } catch (e) { console.warn('Error actualizando Wellhub:', e) }
@@ -324,10 +327,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       const res = await fetch('/api/wellhub/actualizar-slot', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          slotId:      clase.wellhub_slot_id,
-          horario:     clase.horario,
-          sucursalId:  clase.sucursal_id,
+        body: JSON.stringify({
+          slotId:     clase.wellhub_slot_id,
+          horario:    clase.horario,
+          sucursalId: clase.sucursal_id,
+          coach:      clase.staff ? `${clase.staff.nombre} ${clase.staff.primer_apellido}`.trim() : undefined,
         }),
       })
       fetchData()
