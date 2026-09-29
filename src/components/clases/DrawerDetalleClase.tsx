@@ -37,6 +37,10 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [toastMsg,          setToastMsg]          = useState('')
   const [modalEliminar,     setModalEliminar]     = useState(false)
   const [eliminando,        setEliminando]        = useState(false)
+  const [publicandoWellhub,   setPublicandoWellhub]   = useState(false)
+  const [publicandoTotalpass, setPublicandoTotalpass] = useState(false)
+  const [wellhubExito,        setWellhubExito]        = useState(false)
+  const [totalpassExito,      setTotalpassExito]      = useState(false)
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -342,12 +346,13 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   }
 
   const handlePublicarWellhub = async () => {
-    if (!clase || !claseId) return
+    if (!clase || !claseId || publicandoWellhub) return
+    setPublicandoWellhub(true)
     try {
       const res = await fetch('/api/wellhub/publicar-clase', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
+        body: JSON.stringify({
           claseId,
           nombre:          clase.nombre_clase,
           descripcion:     clase.descripcion || clase.nombre_clase,
@@ -356,14 +361,20 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           capacidadMax:    clase.capacidad_max,
         }),
       })
-      if (res.ok) fetchData()
+      if (res.ok) {
+        setWellhubExito(true)
+        fetchData()
+        setTimeout(() => setWellhubExito(false), 3000)
+      }
     } catch (e) {
       console.error('Error publicando en Wellhub:', e)
     }
+    setPublicandoWellhub(false)
   }
 
   const handlePublicarTotalpass = async () => {
-    if (!clase || !claseId) return
+    if (!clase || !claseId || publicandoTotalpass) return
+    setPublicandoTotalpass(true)
     try {
       const payload = {
         clase_id:         claseId,
@@ -382,8 +393,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       })
       if (res.ok) {
         await fetchData()
-        setToast(true)
-        setToastMsg('Clase publicada en TotalPass')
+        setTotalpassExito(true)
+        setTimeout(() => setTotalpassExito(false), 3000)
       } else {
         const err = await res.json().catch(() => ({ detail: res.statusText }))
         setToastError(true)
@@ -392,6 +403,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error publicando en TotalPass:', e)
     }
+    setPublicandoTotalpass(false)
   }
 
   if (!isOpen) return null
@@ -514,48 +526,151 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               {clase.descripcion && (
                 <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">{clase.descripcion}</p>
               )}
-              <div className="border border-gray-100 rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                  <p className="text-xs font-black text-gray-500 uppercase tracking-wide">Plataformas externas</p>
-                </div>
-                <div className="divide-y divide-gray-50">
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-gray-900">Wellhub</span>
-                      {enWellhub
-                        ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-50 text-orange-500">✓ Publicada · Slot {clase.wellhub_slot_id}</span>
-                        : <span className="text-xs text-gray-400">No publicada</span>}
+              <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+               {/* Plataformas externas */}
+                <div className="space-y-3">
+                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Plataformas externas</p>
+
+                  {/* Wellhub */}
+                  <div className={`rounded-2xl border-2 overflow-hidden transition-all duration-300 ${
+                    publicandoWellhub ? 'border-orange-300 bg-orange-50' :
+                    wellhubExito      ? 'border-emerald-300 bg-emerald-50' :
+                    enWellhub         ? 'border-orange-200 bg-white' :
+                    'border-gray-200 bg-gray-50'
+                  }`}>
+                    <div className="px-4 py-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${
+                            enWellhub ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'
+                          }`}>W</div>
+                          <div>
+                            <p className="text-sm font-black text-gray-900">Wellhub</p>
+                            <p className={`text-xs font-bold ${enWellhub ? 'text-orange-500' : 'text-gray-400'}`}>
+                              {enWellhub ? `Slot #${clase.wellhub_slot_id}` : 'No publicada'}
+                            </p>
+                          </div>
+                        </div>
+                        {!enWellhub ? (
+                          <button onClick={handlePublicarWellhub} disabled={publicandoWellhub}
+                            className={`flex items-center gap-2 text-sm font-black px-5 py-2.5 rounded-xl transition-all duration-200 ${
+                              publicandoWellhub
+                                ? 'bg-orange-500 text-white cursor-not-allowed scale-95'
+                                : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-105 shadow-lg shadow-orange-200'
+                            }`}>
+                            {publicandoWellhub ? (
+                              <><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Publicando...</>
+                            ) : '🚀 Publicar'}
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5">
+                            <span className="text-emerald-500 text-sm">✓</span>
+                            <span className="text-xs font-black text-emerald-600">Activa</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {enWellhub && (
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                          {[
+                            { label: 'Cupos',      val: clase.capacidad_max },
+                            { label: 'Ocupados',   val: clase.espacios_ocupados || 0 },
+                            { label: 'Libres',     val: (clase.capacidad_max || 0) - (clase.espacios_ocupados || 0) },
+                          ].map(m => (
+                            <div key={m.label} className="bg-orange-50 rounded-xl px-3 py-2 text-center">
+                              <p className="text-lg font-black text-orange-600">{m.val}</p>
+                              <p className="text-[10px] text-orange-400 uppercase tracking-wide">{m.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {enWellhub && (
+                        <button onClick={handleActualizarHorarioWellhub} disabled={sincronizado}
+                          className={`w-full py-2 rounded-xl text-xs font-black transition-all ${
+                            sincronizado
+                              ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                          }`}>
+                          {sincronizado ? '✓ Horario sincronizado' : '↻ Sincronizar horario'}
+                        </button>
+                      )}
                     </div>
-                    {!enWellhub && (
-                      <button onClick={handlePublicarWellhub}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 transition">
-                        Publicar
-                      </button>
+
+                    {publicandoWellhub && (
+                      <div className="h-1.5 bg-orange-100"><div className="h-1.5 bg-orange-500 animate-pulse" style={{ width: '70%' }} /></div>
                     )}
-                    {enWellhub && (
-                      <button onClick={handleActualizarHorarioWellhub}
-                        disabled={sincronizado}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
-                          sincronizado 
-                            ? 'bg-emerald-50 text-emerald-600 cursor-default' 
-                            : 'bg-pink-50 text-pink-600 hover:bg-pink-100'
-                        }`}>
-                        {sincronizado ? '✓ Horario sincronizado' : 'Sincronizar horario'}
-                      </button>
+                    {wellhubExito && (
+                      <div className="px-4 py-3 bg-emerald-100 flex items-center gap-2">
+                        <span className="text-xl">🎉</span>
+                        <p className="text-xs font-black text-emerald-700">¡Clase publicada en Wellhub exitosamente!</p>
+                      </div>
                     )}
                   </div>
-                  <div className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-gray-900">TotalPass</span>
-                      {enTotalpass
-                        ? <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-500">✓ Publicada</span>
-                        : <span className="text-xs text-gray-400">No publicada</span>}
+
+                  {/* TotalPass */}
+                  <div className={`rounded-2xl border-2 overflow-hidden transition-all duration-300 ${
+                    publicandoTotalpass ? 'border-blue-300 bg-blue-50' :
+                    totalpassExito      ? 'border-emerald-300 bg-emerald-50' :
+                    enTotalpass         ? 'border-blue-200 bg-white' :
+                    'border-gray-200 bg-gray-50'
+                  }`}>
+                    <div className="px-4 py-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${
+                            enTotalpass ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'
+                          }`}>T</div>
+                          <div>
+                            <p className="text-sm font-black text-gray-900">TotalPass</p>
+                            <p className={`text-xs font-bold ${enTotalpass ? 'text-blue-500' : 'text-gray-400'}`}>
+                              {enTotalpass ? `ID ${clase.totalpass_occurrence_uuid?.slice(0, 8)}...` : 'No publicada'}
+                            </p>
+                          </div>
+                        </div>
+                        {!enTotalpass && clase?.sucursal_id ? (
+                          <button onClick={handlePublicarTotalpass} disabled={publicandoTotalpass}
+                            className={`flex items-center gap-2 text-sm font-black px-5 py-2.5 rounded-xl transition-all duration-200 ${
+                              publicandoTotalpass
+                                ? 'bg-blue-500 text-white cursor-not-allowed scale-95'
+                                : 'bg-blue-500 text-white hover:bg-blue-600 hover:scale-105 shadow-lg shadow-blue-200'
+                            }`}>
+                            {publicandoTotalpass ? (
+                              <><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Publicando...</>
+                            ) : '🚀 Publicar'}
+                          </button>
+                        ) : enTotalpass ? (
+                          <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5">
+                            <span className="text-emerald-500 text-sm">✓</span>
+                            <span className="text-xs font-black text-emerald-600">Activa</span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {enTotalpass && (
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { label: 'Cupos',    val: clase.capacidad_max },
+                            { label: 'Ocupados', val: clase.espacios_ocupados || 0 },
+                            { label: 'Libres',   val: (clase.capacidad_max || 0) - (clase.espacios_ocupados || 0) },
+                          ].map(m => (
+                            <div key={m.label} className="bg-blue-50 rounded-xl px-3 py-2 text-center">
+                              <p className="text-lg font-black text-blue-600">{m.val}</p>
+                              <p className="text-[10px] text-blue-400 uppercase tracking-wide">{m.label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    {!enTotalpass && clase?.sucursal_id && (
-                      <button onClick={handlePublicarTotalpass}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition">
-                        Publicar
-                      </button>
+
+                    {publicandoTotalpass && (
+                      <div className="h-1.5 bg-blue-100"><div className="h-1.5 bg-blue-500 animate-pulse" style={{ width: '70%' }} /></div>
+                    )}
+                    {totalpassExito && (
+                      <div className="px-4 py-3 bg-emerald-100 flex items-center gap-2">
+                        <span className="text-xl">🎉</span>
+                        <p className="text-xs font-black text-emerald-700">¡Clase publicada en TotalPass exitosamente!</p>
+                      </div>
                     )}
                   </div>
                 </div>

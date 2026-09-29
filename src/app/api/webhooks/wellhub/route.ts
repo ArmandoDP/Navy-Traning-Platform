@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
       const { data: clase } = await supabase
         .from('clases')
-        .select('id, capacidad_max, espacios_ocupados, nombre_clase, horario')
+        .select('id, capacidad_max, espacios_ocupados, nombre_clase, horario, totalpass_occurrence_uuid, sucursal_id')
         .eq('wellhub_slot_id', String(slot.id))
         .single()
 
@@ -196,6 +196,23 @@ export async function POST(req: NextRequest) {
                 )
               } catch (e: any) {
                 console.error('Error actualizando cupos en Wellhub:', e.message)
+              }
+
+              // ← Actualizar cupos en TotalPass
+              if (clase.totalpass_occurrence_uuid && clase.sucursal_id) {
+                try {
+                  await fetch(`${process.env.BACKEND_URL}/totalpass-booking/actualizar-cupos`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      occurrence_uuid: clase.totalpass_occurrence_uuid,
+                      sucursal_id:     clase.sucursal_id,
+                      slots:           Math.max(0, (clase.capacidad_max || 0) - nuevosOcupados),
+                    }),
+                  })
+                } catch (e: any) {
+                  console.error('Error actualizando cupos TotalPass desde Wellhub:', e.message)
+                }
               }
             }
           }
