@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase }                  from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { validarAccesoWellhub, confirmarBookingWellhub, actualizarCuposSlotWellhub } from '@/lib/wellhub'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
+  console.log('Webhook Wellhub recibido:', body.event_type)
 
   try {
 
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
       // Crear cliente si no existe
       if (!clienteExistente && user.email) {
         const nombreCompleto = user.name || 'Usuario Wellhub'
-        const { data: nuevoCliente } = await supabase.from('clientes').insert({
+        const { data: nuevoCliente, error: errorCliente } = await supabase.from('clientes').insert({
           nombre_completo: nombreCompleto,
           email:           user.email,
           telefono:        user.phone_number || null,
@@ -119,6 +120,7 @@ export async function POST(req: NextRequest) {
           origen:          'Wellhub',
           sucursal_id:     GYM_SUCURSAL[String(slot.gym_id)] || null,
         }).select('id').single()
+        console.log('Insert cliente resultado:', nuevoCliente, errorCliente)
         clienteExistente = nuevoCliente
         console.log(`Cliente Wellhub creado: ${user.email}`)
       }
