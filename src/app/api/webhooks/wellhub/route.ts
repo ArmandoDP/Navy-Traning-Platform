@@ -99,6 +99,8 @@ export async function POST(req: NextRequest) {
         .eq('email', user.email)
         .maybeSingle()
       
+      console.log('clienteExistente:', clienteExistente, 'email:', user.email)
+      
       // Obtener sucursal por gym_id
       const GYM_SUCURSAL: Record<string, string> = {
         '848637': '1b2032dc-f5da-40c6-8c4e-e227be14673b', // Condesa Gym
