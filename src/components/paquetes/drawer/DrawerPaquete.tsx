@@ -195,74 +195,39 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       numero_clases:           form.clases_incluidas,
       max_usuarios:            form.max_usuarios,
       renovacion:              form.renovacion,
-      acceso_total:            form.acceso_total,            // ← faltaba
-      acceso_sucursal_hermana: form.acceso_sucursal_hermana, // ← faltaba
-      visible_en_app: form.visible_en_app,
-      penalizacion_noshow: form.penalizacion_noshow,
-      monto_penalizacion: form.monto_penalizacion,
-      es_recurrente: form.es_recurrente,
+      acceso_total:            form.acceso_total,
+      acceso_sucursal_hermana: form.acceso_sucursal_hermana,
+      visible_en_app:          form.visible_en_app,
+      penalizacion_noshow:     form.penalizacion_noshow,
+      monto_penalizacion:      form.monto_penalizacion,
+      es_recurrente:           form.es_recurrente,
       estatus,
     }
 
-    let paqueteId = paquete?.id
+    const res = await fetch('/api/paquetes', {
+      method: paquete?.id ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id:                paquete?.id,
+        payload,
+        precios,
+        accesosSucursales,
+        roomsSelected,
+        splits,
+      }),
+    })
 
-    if (paquete?.id) {
-      await supabase.from('paquetes').update(payload).eq('id', paquete.id)
-    } else {
-      const { data } = await supabase.from('paquetes').insert(payload).select().single()
-      paqueteId = data?.id
-    }
-
-    if (!paqueteId) { setLoading(false); return }
-
-    // Precios — borrar y reinsertar
-    await supabase.from('paquete_precios').delete().eq('paquete_id', paqueteId)
-    const preciosActivos = precios.filter(p => p.activo && p.precio_app)
-    if (preciosActivos.length > 0) {
-      await supabase.from('paquete_precios').insert(
-        preciosActivos.map(p => ({
-          paquete_id:   paqueteId,
-          sucursal_id:  p.sucursal_id,
-          activo:       true,
-          precio_app:   Number(p.precio_app),
-          activo_desde: p.activo_desde || null,
-        }))
-      )
-    }
-
-    // Después de guardar rooms:
-    await supabase.from('paquete_accesos_sucursales').delete().eq('paquete_id', paqueteId)
-    if (accesosSucursales.length > 0) {
-      await supabase.from('paquete_accesos_sucursales').insert(
-        accesosSucursales.map(sucursalId => ({ paquete_id: paqueteId, sucursal_id: sucursalId }))
-      )
-    }
-
-    // Rooms — borrar y reinsertar
-    await supabase.from('paquete_rooms').delete().eq('paquete_id', paqueteId)
-    if (roomsSelected.length > 0) {
-      await supabase.from('paquete_rooms').insert(
-        roomsSelected.map(roomId => ({ paquete_id: paqueteId, room_id: roomId }))
-      )
-    }
-
-    // Splits — borrar y reinsertar
-    await supabase.from('paquete_splits').delete().eq('paquete_id', paqueteId)
-    if (splits.length > 0) {
-      await supabase.from('paquete_splits').insert(
-        splits.map(s => ({
-          paquete_id:       paqueteId,
-          sucursal_origen:  s.sucursal_origen_id,
-          sucursal_destino: s.sucursal_destino_id,
-          porcentaje:       s.porcentaje,
-        }))
-      )
+    if (!res.ok) {
+      const err = await res.json()
+      alert('Error: ' + err.error)
+      setLoading(false)
+      return
     }
 
     setLoading(false)
     setToast(true)
     onSuccess()
-  }
+}
 
  const handleClose = () => {
     setForm({
@@ -282,17 +247,33 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
 
   const handleCambiarEstatus = async (estatus: string) => {
     if (!paquete?.id) return
-    await supabase.from('paquetes').update({ estatus }).eq('id', paquete.id)
-    onSuccess()
-    handleClose()
-    }
-
-  const handleEliminar = async () => {
-    if (!paquete?.id || !confirm('¿Eliminar este paquete? Esta acción no se puede deshacer.')) return
-    await supabase.from('paquetes').delete().eq('id', paquete.id)
+    await fetch('/api/paquetes', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: paquete.id,
+        payload: { estatus },
+        precios: [],
+        accesosSucursales: [],
+        roomsSelected: [],
+        splits: [],
+      }),
+    })
     onSuccess()
     handleClose()
   }
+
+  const handleEliminar = async () => {
+    if (!paquete?.id || !confirm('¿Eliminar este paquete?')) return
+    await fetch('/api/paquetes', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: paquete.id }),
+    })
+    onSuccess()
+    handleClose()
+  }
+  
   if (!isOpen) return null
 
   return (

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase }                  from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { validarAccesoWellhub, confirmarBookingWellhub, actualizarCuposSlotWellhub } from '@/lib/wellhub'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
+  console.log('Webhook Wellhub recibido:', body.event_type)
 
   try {
 
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
 
       const { data: clase } = await supabase
         .from('clases')
-        .select('id, capacidad_max, espacios_ocupados, nombre_clase, horario')
+        .select('id, capacidad_max, espacios_ocupados, nombre_clase, horario, totalpass_occurrence_uuid, sucursal_id')
         .eq('wellhub_slot_id', String(slot.id))
         .single()
 
@@ -99,6 +100,8 @@ export async function POST(req: NextRequest) {
         .eq('email', user.email)
         .maybeSingle()
       
+      console.log('clienteExistente:', clienteExistente, 'email:', user.email)
+      
       // Obtener sucursal por gym_id
       const GYM_SUCURSAL: Record<string, string> = {
         '848637': '1b2032dc-f5da-40c6-8c4e-e227be14673b', // Condesa Gym
@@ -108,7 +111,7 @@ export async function POST(req: NextRequest) {
       // Crear cliente si no existe
       if (!clienteExistente && user.email) {
         const nombreCompleto = user.name || 'Usuario Wellhub'
-        const { data: nuevoCliente } = await supabase.from('clientes').insert({
+        const { data: nuevoCliente, error: errorCliente } = await supabase.from('clientes').insert({
           nombre_completo: nombreCompleto,
           email:           user.email,
           telefono:        user.phone_number || null,
@@ -117,6 +120,7 @@ export async function POST(req: NextRequest) {
           origen:          'Wellhub',
           sucursal_id:     GYM_SUCURSAL[String(slot.gym_id)] || null,
         }).select('id').single()
+        console.log('Insert cliente resultado:', nuevoCliente, errorCliente)
         clienteExistente = nuevoCliente
         console.log(`Cliente Wellhub creado: ${user.email}`)
       }
@@ -196,6 +200,23 @@ export async function POST(req: NextRequest) {
                 )
               } catch (e: any) {
                 console.error('Error actualizando cupos en Wellhub:', e.message)
+              }
+
+              // ← Actualizar cupos en TotalPass
+              if (clase.totalpass_occurrence_uuid && clase.sucursal_id) {
+                try {
+                  await fetch(`${process.env.BACKEND_URL}/totalpass-booking/actualizar-cupos`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      occurrence_uuid: clase.totalpass_occurrence_uuid,
+                      sucursal_id:     clase.sucursal_id,
+                      slots:           Math.max(0, (clase.capacidad_max || 0) - nuevosOcupados),
+                    }),
+                  })
+                } catch (e: any) {
+                  console.error('Error actualizando cupos TotalPass desde Wellhub:', e.message)
+                }
               }
             }
           }

@@ -6,15 +6,26 @@ export async function POST(req: NextRequest) {
   try {
     const { claseId, nombre, descripcion, horario, duracionMinutos, capacidadMax } = await req.json()
 
-    // 0. Obtener la sucursal de la clase para usar el gym_id y product_id correctos
+    // 0. Obtener la sucursal de la clase
     const { data: clase } = await supabase
       .from('clases')
-      .select('sucursal_id, salon, coach_id, staff(nombre, primer_apellido)')
+      .select('sucursal_id, salon, coach_id, wellhub_slot_id, wellhub_class_id, staff(nombre, primer_apellido)')
       .eq('id', claseId)
       .single()
 
     if (!clase?.sucursal_id) {
       return NextResponse.json({ error: 'Clase sin sucursal asignada' }, { status: 400 })
+    }
+
+    // ← NUEVO: Si ya está publicada, no crear duplicado
+    if (clase.wellhub_slot_id && clase.wellhub_class_id) {
+      console.log(`Clase ${claseId} ya publicada en Wellhub — slot ${clase.wellhub_slot_id}`)
+      return NextResponse.json({
+        success:          true,
+        already_published: true,
+        wellhub_class_id: clase.wellhub_class_id,
+        wellhub_slot_id:  clase.wellhub_slot_id,
+      })
     }
 
     const sucursalId = clase.sucursal_id
