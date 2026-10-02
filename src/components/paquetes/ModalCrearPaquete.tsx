@@ -46,19 +46,22 @@ export default function ModalCrearPaquete({ isOpen, onClose, onSuccess, paquete 
       estatus:       formData.estatus,
     }
 
-    const { error } = editando
-      ? await supabase.from('paquetes').update(payload).eq('id', paquete.id)
-      : await supabase.from('paquetes').insert([payload])
+    const res = await fetch('/api/paquetes', {
+      method: editando ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editando ? { id: paquete.id, ...payload } : payload),
+    })
 
-    if (error) {
-      alert('Error: ' + error.message)
+    if (!res.ok) {
+      const err = await res.json()
+      alert('Error: ' + err.error)
     } else {
       onSuccess()
       onClose()
     }
     setLoading(false)
   }
-
+  
   if (!isOpen) return null
 
   return (
