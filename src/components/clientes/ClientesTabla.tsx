@@ -76,7 +76,7 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [pagina,    setPagina]    = useState(1)
   const [orden,     setOrden]     = useState<{ col: string; dir: 'asc'|'desc' }>({ col: '', dir: 'asc' })
-  const [filtros, setFiltros] = useState({ nombre: '', sucursal: '', plan: '', fecha: '', estado: '', canal: '' })
+  const [filtros, setFiltros]     = useState({ nombre: '', sucursal: '', plan: '', fecha: '', estado: '', canal: '' })
 
   const hoy = new Date()
 
@@ -92,15 +92,30 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
     return true
   })
 
+  // ── Búsqueda Global y Filtrado Flexible ────────────
   const filtrados = porTab.filter(c => {
-    const nombre   = c.nombre_completo?.toLowerCase() || ''
-    const email    = c.email?.toLowerCase() || ''
-    const sucursal = c.sucursales?.nombre?.toLowerCase() || ''
-    const plan     = c.plan?.toLowerCase() || ''
-    const fecha    = c.created_at?.slice(0, 10) || ''
+    const q = (filtros.nombre || '').toLowerCase().trim()
+
+    const nombreCompleto = `${c.nombre_completo || ''} ${(c as any).nombre || ''} ${(c as any).primer_apellido || ''} ${(c as any).segundo_apellido || ''}`.toLowerCase()
+    const email = (c.email || '').toLowerCase()
+    const telefono = ((c as any).telefono || '').toLowerCase()
+    const sucursal = (c.sucursales?.nombre || '').toLowerCase()
+    const plan = (c.plan || '').toLowerCase()
+    const fecha = c.created_at?.slice(0, 10) || ''
+
+    // Coincidencia amplia si el usuario escribe en la barra de búsqueda
+    const haceMatchBusqueda = !q || 
+      nombreCompleto.includes(q) || 
+      email.includes(q) || 
+      telefono.includes(q) ||
+      sucursal.includes(q)
+
+    // Si hay búsqueda por texto activo (q), ignoramos la restricción rígida de sucursal para encontrar al cliente sin importar dónde esté
+    const evalSucursal = q ? true : (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase()))
+
     return (
-      (!filtros.nombre   || nombre.includes(filtros.nombre.toLowerCase()) || email.includes(filtros.nombre.toLowerCase())) &&
-      (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase())) &&
+      haceMatchBusqueda &&
+      evalSucursal &&
       (!filtros.plan     || plan.includes(filtros.plan.toLowerCase())) &&
       (!filtros.fecha    || fecha === filtros.fecha) &&
       (!filtros.canal    || getCanal(c) === filtros.canal) &&
@@ -133,6 +148,7 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
   const sortIcon = (col: string) => <span className="text-gray-300 ml-0.5 text-[10px]">{orden.col === col ? (orden.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
   const antiguedad = (fecha: string) => {
+    if (!fecha) return { label: '—', color: 'text-gray-300' }
     const dias = Math.floor((hoy.getTime() - new Date(fecha).getTime()) / (1000 * 3600 * 24))
     if (dias < 1)   return { label: 'Hoy',              color: 'text-emerald-600 font-bold' }
     if (dias < 7)   return { label: `${dias} días`,     color: 'text-emerald-500' }
@@ -306,7 +322,7 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
                   {/* Alta */}
                   <td className="px-4 py-3 min-w-[90px]">
                     <p className="text-xs text-gray-700">
-                      {new Date(c.fecha_alta_original || c.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'2-digit' })}
+                      {c.created_at || c.fecha_alta_original ? new Date(c.fecha_alta_original || c.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'2-digit' }) : '—'}
                     </p>
                   </td>
 
@@ -355,32 +371,34 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
         </table>
       </div>
 
-      {/* Paginación */}
+      {/* Paginación dinámicamente extensible */}
       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
         <div className="flex items-center gap-1">
           <button onClick={() => setPagina(p => Math.max(1, p-1))} disabled={pagina === 1}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 disabled:opacity-30 transition">
             <ChevronLeft size={15}/>
           </button>
-          {Array.from({ length: Math.min(totalPags, 5) }, (_, i) => i + 1).map(n => (
-            <button key={n} onClick={() => setPagina(n)}
-              className={`w-7 h-7 rounded-lg text-xs font-bold transition ${pagina === n ? 'bg-gray-900 text-white' : 'hover:bg-gray-100 text-gray-500'}`}>
-              {n}
-            </button>
-          ))}
-          {totalPags > 5 && <>
-            <span className="text-gray-400 text-xs px-1">...</span>
-            <button onClick={() => setPagina(totalPags)}
-              className={`w-7 h-7 rounded-lg text-xs font-bold transition ${pagina === totalPags ? 'bg-gray-900 text-white' : 'hover:bg-gray-100 text-gray-500'}`}>
-              {totalPags}
-            </button>
-          </>}
+
+          {Array.from({ length: totalPags }, (_, i) => i + 1)
+            .filter(n => n === 1 || n === totalPags || Math.abs(n - pagina) <= 1)
+            .map((n, idx, arr) => (
+              <div key={n} className="flex items-center">
+                {idx > 0 && arr[idx - 1] !== n - 1 && (
+                  <span className="text-gray-400 text-xs px-1">...</span>
+                )}
+                <button onClick={() => setPagina(n)}
+                  className={`w-7 h-7 rounded-lg text-xs font-bold transition ${pagina === n ? 'bg-gray-900 text-white' : 'hover:bg-gray-100 text-gray-500'}`}>
+                  {n}
+                </button>
+              </div>
+            ))}
+
           <button onClick={() => setPagina(p => Math.min(totalPags, p+1))} disabled={pagina === totalPags}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 disabled:opacity-30 transition">
             <ChevronR size={15}/>
           </button>
         </div>
-        <p className="text-xs text-gray-400">Resultados por página <span className="font-bold text-gray-600">{POR_PAGINA}</span></p>
+        <p className="text-xs text-gray-400">Página <span className="font-bold text-gray-600">{pagina}</span> de <span className="font-bold text-gray-600">{totalPags}</span></p>
       </div>
     </div>
   )

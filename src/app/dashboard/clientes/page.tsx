@@ -19,14 +19,17 @@ export default function ClientesPage() {
   const [drawerOpen,      setDrawerOpen]      = useState(false)
   const [editarCliente,   setEditarCliente]   = useState<any | null>(null)
   const [editarOpen,      setEditarOpen]      = useState(false)
+  const [exportando,      setExportando]      = useState(false)
 
   const fetchClientes = async () => {
     setLoading(true)
     let q = supabase
       .from('clientes')
-      .select('*, sucursales(nombre, color), pagos(monto, estatus), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))')
+      .select('*, sucursales(nombre, color), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))')
       .order('created_at', { ascending: false })
-    if (sucursalId) q = q.eq('sucursal_id', sucursalId)
+    if (sucursalId && sucursalId !== 'global' ){
+       q = q.eq('sucursal_id', sucursalId)
+    }
     const { data, error } = await q
     if (!error && data) {
       
@@ -52,7 +55,7 @@ export default function ClientesPage() {
         const reservasCliente = reservas?.filter(r => r.cliente_id === c.id) || []
         
         // Clases este mes
-        const clasesMes = asistCliente.filter(a => 
+        const clasesMes = asistCliente.filter(a =>
           a.fecha_checkin && new Date(a.fecha_checkin) >= inicioMes
         ).length
 
@@ -81,22 +84,143 @@ export default function ClientesPage() {
 
   useEffect(() => { fetchClientes() }, [sucursalId])
 
-  // ── Exportar CSV ─────────────────────────────────────────────────────────────
-  const handleExportar = () => {
-    const headers = ['Nombre','Email','Sucursal','Plan','Estatus','Asistencia %','Valor','Alta']
-    const rows = clientes.map(c => [
-      c.nombre_completo, c.email,
-      c.sucursales?.nombre || '', c.plan || '',
-      c.perdido ? 'Perdido' : c.estatus,
-      c.asistencia_pct || 0, c.valor_cliente || 0,
-      new Date(c.created_at).toLocaleDateString('es-MX'),
-    ])
-    const csv  = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href = url; a.download = `clientes-${new Date().toISOString().slice(0,10)}.csv`
-    a.click(); URL.revokeObjectURL(url)
+  // ── Auxiliar para extraer texto limpio de método de pago ─────────────────
+  const extraerTextoMetodo = (valor: any): string | null => {
+    if (!valor) return null
+    if (typeof valor === 'string' && valor.trim() !== '') return valor.trim()
+    if (typeof valor === 'object') {
+      const val = valor.nombre || valor.metodo || valor.tipo || valor.label || valor.brand
+      if (val && typeof val === 'string' && val.trim() !== '') return val.trim()
+    }
+    return null
+  }
+
+  // ── Exportar CSV Completo ──────────────────────────────────────────────────
+  const handleExportar = async () => {
+    try {
+      setExportando(true)
+
+      if (!clientes || clientes.length === 0) {
+        alert('No hay clientes en la lista para exportar.')
+        setExportando(false)
+        return
+      }
+
+      // Traer todos los pagos con todos los posibles nombres de columnas de método
+      const { data: pagosData } = await supabase
+        .from('pagos')
+        .select('*')
+
+      const headers = [
+        'Nombre Completo',
+        'Email',
+        'Teléfono',
+        'Sucursal',
+        'Canal / Origen',
+        'Estatus',
+        'Plan / Paquete',
+        'Fecha Alta',
+        'Vencimiento Membresía',
+        'Método de Pago',
+        'Última Visita',
+        'Clases este Mes',
+        'Asistencia %',
+        '¿Reservó Clase Muestra?',
+        '¿Asistió a Muestra?',
+        'Valor de Cliente (LTV)'
+      ]
+
+      const rows = clientes.map(c => {
+        const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
+        const miMembresia = membresiasList[0]
+        const fechaVencimiento = c.fecha_vencimiento_memb || c.fecha_venc_plan || miMembresia?.fecha_fin
+
+        const nombreSucursal = c.sucursales?.nombre || ''
+        const paqueteObj = miMembresia?.paquetes ? (Array.isArray(miMembresia.paquetes) ? miMembresia.paquetes[0] : miMembresia.paquetes) : null
+        const nombrePlan = c.plan || paqueteObj?.nombre || ''
+
+        // Buscar todos los pagos del cliente
+        const pagosCliente = pagosData?.filter((p: any) => p.cliente_id === c.id) || []
+        
+        // Ordenar por la fecha de pago o creación más reciente
+        const pagosOrdenados = [...pagosCliente].sort(
+          (a: any, b: any) => new Date(b.created_at || b.fecha_pago || b.fecha || 0).getTime() - new Date(a.created_at || a.fecha_pago || a.fecha || 0).getTime()
+        )
+
+        // 1. Intentar obtener el método desde el último pago
+        let metodoResolucion: string | null = null
+        for (const pago of pagosOrdenados) {
+          metodoResolucion = 
+            extraerTextoMetodo(pago.metodo_pago) ||
+            extraerTextoMetodo(pago.metodo) ||
+            extraerTextoMetodo(pago.forma_pago) ||
+            extraerTextoMetodo(pago.tipo_pago) ||
+            extraerTextoMetodo(pago.medio_pago) ||
+            extraerTextoMetodo(pago.gateway)
+          if (metodoResolucion) break
+        }
+
+        // 2. Si no hay registros en la tabla 'pagos', revisar en la membresía
+        if (!metodoResolucion && miMembresia) {
+          metodoResolucion = 
+            extraerTextoMetodo(miMembresia.origen) || 
+            extraerTextoMetodo(miMembresia.metodo_pago) ||
+            extraerTextoMetodo(miMembresia.notas)
+        }
+
+        // 3. Revisar en los atributos directos del cliente
+        if (!metodoResolucion) {
+          metodoResolucion = 
+            extraerTextoMetodo(c.metodo_pago) ||
+            extraerTextoMetodo(c.forma_pago) ||
+            extraerTextoMetodo(c.tipo_pago) ||
+            extraerTextoMetodo(c.medio_pago)
+        }
+
+        // 4. Si la cuenta proviene de un agregador externo
+        const canalOrigen = c.canal || c.origen || 'Navy'
+        if (!metodoResolucion && (canalOrigen === 'Wellhub' || canalOrigen === 'TotalPass')) {
+          metodoResolucion = canalOrigen
+        }
+
+        const metodoFinal = metodoResolucion || 'Sin registro'
+
+        return [
+          c.nombre_completo || c.nombre || '',
+          c.email || '',
+          c.telefono || '',
+          nombreSucursal,
+          canalOrigen,
+          c.perdido ? 'Perdido' : (c.estatus || 'Activo'),
+          nombrePlan,
+          c.created_at ? new Date(c.created_at).toLocaleDateString('es-MX') : '',
+          fechaVencimiento ? new Date(fechaVencimiento).toLocaleDateString('es-MX') : 'Sin fecha',
+          metodoFinal,
+          c.ultima_visita ? new Date(c.ultima_visita).toLocaleDateString('es-MX') : 'Sin visitas',
+          c.clases_mes || 0,
+          `${c.asistencia_pct || 0}%`,
+          c.reservo_muestra ? 'Sí' : 'No',
+          c.asistio_muestra ? 'Sí' : 'No',
+          c.valor_cliente || 0
+        ]
+      })
+
+      const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `reporte_clientes_completo_${new Date().toISOString().slice(0,10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Error al exportar:', err)
+      alert('Ocurrió un error al generar la descarga del reporte.')
+    } finally {
+      setExportando(false)
+    }
   }
 
   // ── Bulk actions ──────────────────────────────────────────────────────────────
@@ -122,7 +246,7 @@ export default function ClientesPage() {
 
   // ── Abrir drawer ver cliente ──────────────────────────────────────────────────
   const handleVerCliente = (cliente: any) => {
-    setDrawerClienteId(cliente.id)   // ← antes era solo id
+    setDrawerClienteId(cliente.id)
     setDrawerOpen(true)
   }
 
@@ -130,7 +254,7 @@ export default function ClientesPage() {
     setEditarCliente(cliente)
     setEditarOpen(true)
   }
-  
+ 
   // ── Abrir drawer editar desde el drawer de ver ────────────────────────────────
   const handleEditarDesdeDrawer = (cliente: any) => {
     setDrawerOpen(false)
@@ -166,9 +290,12 @@ export default function ClientesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleExportar}
-            className="flex items-center gap-2 border border-gray-200 bg-white text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition">
-            <Upload size={15}/> Exportar
+          <button 
+            onClick={handleExportar}
+            disabled={exportando}
+            className="flex items-center gap-2 border border-gray-200 bg-white text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
+          >
+            <Upload size={15}/> {exportando ? 'Exportando...' : 'Exportar'}
           </button>
           <button onClick={() => setNuevoOpen(true)}
             className="flex items-center gap-2 btn-dark font-bold text-sm px-4 py-2.5 rounded-xl transition">
@@ -192,8 +319,8 @@ export default function ClientesPage() {
         onRenovar={handleRenovar}
         onMarcarPerdido={handleMarcarPerdido}
         onCambiarPaquete={handleCambiarPaquete}
-        onVerCliente={handleVerCliente}       // ← ya estaba
-        onEditarCliente={handleEditarCliente} // ← nuevo
+        onVerCliente={handleVerCliente}
+        onEditarCliente={handleEditarCliente}
       />
 
       {/* Drawer nuevo cliente */}
