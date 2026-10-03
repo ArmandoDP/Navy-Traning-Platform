@@ -1,6 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
-import { validarAccesoWellhub, confirmarBookingWellhub, actualizarCuposSlotWellhub } from '@/lib/wellhub'
+import { NextRequest, NextResponse }              from 'next/server'
+import { supabaseAdmin as supabase }              from '@/lib/supabase-admin'
+import { validarAccesoWellhub, confirmarBookingWellhub } from '@/lib/wellhub'
+
+const GYM_SUCURSAL: Record<string, string> = {
+  '848637': '1b2032dc-f5da-40c6-8c4e-e227be14673b', // Condesa Gym
+  '848638': 'f8f798a8-d89b-4874-a53a-cdcb6325ad2a', // Condesa Studio
+}
+
+// Fuente única de cupos: Supabase + Wellhub + TotalPass desde Railway
+async function sincronizarCupos(claseId: string) {
+  try {
+    const res = await fetch(`${process.env.BACKEND_URL}/sync/cupos`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ clase_id: claseId }),
+    })
+    console.log('Sync cupos:', res.status, await res.text())
+  } catch (e: any) {
+    console.error('Error sincronizando cupos:', e.message)
+  }
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -20,7 +39,7 @@ export async function POST(req: NextRequest) {
         .from('clientes')
         .select('id')
         .eq('email', user.email)
-        .single()
+        .maybeSingle()
 
       const { data: checkin } = await supabase.from('wellhub_checkins').insert({
         unique_token: user.unique_token,
@@ -40,14 +59,15 @@ export async function POST(req: NextRequest) {
           .update({ validado: true })
           .eq('id', checkin?.id)
 
-        if (!clienteExistente) {
+        if (!clienteExistente && user.email) {
           await supabase.from('clientes').insert({
-            nombre_completo: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Usuario Wellhub',
-            email:            user.email,
-            telefono:         user.phone_number || null,
-            estatus:          'Activo',
-            plan:             'Wellhub',
-            origen:           'Wellhub',  // ← agrega esto
+            nombre_completo: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
+            email:           user.email,
+            telefono:        user.phone_number || null,
+            estatus:         'Activo',
+            plan:            'Wellhub',
+            origen:          'Wellhub',
+            sucursal_id:     GYM_SUCURSAL[String(body.event_data?.gym?.id)] || null,
           })
         }
 
@@ -57,7 +77,7 @@ export async function POST(req: NextRequest) {
         await supabase.from('alertas').insert({
           tipo:        'pago_fallido',
           categoria:   'operacion',
-          titulo:      `Check-in Wellhub sin acceso válido — ${user.first_name} ${user.last_name}`,
+          titulo:      `Check-in Wellhub sin acceso válido — ${user.first_name || ''} ${user.last_name || ''}`.trim(),
           descripcion: errValidacion.message,
           metadata:    { unique_token: user.unique_token },
         })
@@ -75,7 +95,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'booking_number faltante' }, { status: 400 })
       }
 
-      // Anti-duplicado por booking_number — antes de todo
+      // Anti-duplicado por booking_number
       const { data: existenteBooking } = await supabase
         .from('wellhub_bookings')
         .select('id')
@@ -89,30 +109,20 @@ export async function POST(req: NextRequest) {
 
       const { data: clase } = await supabase
         .from('clases')
-        .select('id, capacidad_max, espacios_ocupados, nombre_clase, horario, totalpass_occurrence_uuid, sucursal_id')
+        .select('id, capacidad_max, nombre_clase, sucursal_id')
         .eq('wellhub_slot_id', String(slot.id))
-        .single()
+        .maybeSingle()
 
-      // Buscar cliente existente
+      // Buscar / crear cliente
       let { data: clienteExistente } = await supabase
         .from('clientes')
         .select('id')
         .eq('email', user.email)
         .maybeSingle()
-      
-      console.log('clienteExistente:', clienteExistente, 'email:', user.email)
-      
-      // Obtener sucursal por gym_id
-      const GYM_SUCURSAL: Record<string, string> = {
-        '848637': '1b2032dc-f5da-40c6-8c4e-e227be14673b', // Condesa Gym
-        '848638': 'f8f798a8-d89b-4874-a53a-cdcb6325ad2a', // Condesa Studio
-      }
 
-      // Crear cliente si no existe
       if (!clienteExistente && user.email) {
-        const nombreCompleto = user.name || 'Usuario Wellhub'
         const { data: nuevoCliente, error: errorCliente } = await supabase.from('clientes').insert({
-          nombre_completo: nombreCompleto,
+          nombre_completo: user.name || user.email,
           email:           user.email,
           telefono:        user.phone_number || null,
           estatus:         'Activo',
@@ -120,13 +130,12 @@ export async function POST(req: NextRequest) {
           origen:          'Wellhub',
           sucursal_id:     GYM_SUCURSAL[String(slot.gym_id)] || null,
         }).select('id').single()
-        console.log('Insert cliente resultado:', nuevoCliente, errorCliente)
+        if (errorCliente) console.error('Error creando cliente Wellhub:', errorCliente.message)
+        else console.log(`Cliente Wellhub creado: ${user.email}`)
         clienteExistente = nuevoCliente
-        console.log(`Cliente Wellhub creado: ${user.email}`)
       }
 
-      const sucursalId = GYM_SUCURSAL[String(slot.gym_id)] || null
-      let clienteId = clienteExistente?.id ?? null
+      const clienteId = clienteExistente?.id ?? null
 
       // Anti-duplicado por cliente + clase
       if (clase && clienteId) {
@@ -135,6 +144,7 @@ export async function POST(req: NextRequest) {
           .select('id')
           .eq('cliente_id', clienteId)
           .eq('clase_id', clase.id)
+          .neq('estatus', 'Cancelada')
           .maybeSingle()
 
         if (reservaExistente) {
@@ -153,22 +163,22 @@ export async function POST(req: NextRequest) {
         metadata:         body,
       }).select().single()
 
-      let count = 0
+      // Cupo real = reservas activas en la BD
+      let activas = 0
       if (clase) {
-        const { count: reservasCount } = await supabase
+        const { count } = await supabase
           .from('reservas')
-          .select('id', { count: 'exact' })
+          .select('id', { count: 'exact', head: true })
           .eq('clase_id', clase.id)
           .neq('estatus', 'Cancelada')
-        count = reservasCount || 0
+        activas = count || 0
       }
 
-      const hayCupo = clase ? count < clase.capacidad_max : true
+      const hayCupo = clase ? activas < clase.capacidad_max : true
 
       if (hayCupo) {
         try {
-          const resultado = await confirmarBookingWellhub(slot.booking_number, slot.class_id, true, String(slot.gym_id))
-          console.log('Booking confirmado en Wellhub:', resultado)
+          await confirmarBookingWellhub(slot.booking_number, slot.class_id, true, String(slot.gym_id))
 
           await supabase.from('wellhub_bookings')
             .update({ estatus: 'Confirmado' })
@@ -185,40 +195,11 @@ export async function POST(req: NextRequest) {
             })
 
             if (insertError) {
-              console.warn('Reserva duplicada o error al insertar — no se incrementan cupos:', insertError.message)
-            } else {
-              const nuevosOcupados = count + 1
-              await supabase.from('clases')
-                .update({ espacios_ocupados: nuevosOcupados })
-                .eq('id', clase.id)
-
-              try {
-                await actualizarCuposSlotWellhub(
-                  String(slot.id),
-                  nuevosOcupados,
-                  String(slot.class_id)
-                )
-              } catch (e: any) {
-                console.error('Error actualizando cupos en Wellhub:', e.message)
-              }
-
-              // ← Actualizar cupos en TotalPass
-              if (clase.totalpass_occurrence_uuid && clase.sucursal_id) {
-                try {
-                  await fetch(`${process.env.BACKEND_URL}/totalpass-booking/actualizar-cupos`, {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      occurrence_uuid: clase.totalpass_occurrence_uuid,
-                      sucursal_id:     clase.sucursal_id,
-                      slots:           Math.max(0, (clase.capacidad_max || 0) - nuevosOcupados),
-                    }),
-                  })
-                } catch (e: any) {
-                  console.error('Error actualizando cupos TotalPass desde Wellhub:', e.message)
-                }
-              }
+              console.warn('Error al insertar reserva Wellhub:', insertError.message)
             }
+
+            // Supabase + Wellhub + TotalPass con el conteo real
+            await sincronizarCupos(clase.id)
           }
 
         } catch (errConfirm: any) {
@@ -234,7 +215,7 @@ export async function POST(req: NextRequest) {
           await supabase.from('alertas').insert({
             tipo:        'lista_espera',
             categoria:   'operacion',
-            titulo:      `Booking Wellhub rechazado — sin cupo`,
+            titulo:      'Booking Wellhub rechazado — sin cupo',
             descripcion: `${clase?.nombre_clase || 'Clase'} ya no tiene espacios disponibles`,
             cliente_id:  clienteId,
             metadata:    { booking_number: slot.booking_number },
@@ -254,9 +235,9 @@ export async function POST(req: NextRequest) {
       if (bookingNumber) {
         const { data: booking } = await supabase
           .from('wellhub_bookings')
-          .select('id, cliente_id, wellhub_slot_id, wellhub_class_id, metadata')
+          .select('id, cliente_id, wellhub_slot_id')
           .eq('booking_number', bookingNumber)
-          .single()
+          .maybeSingle()
 
         if (booking) {
           await supabase.from('wellhub_bookings')
@@ -265,38 +246,26 @@ export async function POST(req: NextRequest) {
 
           const { data: clase } = await supabase
             .from('clases')
-            .select('id, espacios_ocupados, capacidad_max')
+            .select('id')
             .eq('wellhub_slot_id', booking.wellhub_slot_id)
-            .single()
+            .maybeSingle()
 
           if (clase) {
-            const nuevosOcupados = Math.max(0, (clase.espacios_ocupados || 0) - 1)
-
-            await supabase.from('clases')
-              .update({ espacios_ocupados: nuevosOcupados })
-              .eq('id', clase.id)
-
-            try {
-              await actualizarCuposSlotWellhub(
-                String(booking.wellhub_slot_id),
-                nuevosOcupados,
-                String(booking.wellhub_class_id || booking.metadata?.event_data?.slot?.class_id)
-              )
-            } catch (e: any) {
-              console.error('Error actualizando cupos cancelación Wellhub:', e.message)
+            if (booking.cliente_id) {
+              await supabase.from('reservas')
+                .update({ estatus: 'Cancelada' })
+                .eq('clase_id', clase.id)
+                .eq('cliente_id', booking.cliente_id)
             }
 
-            await supabase.from('reservas')
-              .update({ estatus: 'Cancelada' })
-              .eq('clase_id', clase.id)
-              .eq('cliente_id', booking.cliente_id)
+            await sincronizarCupos(clase.id)
           }
 
           if (body.event_type === 'booking-late-cancelation') {
             await supabase.from('alertas').insert({
               tipo:        'no_show',
               categoria:   'asistencia',
-              titulo:      `Cancelación tardía — Wellhub`,
+              titulo:      'Cancelación tardía — Wellhub',
               descripcion: `Booking ${bookingNumber} cancelado fuera de la ventana permitida`,
               cliente_id:  booking.cliente_id,
               metadata:    { booking_number: bookingNumber },

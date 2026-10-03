@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Search, Check, AlertCircle } from 'lucide-react'
+import { logActividad } from '@/lib/log-actividad';
+import { useAuth } from '@/context/AuthContext';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Cliente {
@@ -70,6 +72,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
   const [yaReservado, setYaReservado] = useState(false)
   
   const [modalLlena, setModalLlena] = useState(false)
+  const { staff } = useAuth()
 
   // Al abrir — solo clases y sucursales
   useEffect(() => {
@@ -152,41 +155,50 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
 
     if (error) { alert('Error: ' + error.message); setLoading(false); return }
 
-    // Actualizar espacios_ocupados en Supabase
-    await supabase.from('clases')
-      .update({ espacios_ocupados: reservasActivas + 1 })
-      .eq('id', claseSeleccionada.id)
+    // // Actualizar espacios_ocupados en Supabase
+    // await supabase.from('clases')
+    //   .update({ espacios_ocupados: reservasActivas + 1 })
+    //   .eq('id', claseSeleccionada.id)
 
-    // Actualizar Wellhub
-    if (claseSeleccionada.wellhub_slot_id && claseSeleccionada.wellhub_class_id) {
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/actualizar-cupos`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            slot_id:      claseSeleccionada.wellhub_slot_id,
-            clase_id:     claseSeleccionada.wellhub_class_id,
-            total_booked: reservasActivas + 1,
-            sucursal_id:  claseSeleccionada.sucursal_id,
-          }),
-        })
-      } catch (e) { console.warn('Error actualizando Wellhub:', e) }
-    }
+    // // Actualizar Wellhub
+    // if (claseSeleccionada.wellhub_slot_id && claseSeleccionada.wellhub_class_id) {
+    //   try {
+    //     await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/actualizar-cupos`, {
+    //       method:  'POST',
+    //       headers: { 'Content-Type': 'application/json' },
+    //       body: JSON.stringify({
+    //         slot_id:      claseSeleccionada.wellhub_slot_id,
+    //         clase_id:     claseSeleccionada.wellhub_class_id,
+    //         total_booked: reservasActivas + 1,
+    //         sucursal_id:  claseSeleccionada.sucursal_id,
+    //       }),
+    //     })
+    //   } catch (e) { console.warn('Error actualizando Wellhub:', e) }
+    // }
 
-    // Actualizar TotalPass
-    if (claseSeleccionada.totalpass_occurrence_uuid) {
-      try {
-        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/actualizar-cupos`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            occurrence_uuid: claseSeleccionada.totalpass_occurrence_uuid,
-            sucursal_id:     claseSeleccionada.sucursal_id,
-            slots:           Math.max(0, claseSeleccionada.capacidad_max - (reservasActivas + 1)),
-          }),
-        })
-      } catch (e) { console.warn('Error actualizando TotalPass:', e) }
-    }
+    // // Actualizar TotalPass
+    // if (claseSeleccionada.totalpass_occurrence_uuid) {
+    //   try {
+    //     await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/actualizar-cupos`, {
+    //       method:  'POST',
+    //       headers: { 'Content-Type': 'application/json' },
+    //       body: JSON.stringify({
+    //         occurrence_uuid: claseSeleccionada.totalpass_occurrence_uuid,
+    //         sucursal_id:     claseSeleccionada.sucursal_id,
+    //         slots:           Math.max(0, claseSeleccionada.capacidad_max - (reservasActivas + 1)),
+    //       }),
+    //     })
+    //   } catch (e) { console.warn('Error actualizando TotalPass:', e) }
+    // }
+
+    // Sincronizar cupos en Supabase, Wellhub y TotalPass
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sync/cupos`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ clase_id: claseSeleccionada.id }),
+      })
+    } catch (e) { console.warn('Error sincronizando cupos:', e) }
 
     // Si eligió spot y la clase no está llena, guardarlo
     if (spotSeleccionado && reserva && !llena) {
@@ -213,6 +225,15 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
       } catch (e) { console.warn('Error enviando notificación:', e) }
     }
 
+    await logActividad({
+      tipo:        'reserva_creada_crm',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó una reserva para ${clienteSeleccionado?.nombre_completo} en "${claseSeleccionada?.nombre_clase}"`,
+      tabla:       'reservas',
+      accion:      'INSERT',
+      metadata:    { clase_id: claseSeleccionada?.id, cliente_id: clienteSeleccionado?.id, nombre_clase: claseSeleccionada?.nombre_clase },
+      sucursal_id: claseSeleccionada?.sucursal_id,
+      staff_id:    staff?.id,
+    })
     onSuccess(); onClose(); resetForm()
     setLoading(false)
   }
