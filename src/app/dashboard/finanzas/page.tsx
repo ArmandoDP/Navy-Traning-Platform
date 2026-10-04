@@ -10,7 +10,7 @@ import { useSucursal }       from '@/context/SucursalContext'
 import { supabase }          from '../../../lib/supabase'
 
 type Tab = 'resumen' | 'ingresos' | 'transacciones' | 'fallidos' | 'nomina'
-type TipoFiltroGalley = 'todos' | 'galley_solo' | 'sucursal_limpia'
+export type TipoFiltroGalley = 'todos' | 'galley_solo' | 'sucursal_limpia'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'resumen',        label: 'Resumen',           icon: '▦' },
@@ -47,7 +47,13 @@ export default function FinanzasPage() {
     ? new Date(anio, mes + 1, 0).toISOString().split('T')[0]
     : customFin
 
-  const subProps: any = { fechaInicio, fechaFin, sucursalId: sucursalId || undefined, filtroGalley }
+  // CORRECCIÓN DE TYPESCRIPT: sucursalId debe ser string | null para coincidir con las Props
+  const subProps = { 
+    fechaInicio, 
+    fechaFin, 
+    sucursalId: sucursalId || null, 
+    filtroGalley 
+  }
 
   const descargarCSV = (nombreBase: string, encabezados: string[], filas: (string | number)[][]) => {
     const csvContent = [encabezados.join(','), ...filas.map((f) => f.join(','))].join('\n')
@@ -130,12 +136,17 @@ export default function FinanzasPage() {
         ])
 
         const sucursales = resSucursales.data || []
-        const listaPagos = (resPagos.data || []).filter(p => {
+        let listaPagos = (resPagos.data || []).filter(p => {
           const t = new Date(p.created_at || p.fecha || p.fecha_pago).getTime()
           const st = (p.estatus || p.status || '').toLowerCase()
           const esExitoso = ['completado', 'completed', 'paid', 'exitoso', 'succeeded'].some(e => st.includes(e))
           return t >= startMs && t <= endMs && esExitoso
         })
+
+        // Filtrar según el origen seleccionado
+        if (filtroGalley === 'galley_solo') {
+          listaPagos = []
+        }
 
         const { mapSucursalesCliente } = await obtenerMapaClientesYOrigen(listaPagos)
 
@@ -152,7 +163,6 @@ export default function FinanzasPage() {
         matriz['Venta Web / Suscripción Online'] = { navy: 0, orkestapay: 0, stripe: 0, fitpass: 0, totalpass: 0, wellhub: 0, bruto: 0, comision: 0, neto: 0 }
 
         listaPagos.forEach((p: any) => {
-          // Intentar resolver la sucursal del pago o por perfil de cliente
           const idSucFinal = p.sucursal_id || mapSucursalesCliente[p.cliente_id]
           const sucNombre = mapaNombresSucursales[idSucFinal] || p.sucursal_nombre || 'Venta Web / Suscripción Online'
           
@@ -453,7 +463,7 @@ export default function FinanzasPage() {
     }
   }
 
-  const muestraFiltroGalley = ['resumen', 'ingresos', 'transacciones'].includes(tab)
+  const muestraFiltroGalley = ['resumen', 'transacciones'].includes(tab)
 
   return (
     <div className="space-y-5">
@@ -520,11 +530,11 @@ export default function FinanzasPage() {
         ))}
       </div>
 
-      {tab === 'resumen'       && <FinanzasResumen       {...subProps} />}
-      {tab === 'ingresos'      && <FinanzasIngresos      {...subProps} />}
-      {tab === 'transacciones' && <FinanzasTransacciones {...subProps} />}
-      {tab === 'fallidos'      && <FinanzasPagosFallidos {...subProps} />}
-      {tab === 'nomina'        && <FinanzasNomina        {...subProps} />}
+      {tab === 'resumen'       && <FinanzasResumen       key={filtroGalley} {...subProps} />}
+      {tab === 'ingresos'      && <FinanzasIngresos      key={filtroGalley} {...subProps} />}
+      {tab === 'transacciones' && <FinanzasTransacciones key={filtroGalley} {...subProps} />}
+      {tab === 'fallidos'      && <FinanzasPagosFallidos key={filtroGalley} {...subProps} />}
+      {tab === 'nomina'        && <FinanzasNomina        key={filtroGalley} {...subProps} />}
     </div>
   )
 }

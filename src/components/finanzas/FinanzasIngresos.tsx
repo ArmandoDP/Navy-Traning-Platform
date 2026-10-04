@@ -1,54 +1,68 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase }            from '@/lib/supabase'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts'
 
-interface Props { fechaInicio: string; fechaFin: string }
+interface Props { 
+  fechaInicio: string
+  fechaFin: string
+  sucursalId?: string | null
+}
 
 const CANALES = ['Navy','OrkestaPay','Stripe','Fitpass','Totalpass','Wellhub']
 const CANAL_COLORS: Record<string, string> = {
   Navy: '#171B24', OrkestaPay: '#ec4899', Stripe: '#6366f1', Fitpass: '#9ca3af', Totalpass: '#22c55e', Wellhub: '#f59e0b'
 }
 
-export default function FinanzasIngresos({ fechaInicio, fechaFin }: Props) {
-  const [loading,     setLoading]     = useState(true)
-  const [pagos,       setPagos]       = useState<any[]>([])
-  const [sucursales,  setSucursales]  = useState<any[]>([])
-  const [totalBrutoAnt, setTotalBrutoAnt] = useState(0)
+export default function FinanzasIngresos({ fechaInicio, fechaFin, sucursalId }: Props) {
+  const [loading,        setLoading]        = useState(true)
+  const [pagos,          setPagos]          = useState<any[]>([])
+  const [sucursales,     setSucursales]     = useState<any[]>([])
+  const [totalBrutoAnt,  setTotalBrutoAnt]  = useState(0)
 
   useEffect(() => {
-  const fetch = async () => {
-    setLoading(true)
-    const [{ data: p }, { data: s }] = await Promise.all([
-      supabase.from('pagos').select('monto, canal, sucursal_id, estatus')
+    const fetch = async () => {
+      setLoading(true)
+
+      let qPagos = supabase.from('pagos').select('monto, canal, sucursal_id, estatus')
         .gte('fecha_pago', fechaInicio).lte('fecha_pago', fechaFin + 'T23:59:59')
-        .eq('estatus', 'Completado'),
-      supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
-    ])
-    if (p) setPagos(p)
-    if (s) setSucursales(s)
+        .eq('estatus', 'Completado')
+      if (sucursalId) qPagos = qPagos.eq('sucursal_id', sucursalId)
 
-    // Mes anterior
-    const fechaInicioAnt = new Date(fechaInicio)
-    fechaInicioAnt.setMonth(fechaInicioAnt.getMonth() - 1)
-    const fechaFinAnt = new Date(fechaFin)
-    fechaFinAnt.setMonth(fechaFinAnt.getMonth() - 1)
+      const resPagos = await qPagos
+      const p = resPagos.data || []
 
-    const { data: pagosAnt } = await supabase
-      .from('pagos')
-      .select('monto, estatus')
-      .gte('fecha_pago', fechaInicioAnt.toISOString().split('T')[0])
-      .lte('fecha_pago', fechaFinAnt.toISOString().split('T')[0] + 'T23:59:59')
-      .eq('estatus', 'Completado')
+      const resSucs = await supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa')
+      const s = resSucs.data || []
 
-    if (pagosAnt) {
-      setTotalBrutoAnt(pagosAnt.reduce((a, p) => a + (p.monto || 0), 0))
+      setPagos(p)
+      setSucursales(s)
+
+      // Mes anterior
+      const fechaInicioAnt = new Date(fechaInicio)
+      fechaInicioAnt.setMonth(fechaInicioAnt.getMonth() - 1)
+      const fechaFinAnt = new Date(fechaFin)
+      fechaFinAnt.setMonth(fechaFinAnt.getMonth() - 1)
+
+      let qPagosAnt = supabase
+        .from('pagos')
+        .select('monto, estatus')
+        .gte('fecha_pago', fechaInicioAnt.toISOString().split('T')[0])
+        .lte('fecha_pago', fechaFinAnt.toISOString().split('T')[0] + 'T23:59:59')
+        .eq('estatus', 'Completado')
+      if (sucursalId) qPagosAnt = qPagosAnt.eq('sucursal_id', sucursalId)
+
+      const { data: pagosAnt } = await qPagosAnt
+      if (pagosAnt) {
+        setTotalBrutoAnt(pagosAnt.reduce((a, item) => a + (item.monto || 0), 0))
+      } else {
+        setTotalBrutoAnt(0)
+      }
+
+      setLoading(false)
     }
-
-    setLoading(false)
-  }
-  fetch()
-}, [fechaInicio, fechaFin])
+    fetch()
+  }, [fechaInicio, fechaFin, sucursalId])
 
   const totalBruto   = pagos.reduce((a, p) => a + (p.monto || 0), 0)
   const comisiones   = Math.round(totalBruto * 0.055)
@@ -94,7 +108,6 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin }: Props) {
 
   return (
     <div className="space-y-5">
-
       {/* Métricas */}
       <div className="grid grid-cols-4 gap-4">
         {[
@@ -126,7 +139,6 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin }: Props) {
               ))}
             </BarChart>
           </ResponsiveContainer>
-          {/* Leyenda */}
           <div className="flex flex-wrap gap-3 mt-2">
             {CANALES.map(c => (
               <div key={c} className="flex items-center gap-1.5">
