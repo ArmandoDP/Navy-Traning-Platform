@@ -79,7 +79,9 @@ const TIPO_CONFIG: Record<string, Cfg> = {
   room_eliminado: { label: 'Room eliminado', color: 'text-red-700', bg: 'bg-red-50', icon: LayoutGrid },
   sucursal_creada:    { label: 'Sucursal creada',    color: 'text-green-700', bg: 'bg-green-50', icon: MapPin },
   sucursal_editada:   { label: 'Sucursal editada',   color: 'text-blue-700',  bg: 'bg-blue-50',  icon: MapPin },
-  sucursal_eliminada: { label: 'Sucursal eliminada', color: 'text-red-700',   bg: 'bg-red-50',   icon: MapPin },
+  sucursal_eliminada: { label: 'Sucursal eliminada', color: 'text-red-700', bg: 'bg-red-50', icon: MapPin },
+  
+  clase_editada: { label: 'Clase editada', color: 'text-orange-700', bg: 'bg-orange-50', icon: Edit2 },
 }
 
 const TABLAS = ['todas', 'clases', 'reservas', 'clientes', 'membresias', 'pagos', 'paquetes', 'ventas', 'insumos', 'staff']

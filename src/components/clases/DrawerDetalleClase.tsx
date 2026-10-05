@@ -10,6 +10,7 @@ import ToastExito     from '@/components/ToastExito'
 import TabAsistencia from './TabAsistencia'
 import { useAuth }       from '@/context/AuthContext'
 import { logActividad }  from '@/lib/log-actividad'
+import ModalEditarClase from '../ModalEditarClase'
 
 interface Props {
   isOpen:    boolean
@@ -43,7 +44,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [publicandoTotalpass, setPublicandoTotalpass] = useState(false)
   const [wellhubExito,        setWellhubExito]        = useState(false)
   const [totalpassExito, setTotalpassExito] = useState(false)
-  const { staff } = useAuth()
+  const { staff, esGlobal } = useAuth()
+  const [modalEditar, setModalEditar] = useState(false)
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -580,6 +582,13 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               {clase.descripcion && (
                 <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">{clase.descripcion}</p>
               )}
+
+              {esGlobal && (
+                <button onClick={() => setModalEditar(true)}
+                  className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50">
+                  ✏️ Editar clase
+                </button>
+              )}
               <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                {/* Plataformas externas */}
                 <div className="space-y-3">
@@ -857,6 +866,12 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             onClose={() => setToastError(false)}
           />
         )}
+        <ModalEditarClase
+          isOpen={modalEditar}
+          claseId={claseId}
+          onClose={() => setModalEditar(false)}
+          onSuccess={onSuccess}
+        />
       </div>
 
       {modalEliminar && (
