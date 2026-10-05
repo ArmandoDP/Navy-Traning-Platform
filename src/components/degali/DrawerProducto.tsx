@@ -166,7 +166,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
       tabla:       'productos',
       accion:      producto ? 'UPDATE' : 'INSERT',
       metadata:    { 
-        producto_id: producto?.id || prod?.id,
+        producto_id: producto?.id ?? null,
         nombre,
         categoria,
         tipo,
