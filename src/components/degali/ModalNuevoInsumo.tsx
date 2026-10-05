@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, RefreshCw } from 'lucide-react'
 import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   sucursalId: string | null
@@ -36,6 +37,7 @@ export default function ModalNuevoInsumo({ sucursalId, onClose, onSuccess }: Pro
   const [stockMinimo, setStockMinimo] = useState<number | ''>(5)
   const [stockReorden, setStockReorden] = useState<number | ''>(10)
   const [loading, setLoading] = useState(false)
+  const { staff } = useAuth()
 
   // Cambiar selector según tipo de unidad seleccionado
   const handleCambioTipoUnidad = (tipo: 'pza' | 'g') => {
@@ -132,6 +134,7 @@ export default function ModalNuevoInsumo({ sucursalId, onClose, onSuccess }: Pro
       accion:      'INSERT',
       metadata:    { 
         insumo_id:       insumo.id,
+        staff_id:        staff?.id,
         nombre,
         categoria,
         unidad,
