@@ -32,6 +32,7 @@ const NAV: NavItem[] = [
   { href: '/dashboard/finanzas',     label: 'Finanzas',      icon: DollarSign      },
   { href: '/dashboard/alertas',      label: 'Alertas',       icon: Bell            },
   { href: '/dashboard/reportes',     label: 'Reportes',      icon: BarChart2       },
+  { href: '/dashboard/actividad',    label: 'Actividad',     icon: Activity },
   { href: '/dashboard/integraciones',label: 'Integraciones', icon: Puzzle          },
   { href: '/dashboard/configuracion',label: 'Configuración', icon: Settings        },
 ]
@@ -56,6 +57,7 @@ const RUTA_A_MODULO: Record<string, Modulo> = {
   '/dashboard/finanzas':     'finanzas',
   '/dashboard/alertas':      'alertas',
   '/dashboard/reportes':     'reportes',
+  '/dashboard/actividad':   'actividad',
   '/dashboard/integraciones':'integraciones',
   '/dashboard/configuracion':'configuracion',
 }

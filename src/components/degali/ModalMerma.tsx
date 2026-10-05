@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X } from 'lucide-react'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   insumo:     any
@@ -16,6 +18,7 @@ export default function ModalMerma({ insumo, sucursalId, onClose, onSuccess }: P
   const [cantidad,  setCantidad]  = useState('')
   const [motivo,    setMotivo]    = useState('')
   const [guardando, setGuardando] = useState(false)
+  const { staff } = useAuth()
 
   const handleGuardar = async () => {
     if (!cantidad || !motivo) return
@@ -37,6 +40,20 @@ export default function ModalMerma({ insumo, sucursalId, onClose, onSuccess }: P
       })
       .eq('id', insumo.id)
 
+    await logActividad({
+      tipo:        'merma_registrada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} registró merma de "${insumo.insumos?.nombre}" — ${cantidad} ${insumo.insumos?.unidad || 'unidades'}`,
+      tabla:       'merma',
+      accion:      'INSERT',
+      metadata:    { 
+        insumo_id: insumo.insumos?.id,
+        nombre:    insumo.insumos?.nombre,
+        cantidad:  parseFloat(cantidad),
+        motivo,
+      },
+      sucursal_id: sucursalId,
+      staff_id:    staff?.id,
+    })
     setGuardando(false)
     onSuccess()
   }

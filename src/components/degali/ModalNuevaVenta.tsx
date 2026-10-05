@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Search, User } from 'lucide-react'
 import { Resend } from 'resend'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   carrito:       any[]
@@ -20,6 +22,7 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
   const [clientes,        setClientes]        = useState<any[]>([])
   const [buscando,        setBuscando]        = useState(false)
   const [procesando,      setProcesando]      = useState(false)
+  const { staff } = useAuth()
 
   const buscarCliente = async (q: string) => {
     setBusquedaCliente(q)
@@ -101,6 +104,21 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
       })
     }
 
+    await logActividad({
+      tipo:        'venta_galley',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} registró venta de $${total} (${metodoPago})${clienteSel ? ` para "${clienteSel.nombre_completo}"` : ''}`,
+      tabla:       'ventas',
+      accion:      'INSERT',
+      metadata:    { 
+        venta_id:   venta.id,
+        total,
+        metodo:     metodoPago,
+        cliente_id: clienteSel?.id || null,
+        productos:  carrito.map(i => ({ nombre: i.nombre, cantidad: i.cantidad })),
+      },
+      sucursal_id: sucursalId,
+      staff_id:    staff?.id,
+    })
     setProcesando(false)
     onVentaCreada()
   }

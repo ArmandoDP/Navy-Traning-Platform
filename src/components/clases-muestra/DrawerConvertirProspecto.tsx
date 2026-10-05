@@ -4,6 +4,9 @@ import { supabase }            from '@/lib/supabase'
 import { X, User, CreditCard, Calendar, Lock, Star } from 'lucide-react'
 import ToastExito    from '@/components/ToastExito'
 import ModalPagoSucursal from '@/components/clientes/ModalPagoSucursal'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth }      from '@/context/AuthContext'
+
 
 interface Prospecto {
   id:              string
@@ -69,6 +72,7 @@ export default function DrawerConvertirProspecto({ isOpen, prospecto, onClose, o
   const [paquetes,       setPaquetes]       = useState<Paquete[]>([])
   const [adquirirPaquete, setAdquirirPaquete] = useState(false)
   const [paqueteGratis,  setPaqueteGratis]  = useState(false)
+  const { staff } = useAuth()
 
   const [form, setForm] = useState({
     nombre:                 '',
@@ -234,6 +238,22 @@ export default function DrawerConvertirProspecto({ isOpen, prospecto, onClose, o
           }),
         })
       }
+
+      await logActividad({
+        tipo:        'prospecto_convertido',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} convirtió a "${form.nombre} ${form.primer_apellido}" de Prospecto a Cliente Navy`,
+        tabla:       'clientes',
+        accion:      'UPDATE',
+        metadata:    { 
+          cliente_id:  prospecto.id, 
+          email:       form.email,
+          paquete_id:  form.paquete_id || null,
+          paquete:     paquete?.nombre || null,
+          cortesia:    paqueteGratis,
+        },
+        sucursal_id: form.sucursal_id || null,
+        staff_id:    staff?.id,
+      })
 
       setLoading(false)
       setToast(true)

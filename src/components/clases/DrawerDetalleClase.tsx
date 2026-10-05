@@ -8,6 +8,8 @@ import {
 import { supabase }   from '@/lib/supabase'
 import ToastExito     from '@/components/ToastExito'
 import TabAsistencia from './TabAsistencia'
+import { useAuth }       from '@/context/AuthContext'
+import { logActividad }  from '@/lib/log-actividad'
 
 interface Props {
   isOpen:    boolean
@@ -40,7 +42,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [publicandoWellhub,   setPublicandoWellhub]   = useState(false)
   const [publicandoTotalpass, setPublicandoTotalpass] = useState(false)
   const [wellhubExito,        setWellhubExito]        = useState(false)
-  const [totalpassExito,      setTotalpassExito]      = useState(false)
+  const [totalpassExito, setTotalpassExito] = useState(false)
+  const { staff } = useAuth()
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -238,6 +241,17 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       }
 
       await supabase.from('clases').delete().eq('id', claseId)
+
+      // ← Registrar quién eliminó
+      await logActividad({
+        tipo:        'clase_eliminada',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} eliminó "${clase?.nombre_clase}"`,
+        tabla:       'clases',
+        accion:      'DELETE',
+        metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+        sucursal_id: clase?.sucursal_id,
+        staff_id:    staff?.id,
+      })
       
       setModalEliminar(false)
       onSuccess()
@@ -321,6 +335,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error cancelando clase:', e)
     }
+
+    await logActividad({
+      tipo:        'clase_cancelada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} canceló "${clase?.nombre_clase}"`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
     fetchData()
     onSuccess()
   }
@@ -343,6 +367,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error actualizando horario Wellhub:', e)
     }
+
+    await logActividad({
+      tipo:        'clase_wellhub_actualizada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} actualizó horario en Wellhub de "${clase?.nombre_clase}"`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
   }
 
   const handlePublicarWellhub = async () => {
@@ -369,6 +403,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error publicando en Wellhub:', e)
     }
+    
+    await logActividad({
+      tipo:        'clase_publicada_wellhub',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} publicó "${clase?.nombre_clase}" en Wellhub`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
     setPublicandoWellhub(false)
   }
 
@@ -403,6 +447,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error publicando en TotalPass:', e)
     }
+
+    await logActividad({
+      tipo:        'clase_publicada_totalpass',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} publicó "${clase?.nombre_clase}" en TotalPass`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
     setPublicandoTotalpass(false)
   }
 

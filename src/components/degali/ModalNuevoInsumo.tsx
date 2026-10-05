@@ -124,6 +124,23 @@ export default function ModalNuevoInsumo({ sucursalId, onClose, onSuccess }: Pro
       }
     }
 
+    await logActividad({
+      tipo:        'insumo_creado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó el insumo "${nombre}" (${categoria})`,
+      tabla:       'insumos',
+      accion:      'INSERT',
+      metadata:    { 
+        insumo_id:       insumo.id,
+        nombre,
+        categoria,
+        unidad,
+        costo_unitario:  costoUnitarioCalculado,
+        stock_inicial:   Number(stockInicial) || 0,
+      },
+      sucursal_id: sucursalId,
+      staff_id:    staff?.id,
+    })
+
     onSuccess()
     setLoading(false)
   }

@@ -9,6 +9,8 @@ import StaffTabPerformance from './StaffTabPerformance'
 import StaffTabNomina      from './StaffTabNomina'
 import StaffTabHoras       from './StaffTabHoras'
 import StaffTabAcceso from '../StaffTabAcceso'
+import { useAuth }      from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   staffId: string | null
@@ -33,6 +35,7 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
   const [showAcciones, setShowAcciones] = useState(false)
   const [loadingAccion, setLoadingAccion] = useState(false)
   const [popup, setPopup] = useState<{ tipo: 'error'|'exito'; mensaje: string } | null>(null)
+  const { staff: usuarioActual } = useAuth()
 
   const isCoach = empleado?.tipo === 'Coach'
 
@@ -72,7 +75,31 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
   const handleCambiarEstatus = async () => {
     setLoadingAccion(true)
     const nuevoEstatus = empleado.estatus === 'Activo' ? 'Inactivo' : 'Activo'
-    await supabase.from('staff').update({ estatus: nuevoEstatus }).eq('id', empleado.id)
+
+    const { error } = await supabase.from('staff').update({ estatus: nuevoEstatus }).eq('id', empleado.id)
+    if (error) {
+      alert('Error al cambiar estatus: ' + error.message)
+      setLoadingAccion(false)
+      return
+    }
+
+    await logActividad({
+      tipo:        nuevoEstatus === 'Activo' ? 'staff_activado' : 'staff_desactivado',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} ${nuevoEstatus === 'Activo' ? 'activó' : 'desactivó'} a ${empleado.nombre} ${empleado.primer_apellido || ''}`,
+      tabla:       'staff',
+      accion:      'UPDATE',
+      metadata: {
+        empleado_id:     empleado.id,
+        nombre:          `${empleado.nombre} ${empleado.primer_apellido || ''}`.trim(),
+        email:           empleado.email,
+        rol:             empleado.rol,
+        estatus_antes:   empleado.estatus,
+        estatus_despues: nuevoEstatus,
+      },
+      sucursal_id: empleado.sucursal_asignada_id || null,
+      staff_id:    usuarioActual?.id,
+    })
+
     await fetchEmpleado()
     setShowAcciones(false)
     setLoadingAccion(false)
@@ -80,10 +107,37 @@ export default function DrawerStaff({ staffId, isOpen, onClose, onEditar }: Prop
 
   const handleEliminar = async () => {
     setLoadingAccion(true)
+
+    // Guardar los datos antes de borrar, para el log
+    const datosEmpleado = {
+      empleado_id: empleado.id,
+      nombre:      `${empleado.nombre} ${empleado.primer_apellido || ''}`.trim(),
+      email:       empleado.email,
+      rol:         empleado.rol,
+    }
+
     await supabase.from('staff_sucursales').delete().eq('staff_id', empleado.id)
     await supabase.from('staff_categorias').delete().eq('staff_id', empleado.id)
     await supabase.from('staff_documentos').delete().eq('staff_id', empleado.id)
-    await supabase.from('staff').delete().eq('id', empleado.id)
+
+    const { error } = await supabase.from('staff').delete().eq('id', empleado.id)
+    if (error) {
+      alert('No se pudo eliminar: ' + error.message +
+        '\n\nSi tiene clases asignadas o historial, mejor desactívalo.')
+      setLoadingAccion(false)
+      return
+    }
+
+    await logActividad({
+      tipo:        'staff_eliminado',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} eliminó a ${datosEmpleado.nombre} (${datosEmpleado.rol || 'sin rol'})`,
+      tabla:       'staff',
+      accion:      'DELETE',
+      metadata:    datosEmpleado,
+      sucursal_id: empleado.sucursal_asignada_id || null,
+      staff_id:    usuarioActual?.id,
+    })
+
     setLoadingAccion(false)
     onClose()
   }

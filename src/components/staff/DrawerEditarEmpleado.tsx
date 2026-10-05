@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { X, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useAuth }      from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   isOpen:    boolean
@@ -41,6 +43,8 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
   const [sucursales,    setSucursales]    = useState<Sucursal[]>([])
   const [modalBonoOpen, setModalBonoOpen] = useState(false)
   const [reglaEditando, setReglaEditando] = useState<any>(null)
+  const { staff: usuarioActual } = useAuth()
+
   const [reglas, setReglas] = useState<any[]>([])
   const [docs, setDocs] = useState<{ tipo: string; file: File | null; url?: string; docId?: string }[]>([
   { tipo: 'INE',                      file: null },
@@ -149,6 +153,37 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
     if (!empleado || !form.nombre || !form.tipo) return
     setLoading(true)
 
+    const nuevoRol = form.rol || 'staff_navy'
+
+    // Detectar qué cambió, comparando contra los datos originales del empleado
+    const CAMPOS: [string, any, string][] = [
+      ['nombre',                  form.nombre,                                        'Nombre'],
+      ['primer_apellido',         form.primer_apellido,                               'Primer apellido'],
+      ['segundo_apellido',        form.segundo_apellido,                              'Segundo apellido'],
+      ['email',                   form.email,                                         'Email'],
+      ['telefono',                form.telefono,                                      'Teléfono'],
+      ['estatus',                 form.estatus,                                       'Estatus'],
+      ['tipo',                    form.tipo,                                          'Tipo'],
+      ['nivel',                   isCoach ? form.nivel || null : null,                'Nivel'],
+      ['tarifa_hora',             form.tarifa_hora ? Number(form.tarifa_hora) : null, 'Tarifa por hora'],
+      ['sueldo_fijo',             form.sueldo_fijo ? Number(form.sueldo_fijo) : null, 'Sueldo fijo'],
+      ['aplica_bono_puntualidad', form.aplica_bono_puntualidad,                       'Bono puntualidad'],
+      ['pago_en_efectivo',        form.pago_en_efectivo,                              'Pago en efectivo'],
+      ['rol',                     nuevoRol,                                           'Rol'],
+    ]
+    const cambios: Record<string, { antes: any; despues: any }> = {}
+    for (const [campo, nuevo, etiqueta] of CAMPOS) {
+      const antes = (empleado as any)[campo] ?? null
+      if (String(antes ?? '') !== String(nuevo ?? '')) {
+        cambios[etiqueta] = { antes, despues: nuevo }
+      }
+    }
+    // Datos bancarios: se registra que cambiaron, nunca el número de cuenta
+    const cambioBancario =
+      String(empleado.banco ?? '') !== String(form.banco ?? '') ||
+      String(empleado.cuenta_bancaria ?? '') !== String(form.cuenta_bancaria ?? '')
+    if (cambioBancario) cambios['Datos bancarios'] = { antes: '(oculto)', despues: '(modificado)' }
+
     // 1. Actualizar staff
     const { error } = await supabase.from('staff').update({
       nombre:                  form.nombre,
@@ -171,7 +206,7 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       contacto_emergencia_nombre:   form.contacto_emergencia_nombre,
       contacto_emergencia_relacion: form.contacto_emergencia_relacion,
       contacto_emergencia_telefono: form.contacto_emergencia_telefono,
-      rol: form.rol || 'staff_navy',
+      rol: nuevoRol,
     }).eq('id', empleado.id)
 
     if (error) { alert('Error: ' + error.message); setLoading(false); return }
@@ -192,17 +227,58 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       )
     }
 
+    // 4. Documentos
+    const docsSubidos: string[] = []
     for (const doc of docs) {
       if (!doc.file) continue
       const ext  = doc.file.name.split('.').pop()
       const path = `${empleado.id}/${doc.tipo.replace(/ /g, '_')}_${Date.now()}.${ext}`
       await supabase.storage.from('staff-documentos').upload(path, doc.file, { upsert: true })
       const { data: urlData } = supabase.storage.from('staff-documentos').getPublicUrl(path)
-      // Borrar el anterior si existe
       if (doc.docId) await supabase.from('staff_documentos').delete().eq('id', doc.docId)
       await supabase.from('staff_documentos').insert({
         staff_id: empleado.id, tipo: doc.tipo,
         url: urlData.publicUrl, nombre_archivo: doc.file.name,
+      })
+      docsSubidos.push(doc.tipo)
+    }
+
+    // 5. Auditoría
+    const quien    = `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''}`.trim()
+    const afectado = `${form.nombre} ${form.primer_apellido || ''}`.trim()
+    const sucursal = form.sucursales_ids[0] || null
+
+    if (cambios['Rol']) {
+      await logActividad({
+        tipo:        'staff_rol_cambiado',
+        descripcion: `${quien} cambió el rol de ${afectado}: ${cambios['Rol'].antes || 'sin rol'} → ${nuevoRol}`,
+        tabla:       'staff',
+        accion:      'UPDATE',
+        metadata:    { empleado_id: empleado.id, rol_antes: cambios['Rol'].antes, rol_despues: nuevoRol },
+        sucursal_id: sucursal,
+        staff_id:    usuarioActual?.id,
+      })
+    }
+
+    if (Object.keys(cambios).length > 0 || docsSubidos.length > 0) {
+      const resumen = [
+        ...Object.keys(cambios),
+        ...(docsSubidos.length ? [`documentos (${docsSubidos.join(', ')})`] : []),
+      ].join(', ')
+
+      await logActividad({
+        tipo:        'staff_editado',
+        descripcion: `${quien} editó a ${afectado}: ${resumen}`,
+        tabla:       'staff',
+        accion:      'UPDATE',
+        metadata:    {
+          empleado_id:    empleado.id,
+          cambios,
+          sucursales:     form.sucursales_ids,
+          documentos:     docsSubidos,
+        },
+        sucursal_id: sucursal,
+        staff_id:    usuarioActual?.id,
       })
     }
 
@@ -213,8 +289,19 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
   }
 
   const handleEliminarRegla = async (reglaId: string) => {
+    const regla = reglas.find(r => r.id === reglaId)
     await supabase.from('staff_reglas_bono').delete().eq('id', reglaId)
     setReglas(prev => prev.filter(r => r.id !== reglaId))
+
+    await logActividad({
+      tipo:        'bono_regla_eliminada',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} eliminó una regla de bono de ${empleado.nombre} ${empleado.primer_apellido || ''}`,
+      tabla:       'staff_reglas_bono',
+      accion:      'DELETE',
+      metadata:    { empleado_id: empleado.id, regla },
+      sucursal_id: null,
+      staff_id:    usuarioActual?.id,
+    })
   }
 
   const handleGuardarRegla = async (reglaData: any) => {
@@ -226,7 +313,9 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
       monto_bono:     reglaData.monto_bono,
     }
 
-    if (reglaEditando?.id) {
+    const esEdicion = !!reglaEditando?.id
+
+    if (esEdicion) {
       const { data } = await supabase.from('staff_reglas_bono')
         .update(payload).eq('id', reglaEditando.id).select().single()
       if (data) setReglas(prev => prev.map(r => r.id === data.id ? data : r))
@@ -235,6 +324,16 @@ export default function DrawerEditarEmpleado({ isOpen, empleado, onClose, onSucc
         .insert(payload).select().single()
       if (data) setReglas(prev => [...prev, data])
     }
+
+    await logActividad({
+      tipo:        esEdicion ? 'bono_regla_modificada' : 'bono_regla_creada',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} ${esEdicion ? 'modificó' : 'creó'} regla de bono para ${empleado.nombre} ${empleado.primer_apellido || ''}: $${reglaData.monto_bono} desde ${reglaData.min_asistentes} asistentes (${reglaData.categoria})`,
+      tabla:       'staff_reglas_bono',
+      accion:      esEdicion ? 'UPDATE' : 'INSERT',
+      metadata:    { empleado_id: empleado.id, antes: esEdicion ? reglaEditando : null, despues: payload },
+      sucursal_id: null,
+      staff_id:    usuarioActual?.id,
+    })
 
     setReglaEditando(null)
     setModalBonoOpen(false)

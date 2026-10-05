@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Minus, Plus } from 'lucide-react'
 import RecurrenciaConfig from '@/components/clases/RecurrenciaConfig'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Coach    { id: string; nombre: string; primer_apellido: string }
 interface Sucursal { id: string; nombre: string }
@@ -25,6 +27,7 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
   const [rooms,            setRooms]            = useState<Room[]>([])
   const [recurrenciaTipo,  setRecurrenciaTipo]  = useState('semanal')
   const [recurrenciaFin,   setRecurrenciaFin]   = useState('')
+  const { staff } = useAuth()
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -195,6 +198,16 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
         alert('Clase creada, pero no se pudo conectar con TotalPass: ' + err.message)
       }
     }
+
+    await logActividad({
+      tipo:        'clase_creada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó la clase "${form.nombre_clase}"`,
+      tabla:       'clases',
+      accion:      'INSERT',
+      metadata:    { nombre: form.nombre_clase, horario: form.horario, sucursal_id: form.sucursal_id },
+      sucursal_id: form.sucursal_id,
+      staff_id:    staff?.id,
+    })
 
     onSuccess()
     onClose()

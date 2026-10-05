@@ -4,6 +4,8 @@ import { X, Minus, Plus, Upload }    from 'lucide-react'
 import { supabase }                  from '@/lib/supabase'
 import RoomGrid, { CeldaGrid }       from './RoomGrid'
 import RoomItemSelector, { ItemType } from './RoomItemSelector'
+import { useAuth }      from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   isOpen:     boolean
@@ -25,7 +27,8 @@ export default function ModalNuevoRoom({ isOpen, sucursalId, sucursalNombre, onC
   const [zoom,         setZoom]         = useState(100)
   const [celdas,       setCeldas]       = useState<CeldaGrid[]>([])
   const [itemSelected, setItemSelected] = useState<ItemType>(null)
-  const [imagenPlano,  setImagenPlano]  = useState<File | null>(null)
+  const [imagenPlano, setImagenPlano] = useState<File | null>(null)
+  const { staff: usuarioActual } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Contadores por tipo para numeración automática
@@ -118,17 +121,39 @@ export default function ModalNuevoRoom({ isOpen, sucursalId, sucursalNombre, onC
     // Crear spots individuales
     const spots = celdas.filter(c => c.tipo === 'Rack' || c.tipo === 'Mat')
     if (spots.length > 0) {
-      await supabase.from('room_spots').insert(
+      const { error: errSpots } = await supabase.from('room_spots').insert(
         spots.map(s => ({
-          room_id:  room.id,
-          numero:   s.numero,
-          tipo:     s.tipo,
-          fila:     s.fila,
-          columna:  s.columna,
+          room_id:   room.id,
+          numero:    s.numero,
+          tipo:      s.tipo,
+          fila:      s.fila,
+          columna:   s.columna,
           bloqueado: false,
         }))
       )
+      if (errSpots) {
+        alert('El room se creó, pero hubo un error creando los lugares: ' + errSpots.message +
+          '\nÁbrelo en editar y vuelve a guardar el layout.')
+      }
     }
+
+    await logActividad({
+      tipo:        'room_creado',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} creó el room "${nombre}" con ${spots.length} lugares (capacidad ${capacidad})`,
+      tabla:       'rooms',
+      accion:      'INSERT',
+      metadata: {
+        room_id:     room.id,
+        nombre,
+        capacidad,
+        dimensiones: `${ancho}x${alto}`,
+        racks:       spots.filter(s => s.tipo === 'Rack').length,
+        mats:        spots.filter(s => s.tipo === 'Mat').length,
+        con_plano:   !!imagenUrl,
+      },
+      sucursal_id: sucursalId || null,
+      staff_id:    usuarioActual?.id,
+    })
 
     setLoading(false)
     onSuccess()

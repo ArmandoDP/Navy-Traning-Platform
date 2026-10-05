@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X } from 'lucide-react'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   insumo:     any
@@ -17,6 +19,7 @@ export default function ModalCompraInsumo({ insumo, sucursalId, onClose, onSucce
   const [precioUnitario,    setPrecioUnitario]    = useState('0')
   const [notas,             setNotas]             = useState('')
   const [guardando,         setGuardando]         = useState(false)
+  const { staff } = useAuth()
 
   const totalGramosML = (parseFloat(unidadesCompradas) || 0) * (parseFloat(contenidoPorUnidad) || 0)
 
@@ -58,6 +61,22 @@ export default function ModalCompraInsumo({ insumo, sucursalId, onClose, onSucce
         updated_at:   new Date().toISOString(),
       })
       .eq('id', insumo.id)
+    
+    await logActividad({
+      tipo:        'compra_insumo',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} registró compra de "${insumo.insumos?.nombre || insumo.nombre}" — ${totalGramosML}g/ml por $${valorCompra}`,
+      tabla:       'compras_insumos',
+      accion:      'INSERT',
+      metadata:    { 
+        insumo_id:       insumo.insumos?.id || insumo.insumo_id,
+        cantidad:        totalGramosML,
+        precio_unitario: parseFloat(precioUnitario),
+        total:           parseFloat(valorCompra),
+        notas,
+      },
+      sucursal_id: sucursalId,
+      staff_id:    staff?.id,
+    })
 
     setGuardando(false)
     onSuccess()

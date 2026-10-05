@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X } from 'lucide-react'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   isOpen: boolean
@@ -13,6 +15,7 @@ const ESPECIALIDADES = ['Spinning', 'Yoga', 'Box', 'Funcional', 'General']
 
 export default function ModalCrearCoach({ isOpen, onClose, onSuccess }: Props) {
   const [loading, setLoading] = useState(false)
+  const { staff } = useAuth()
   const [formData, setFormData] = useState({
     nombre_completo: '',
     email:           '',
@@ -47,6 +50,15 @@ export default function ModalCrearCoach({ isOpen, onClose, onSuccess }: Props) {
     if (error) {
       alert('Error al crear coach: ' + error.message)
     } else {
+      await logActividad({
+        tipo:        'coach_creado',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó al coach "${formData.nombre_completo}"`,
+        tabla:       'staff',
+        accion:      'INSERT',
+        metadata:    { nombre: formData.nombre_completo, email: formData.email, especialidad: formData.especialidad },
+        sucursal_id: null,
+        staff_id:    staff?.id,
+      })
       onSuccess()
       onClose()
       resetForm()

@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, MapPin, Clock, Trash2 } from 'lucide-react'
 import CiudadCombobox from '@/components/sucursales/CiudadCombobox'
+import { useAuth }      from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   isOpen:    boolean
@@ -64,6 +66,7 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
   const [form,     setForm]     = useState({ ...EMPTY })
   const [popup, setPopup] = useState<{ tipo: 'error' | 'exito'; mensaje: string } | null>(null)
   const [managers, setManagers] = useState<{ id: string; nombre: string; primer_apellido: string }[]>([])
+  const { staff: usuarioActual } = useAuth()
 
   const validarHorario = (horario: string) => {
     if (!horario) return false
@@ -111,30 +114,12 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
 
   const handleSubmit = async () => {
     // Validar campos requeridos
-    if (!form.nombre) {
-      setPopup({ tipo: 'error', mensaje: 'El nombre de la sucursal es obligatorio.' })
-      return
-    }
-    if (!form.ciudad) {
-      setPopup({ tipo: 'error', mensaje: 'La ciudad es obligatoria.' })
-      return
-    }
-    if (!form.codigo) {
-      setPopup({ tipo: 'error', mensaje: 'El código de la sucursal es obligatorio.' })
-      return
-    }
-    if (!form.direccion) {
-      setPopup({ tipo: 'error', mensaje: 'La dirección es obligatoria.' })
-      return
-    }
-    if (!form.telefono) {
-      setPopup({ tipo: 'error', mensaje: 'El teléfono es obligatorio.' })
-      return
-    }
-    if (!form.gerente) {
-      setPopup({ tipo: 'error', mensaje: 'El gerente es obligatorio.' })
-      return
-    }
+    if (!form.nombre)    { setPopup({ tipo: 'error', mensaje: 'El nombre de la sucursal es obligatorio.' }); return }
+    if (!form.ciudad)    { setPopup({ tipo: 'error', mensaje: 'La ciudad es obligatoria.' }); return }
+    if (!form.codigo)    { setPopup({ tipo: 'error', mensaje: 'El código de la sucursal es obligatorio.' }); return }
+    if (!form.direccion) { setPopup({ tipo: 'error', mensaje: 'La dirección es obligatoria.' }); return }
+    if (!form.telefono)  { setPopup({ tipo: 'error', mensaje: 'El teléfono es obligatorio.' }); return }
+    if (!form.gerente)   { setPopup({ tipo: 'error', mensaje: 'El gerente es obligatorio.' }); return }
     if (!validarHorario(form.horario)) {
       setPopup({ tipo: 'error', mensaje: 'El horario tiene un formato inválido. Ejemplo: L-V: 05:45-21:30 | S: 07:00-11:00' })
       return
@@ -158,16 +143,29 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
       capacidad:       Number(form.capacidad),
     }
 
-    const { error } = editando
-      ? await supabase.from('sucursales').update(payload).eq('id', sucursal.id)
-      : await supabase.from('sucursales').insert([payload])
-    
-    supabase.from('staff')
-      .select('id, nombre, primer_apellido')
-      .eq('tipo', 'Manager')
-      .eq('estatus', 'Activo')
-      .order('nombre')
-      .then(({ data }) => { if (data) setManagers(data) })
+    // Qué cambió (solo en edición)
+    const cambios: Record<string, { antes: any; despues: any }> = {}
+    if (editando) {
+      const CAMPOS: [keyof typeof payload, string][] = [
+        ['nombre', 'Nombre'], ['codigo', 'Código'], ['ciudad', 'Ciudad'], ['color', 'Color'],
+        ['direccion', 'Dirección'], ['horario', 'Horario'], ['telefono', 'Teléfono'],
+        ['gerente', 'Gerente'], ['es_matriz', 'Es matriz'], ['estatus', 'Estatus'], ['capacidad', 'Capacidad'],
+      ]
+      for (const [campo, etiqueta] of CAMPOS) {
+        const antes = sucursal?.[campo] ?? null
+        if (String(antes ?? '') !== String(payload[campo] ?? '')) {
+          cambios[etiqueta] = { antes, despues: payload[campo] }
+        }
+      }
+      if (String(sucursal?.banco ?? '') !== String(payload.banco ?? '') ||
+          String(sucursal?.cuenta_bancaria ?? '') !== String(payload.cuenta_bancaria ?? '')) {
+        cambios['Datos bancarios'] = { antes: '(oculto)', despues: '(modificado)' }
+      }
+    }
+
+    const { data: guardada, error } = editando
+      ? await supabase.from('sucursales').update(payload).eq('id', sucursal.id).select('id').single()
+      : await supabase.from('sucursales').insert([payload]).select('id').single()
 
     if (error) {
       setPopup({ tipo: 'error', mensaje: 'Error al guardar: ' + error.message })
@@ -175,24 +173,72 @@ export default function DrawerSucursal({ isOpen, onClose, onSuccess, sucursal }:
       return
     }
 
+    const quien = `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''}`.trim()
+
+    if (!editando) {
+      await logActividad({
+        tipo:        'sucursal_creada',
+        descripcion: `${quien} creó la sucursal "${payload.nombre}" (${payload.codigo}) en ${payload.ciudad}`,
+        tabla:       'sucursales',
+        accion:      'INSERT',
+        metadata:    {
+          sucursal_id: guardada?.id,
+          nombre:      payload.nombre,
+          codigo:      payload.codigo,
+          ciudad:      payload.ciudad,
+          direccion:   payload.direccion,
+          capacidad:   payload.capacidad,
+          es_matriz:   payload.es_matriz,
+        },
+        sucursal_id: guardada?.id || null,
+        staff_id:    usuarioActual?.id,
+      })
+    } else if (Object.keys(cambios).length > 0) {
+      await logActividad({
+        tipo:        'sucursal_editada',
+        descripcion: `${quien} editó la sucursal "${payload.nombre}": ${Object.keys(cambios).join(', ')}`,
+        tabla:       'sucursales',
+        accion:      'UPDATE',
+        metadata:    { sucursal_id: sucursal.id, cambios },
+        sucursal_id: sucursal.id,
+        staff_id:    usuarioActual?.id,
+      })
+    }
+
     setPopup({ tipo: 'exito', mensaje: editando ? 'Sucursal actualizada correctamente.' : 'Sucursal creada correctamente.' })
+    setLoading(false)
     setTimeout(() => {
       setPopup(null)
       onSuccess()
       onClose()
     }, 1500)
-
-    setLoading(false)
   }
 
   const handleEliminar = async () => {
     if (!confirm('¿Seguro que quieres eliminar esta sucursal? Esta acción no se puede deshacer.')) return
     setLoading(true)
+
     const { error } = await supabase.from('sucursales').delete().eq('id', sucursal.id)
-    if (error) { alert('Error: ' + error.message); setLoading(false); return }
+    if (error) {
+      alert('No se pudo eliminar: ' + error.message +
+        '\n\nLa sucursal tiene clientes, clases o pagos ligados. Mejor cámbiala a estatus Inactiva.')
+      setLoading(false)
+      return
+    }
+
+    await logActividad({
+      tipo:        'sucursal_eliminada',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} eliminó la sucursal "${sucursal.nombre}" (${sucursal.codigo})`,
+      tabla:       'sucursales',
+      accion:      'DELETE',
+      metadata:    { sucursal_id: sucursal.id, nombre: sucursal.nombre, codigo: sucursal.codigo, ciudad: sucursal.ciudad },
+      sucursal_id: null,
+      staff_id:    usuarioActual?.id,
+    })
+
+    setLoading(false)
     onSuccess()
     onClose()
-    setLoading(false)
   }
 
   const canSubmit = !loading
