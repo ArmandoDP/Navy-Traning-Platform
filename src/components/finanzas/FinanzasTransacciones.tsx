@@ -4,7 +4,14 @@ import { supabase }            from '@/lib/supabase'
 import { X, ChevronRight, ChevronLeft, ShoppingBag, CreditCard } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
-interface Props { fechaInicio: string; fechaFin: string; sucursalId: string | null }
+export type TipoFiltroGalley = 'todos' | 'galley_solo' | 'sucursal_limpia'
+
+interface Props { 
+  fechaInicio: string
+  fechaFin: string
+  sucursalId: string | null
+  filtroGalley?: TipoFiltroGalley
+}
 
 const selectCls = "border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none bg-white focus:border-gray-400 appearance-none cursor-pointer"
 
@@ -22,7 +29,7 @@ type Transaccion = {
   raw:           any
 }
 
-export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalId }: Props) {
+export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalId, filtroGalley = 'todos' }: Props) {
   const [loading,    setLoading]    = useState(true)
   const [items,      setItems]      = useState<Transaccion[]>([])
   const [sucursales, setSucursales] = useState<any[]>([])
@@ -36,70 +43,74 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
     const load = async () => {
       setLoading(true)
 
-      const [{ data: pagosData }, { data: ventasData }, { data: sucsData }] = await Promise.all([
-        // Membresías y pagos normales
-        (() => {
-          let q = supabase.from('pagos')
-            .select('id, monto, estatus, fecha_pago, canal, concepto, metodo_pago, sucursal_id, stripe_payment_intent_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
-            .gte('fecha_pago', fechaInicio)
-            .lte('fecha_pago', fechaFin + 'T23:59:59')
-            .in('estatus', ['Completado', 'Reembolsado'])
-            .order('fecha_pago', { ascending: false })
-          if (sucursalId) q = q.eq('sucursal_id', sucursalId)
-          return q
-        })(),
+      let txMembresias: Transaccion[] = []
+      let txGalley: Transaccion[] = []
 
-        // Ventas de Galley
-        (() => {
-          let q = supabase.from('ventas')
-            .select('id, total, metodo_pago, numero_operacion, estatus, created_at, sucursal_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
-            .gte('created_at', fechaInicio)
-            .lte('created_at', fechaFin + 'T23:59:59')
-            .order('created_at', { ascending: false })
-          if (sucursalId) q = q.eq('sucursal_id', sucursalId)
-          return q
-        })(),
+      // Membresías (si no es galley_solo)
+      if (filtroGalley !== 'galley_solo') {
+        let q = supabase.from('pagos')
+          .select('id, monto, estatus, fecha_pago, canal, concepto, metodo_pago, sucursal_id, stripe_payment_intent_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
+          .gte('fecha_pago', fechaInicio)
+          .lte('fecha_pago', fechaFin + 'T23:59:59')
+          .in('estatus', ['Completado', 'Reembolsado'])
+          .order('fecha_pago', { ascending: false })
+        if (sucursalId) q = q.eq('sucursal_id', sucursalId)
 
-        supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa'),
-      ])
-
-      const txMembresias: Transaccion[] = (pagosData || []).map(p => {
-        const cli = Array.isArray(p.clientes)   ? (p.clientes as any)[0]   : p.clientes as any
-        const suc = Array.isArray(p.sucursales) ? (p.sucursales as any)[0] : p.sucursales as any
-        return {
-          id:            p.id,
-          tipo:          'membresia' as const,
-          fecha:         p.fecha_pago,
-          cliente:       cli?.nombre_completo || '—',
-          concepto:      p.concepto || 'Membresía',
-          sucursal:      suc?.nombre || '—',
-          sucursalColor: suc?.color || '#6b7280',
-          metodo:        p.metodo_pago || '—',
-          monto:         p.monto || 0,
-          estatus:       p.estatus || '—',
-          raw:           p,
+        const { data: pagosData } = await q
+        if (pagosData) {
+          txMembresias = pagosData.map(p => {
+            const cli = Array.isArray(p.clientes)   ? (p.clientes as any)[0]   : p.clientes as any
+            const suc = Array.isArray(p.sucursales) ? (p.sucursales as any)[0] : p.sucursales as any
+            return {
+              id:            p.id,
+              tipo:          'membresia' as const,
+              fecha:         p.fecha_pago,
+              cliente:       cli?.nombre_completo || '—',
+              concepto:      p.concepto || 'Membresía',
+              sucursal:      suc?.nombre || '—',
+              sucursalColor: suc?.color || '#6b7280',
+              metodo:        p.metodo_pago || '—',
+              monto:         p.monto || 0,
+              estatus:       p.estatus || '—',
+              raw:           p,
+            }
+          })
         }
-      })
+      }
 
-      const txGalley: Transaccion[] = (ventasData || []).map(v => {
-        const cli = Array.isArray(v.clientes)   ? (v.clientes as any)[0]   : v.clientes as any
-        const suc = Array.isArray(v.sucursales) ? (v.sucursales as any)[0] : v.sucursales as any
-        return {
-          id:            v.id,
-          tipo:          'galley' as const,
-          fecha:         v.created_at,
-          cliente:       cli?.nombre_completo || 'Cliente sin registro',
-          concepto:      'The Galley',
-          sucursal:      suc?.nombre || '—',
-          sucursalColor: suc?.color || '#6b7280',
-          metodo:        v.metodo_pago || '—',
-          monto:         v.total || 0,
-          estatus:       v.estatus === 'Completada' ? 'Completado' : v.estatus,
-          raw:           v,
+      // Galley (si no es sucursal_limpia)
+      if (filtroGalley !== 'sucursal_limpia') {
+        let q = supabase.from('ventas')
+          .select('id, total, metodo_pago, numero_operacion, estatus, created_at, sucursal_id, cliente_id, clientes(nombre_completo), sucursales(nombre, color)')
+          .gte('created_at', fechaInicio)
+          .lte('created_at', fechaFin + 'T23:59:59')
+          .order('created_at', { ascending: false })
+        if (sucursalId) q = q.eq('sucursal_id', sucursalId)
+
+        const { data: ventasData } = await q
+        if (ventasData) {
+          txGalley = ventasData.map(v => {
+            const cli = Array.isArray(v.clientes)   ? (v.clientes as any)[0]   : v.clientes as any
+            const suc = Array.isArray(v.sucursales) ? (v.sucursales as any)[0] : v.sucursales as any
+            return {
+              id:            v.id,
+              tipo:          'galley' as const,
+              fecha:         v.created_at,
+              cliente:       cli?.nombre_completo || 'Cliente sin registro',
+              concepto:      'The Galley',
+              sucursal:      suc?.nombre || '—',
+              sucursalColor: suc?.color || '#6b7280',
+              metodo:        v.metodo_pago || '—',
+              monto:         v.total || 0,
+              estatus:       v.estatus === 'Completada' ? 'Completado' : v.estatus,
+              raw:           v,
+            }
+          })
         }
-      })
+      }
 
-      // Combinar y ordenar por fecha
+      const { data: sucsData } = await supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa')
+
       const todas = [...txMembresias, ...txGalley].sort((a, b) =>
         new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
       )
@@ -109,7 +120,7 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
       setLoading(false)
     }
     load()
-  }, [fechaInicio, fechaFin, sucursalId])
+  }, [fechaInicio, fechaFin, sucursalId, filtroGalley])
 
   const handleVerDetalle = async (tx: Transaccion) => {
     setActivo(tx)
@@ -129,7 +140,6 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
     (!filtros.origen   || p.tipo === filtros.origen)
   )
 
-  // Escuchar el evento de clic desde el botón principal de la cabecera
   useEffect(() => {
     const handleExport = () => {
       if (filtrados.length === 0) return
@@ -164,7 +174,6 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
 
   return (
     <div className="relative">
-      {/* Drawer detalle */}
       {activo && (
         <>
           <div onClick={() => setActivo(null)} className="fixed inset-0 z-40 bg-black/20" />
@@ -194,13 +203,11 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-              {/* Monto */}
               <div className="text-center py-4">
                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{activo.concepto}</p>
                 <p className="text-4xl font-black text-gray-900">${activo.monto?.toLocaleString()}</p>
               </div>
 
-              {/* Datos */}
               <div className="border-t border-gray-100 pt-4 space-y-3">
                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Datos de la compra</p>
                 {[
@@ -227,7 +234,6 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
                 ))}
               </div>
 
-              {/* Desglose productos Galley */}
               {activo.tipo === 'galley' && (
                 <div className="border-t border-gray-100 pt-4 space-y-3">
                   <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Productos</p>
@@ -254,7 +260,6 @@ export default function FinanzasTransacciones({ fechaInicio, fechaFin, sucursalI
       )}
 
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-        {/* Header + Filtros */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-wrap gap-3">
           <p className="text-sm font-black text-gray-900">
             Todas las transacciones
