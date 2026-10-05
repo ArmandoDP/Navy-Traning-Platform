@@ -186,13 +186,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       descripcion: `${staff?.nombre} ${staff?.primer_apellido} asignó cortesía "${paquete.nombre}" a "${cliente.nombre_completo}"`,
       tabla:       'membresias',
       accion:      'INSERT',
-      metadata:    { 
-        cliente_id:   cliente.id,
-        paquete_id:   paqueteSel,
-        paquete:      paquete.nombre,
-        fecha_inicio: fechaInicio.toISOString().split('T')[0],
-        fecha_fin:    fechaFin.toISOString().split('T')[0],
-      },
+      metadata: { cliente_id: cliente.id, membresia_id: membresiaActiva?.id },
       sucursal_id: cliente.sucursal_id || null,
       staff_id:    staff?.id,
     })

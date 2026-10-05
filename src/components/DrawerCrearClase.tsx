@@ -204,7 +204,14 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
       descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó la clase "${form.nombre_clase}"`,
       tabla:       'clases',
       accion:      'INSERT',
-      metadata:    { nombre: form.nombre_clase, horario: form.horario, sucursal_id: form.sucursal_id },
+      metadata: {
+        nombre:      form.nombre_clase,
+        fecha:       form.fecha,
+        hora:        form.hora,
+        duracion:    form.duracion_minutos,
+        capacidad:   form.capacidad_max,
+        sucursal_id: form.sucursal_id,
+      },
       sucursal_id: form.sucursal_id,
       staff_id:    staff?.id,
     })

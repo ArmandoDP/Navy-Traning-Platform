@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, RefreshCw } from 'lucide-react'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   sucursalId: string | null
