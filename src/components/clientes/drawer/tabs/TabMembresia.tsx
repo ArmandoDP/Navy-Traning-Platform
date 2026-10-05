@@ -87,7 +87,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       descripcion: `${staff?.nombre} ${staff?.primer_apellido} canceló la renovación de "${cliente.nombre_completo}"`,
       tabla:       'membresias',
       accion:      'UPDATE',
-      metadata:    { cliente_id: cliente.id, membresia_id: membresia?.id },
+      metadata:    { cliente_id: cliente.id, membresia_id: membresiaActiva?.id },
       sucursal_id: cliente.sucursal_id || null,
       staff_id:    staff?.id,
     })
@@ -106,7 +106,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       descripcion: `${staff?.nombre} ${staff?.primer_apellido} reactivó la renovación de "${cliente.nombre_completo}"`,
       tabla:       'membresias',
       accion:      'UPDATE',
-      metadata:    { cliente_id: cliente.id, membresia_id: membresia?.id },
+      metadata:    { cliente_id: cliente.id, membresia_id: membresiaActiva?.id },
       sucursal_id: cliente.sucursal_id || null,
       staff_id:    staff?.id,
     })
