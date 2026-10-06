@@ -28,8 +28,8 @@ export default function ClientesPage() {
       .select('*, sucursales(nombre, color), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))')
       .order('created_at', { ascending: false })
 
-    if (sucursalId && sucursalId !== 'global'){
-       q = q.eq('sucursal_id', sucursalId)
+    if (sucursalId && sucursalId !== 'global') {
+      q = q.eq('sucursal_id', sucursalId)
     }
 
     const { data, error } = await q
@@ -88,26 +88,24 @@ export default function ClientesPage() {
     return null
   }
 
-  // ── EXPORTACIÓN DESACOPLADA (EXTRACCIÓN PLANA Y SEGURA DE DATOS) ──────────
   const handleExportar = async () => {
     try {
       setExportando(true)
 
       if (!clientes || clientes.length === 0) {
-        alert('No hay clientes en la lista para exportar.')
+        alert('No hay clientes cargados en la pantalla para exportar.')
         setExportando(false)
         return
       }
 
-      const clienteIds = clientes.map(c => c.id)
+      const clienteIds = clientes.map(c => c.id).filter(Boolean)
 
-      // 1. Extraer todas las tablas por separado sin arriesgar joins relacionales nulos
+      // 1. Consultas individuales en paralelo sin relaciones anidadas en Supabase
       const [
         resReservas,
         resAsistencias,
         resPagos,
         resClases,
-        resCoaches,
         resSalas,
         resSucursales
       ] = await Promise.all([
@@ -115,31 +113,30 @@ export default function ClientesPage() {
         supabase.from('asistencias').select('*').in('cliente_id', clienteIds),
         supabase.from('pagos').select('*').in('cliente_id', clienteIds),
         supabase.from('clases').select('*'),
-        supabase.from('coaches').select('*'),
         supabase.from('salas').select('*'),
         supabase.from('sucursales').select('*')
       ])
+
+      if (resReservas.error) console.warn('Aviso al traer reservas:', resReservas.error)
+      if (resAsistencias.error) console.warn('Aviso al traer asistencias:', resAsistencias.error)
+      if (resPagos.error) console.warn('Aviso al traer pagos:', resPagos.error)
+      if (resClases.error) console.warn('Aviso al traer clases:', resClases.error)
 
       const reservasAll    = resReservas.data || []
       const asistenciasAll = resAsistencias.data || []
       const pagosAll       = resPagos.data || []
       const clasesAll      = resClases.data || []
-      const coachesAll     = resCoaches.data || []
       const salasAll       = resSalas.data || []
       const sucursalesAll  = resSucursales.data || []
 
-      // 2. Crear Mapas Clave-Valor de referencia ultra rápidos
+      // Mapas de búsqueda rápida en memoria
       const mapaClases:     Record<string, any>    = {}
-      const mapaCoaches:    Record<string, string> = {}
       const mapaSalas:      Record<string, string> = {}
       const mapaSucursales: Record<string, string> = {}
 
-      clasesAll.forEach((cl: any) => { mapaClases[cl.id] = cl })
-      coachesAll.forEach((ch: any) => { 
-        mapaCoaches[ch.id] = `${ch.nombre || ''} ${ch.primer_apellido || ch.apellido || ''}`.trim() 
-      })
-      salasAll.forEach((sl: any) => { mapaSalas[sl.id] = sl.nombre })
-      sucursalesAll.forEach((sc: any) => { mapaSucursales[sc.id] = sc.nombre })
+      clasesAll.forEach((cl: any) => { if (cl?.id) mapaClases[cl.id] = cl })
+      salasAll.forEach((sl: any) => { if (sl?.id) mapaSalas[sl.id] = sl.nombre })
+      sucursalesAll.forEach((sc: any) => { if (sc?.id) mapaSucursales[sc.id] = sc.nombre })
 
       const headers = [
         'Nombre Completo',
@@ -149,11 +146,14 @@ export default function ClientesPage() {
         'Estudio / Sucursal',
         'Canal / Plataforma Registro',
         'Plan Actual',
+        'Fecha Alta',
+        'Antigüedad',
         'Nivel Experiencia',
         'Fecha Vencimiento Plan',
         'Método de Pago',
-        'Clases Tomadas',
+        'Clases Tomadas (Visitas)',
         'No Shows',
+        '% Asistencia',
         'Reservas Próximas',
         'Última Clase Tomada',
         '¿Reservó Clase Muestra?',
@@ -161,17 +161,32 @@ export default function ClientesPage() {
         'Valor de Cliente (LTV MXN)'
       ]
 
+      const ahora = new Date()
+
       const rows = clientes.map(c => {
         const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
         const miMembresia = membresiasList[0]
 
-        // Vencimiento y Plan Real
         const fechaVencimiento = c.fecha_venc_plan || c.fecha_vencimiento_membresia || miMembresia?.fecha_fin
         const paqueteObj = miMembresia?.paquetes ? (Array.isArray(miMembresia.paquetes) ? miMembresia.paquetes[0] : miMembresia.paquetes) : null
         const nombrePlan = c.plan || paqueteObj?.nombre || 'Sin plan activo'
-        const canalOrigen = c.origen || c.canal || miMembresia?.origen || 'Navy'
+        
+        let canalOrigen = c.origen || c.canal || miMembresia?.origen || 'Prospecto'
+        if (c.plan === 'Wellhub' || c.origen === 'Wellhub') canalOrigen = 'Wellhub'
+        else if (c.plan === 'TotalPass' || c.origen === 'TotalPass') canalOrigen = 'TotalPass'
+        else if (c.estatus === 'Prospecto' || (!c.plan && (!c.membresias || c.membresias.length === 0))) canalOrigen = 'Prospecto'
+        else if (!canalOrigen || canalOrigen === 'Prospecto') canalOrigen = 'Navy'
 
-        // Método de Pago
+        const fechaAltaStr = (c.created_at || c.fecha_alta_original) 
+          ? new Date(c.fecha_alta_original || c.created_at).toLocaleDateString('es-MX') 
+          : 'Sin fecha'
+          
+        let antiguedadStr = 'Hoy'
+        if (c.created_at || c.fecha_alta_original) {
+          const dias = Math.floor((ahora.getTime() - new Date(c.fecha_alta_original || c.created_at).getTime()) / (1000 * 3600 * 24))
+          antiguedadStr = dias <= 0 ? 'Hoy' : `${dias} días`
+        }
+
         const misPagos = pagosAll.filter((p: any) => p.cliente_id === c.id)
         let metodoEncontrado = c.forma_pago || c.metodo_pago
 
@@ -183,77 +198,80 @@ export default function ClientesPage() {
         }
         const metodoFinal = metodoEncontrado || (['Wellhub', 'TotalPass', 'Fitpass'].includes(canalOrigen) ? canalOrigen : 'Sin registro')
 
-        // Reservas y Asistencias del cliente
         const misReservas = reservasAll.filter((r: any) => r.cliente_id === c.id)
         const misAsistencias = asistenciasAll.filter((a: any) => a.cliente_id === c.id)
 
-        // Conteo de asistencias
         const totalVisitas = misAsistencias.length > 0 
           ? misAsistencias.length 
-          : misReservas.filter((r: any) => {
-              const st = (r.estatus || '').toLowerCase()
+          : (c.visitas || misReservas.filter((r: any) => {
+              const st = String(r.estatus || '').toLowerCase()
               return st.includes('asistio') || st.includes('completad') || st.includes('checkin') || st.includes('asistió')
+            }).length || 0)
+
+        const totalNoShows = c.no_shows !== undefined 
+          ? c.no_shows 
+          : misReservas.filter((r: any) => {
+              const st = String(r.estatus || '').toLowerCase()
+              return st.includes('no show') || st.includes('no_show') || st.includes('inasistencia')
             }).length
 
-        // Conteo No Shows
-        const totalNoShows = misReservas.filter((r: any) => {
-          const st = (r.estatus || '').toLowerCase()
-          return st.includes('no show') || st.includes('no_show') || st.includes('inasistencia')
-        }).length
+        const pctAsistencia = c.asistencia_pct !== undefined 
+          ? `${c.asistencia_pct}%` 
+          : (misReservas.length > 0 ? `${Math.round((totalVisitas / misReservas.length) * 100)}%` : '0%')
 
-        // Función para armar el texto exacto: "NombreClase · Coach · Sala/Estudio"
-        const obtenerDetalleClase = (reservaObj: any) => {
-          if (!reservaObj) return null
-          const claseId = reservaObj.clase_id
-          const clase = mapaClases[claseId]
+        // Extrae el objeto fecha de la reserva o clase asociada
+        const getFechaObjeto = (r: any): Date => {
+          if (!r) return new Date(0)
+          const clase = mapaClases[r.clase_id] || {}
+          const fRaw = r.horario || r.fecha || clase.horario || clase.fecha_hora || clase.fecha || r.created_at
+          return fRaw ? new Date(fRaw) : new Date(0)
+        }
 
-          const nombreClase = clase?.nombre || clase?.disciplina || reservaObj.disciplina || 'Clase'
-          const coachId     = clase?.coach_id || clase?.instructor_id || reservaObj.coach_id
-          const nombreCoach = mapaCoaches[coachId] || clase?.coach_nombre || 'Joni'
+        // Formatea el detalle completo de la clase
+        const obtenerDetalleClase = (r: any) => {
+          if (!r) return null
+          const clase = mapaClases[r.clase_id] || {}
+
+          const nombreClase = r.nombre_clase || clase.nombre_clase || clase.nombre || 'Clase'
+          const instructor  = r.instructor || clase.instructor || clase.coach || 'Sin instructor'
           
-          const salaId      = reservaObj.room_id || reservaObj.spot_id || clase?.sala_id
-          const sucursalId  = c.sucursal_id || clase?.sucursal_id
-          const nombreLugar = mapaSalas[salaId] || mapaSucursales[sucursalId] || c.sucursales?.nombre || 'Condesa Studio'
+          const sucursalId  = r.sucursal_id || clase.sucursal_id || c.sucursal_id
+          const nombreLugar = mapaSalas[r.room_id || r.spot_id] || mapaSucursales[sucursalId] || c.sucursales?.nombre || 'Condesa Studio'
 
-          const fechaRaw = clase?.fecha || reservaObj.fecha || reservaObj.created_at
-          const fechaFormateada = fechaRaw ? new Date(fechaRaw).toLocaleDateString('es-MX') : ''
-
-          return `${fechaFormateada ? fechaFormateada + ' - ' : ''}${nombreClase} · ${nombreCoach} · ${nombreLugar}`
-        }
-
-        // 1. Próximas Reservas
-        let reservasProximasTexto = 'Sin reservas'
-        const reservasActivas = misReservas.filter((r: any) => {
-          const st = (r.estatus || '').toLowerCase()
-          return st.includes('proxima') || st.includes('próxima') || st.includes('confirmada') || st.includes('reservad')
-        })
-
-        if (reservasActivas.length > 0) {
-          const txt = obtenerDetalleClase(reservasActivas[0])
-          if (txt) reservasProximasTexto = txt
-        } else if (misReservas.length > 0) {
-          // Si tiene reservas registradas pero con estatus genérico
-          const ultReserva = misReservas[0]
-          const txt = obtenerDetalleClase(ultReserva)
-          if (txt) reservasProximasTexto = txt
-        }
-
-        // 2. Última Clase Tomada
-        let ultimaClaseTexto = 'Sin clases tomadas'
-        const reservasAsistidas = misReservas.filter((r: any) => {
-          const st = (r.estatus || '').toLowerCase()
-          return st.includes('asistio') || st.includes('completad') || st.includes('checkin') || st.includes('asistió')
-        })
-
-        if (reservasAsistidas.length > 0) {
-          const ult = reservasAsistidas.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0]
-          const txt = obtenerDetalleClase(ult)
-          if (txt) ultimaClaseTexto = txt
-        } else if (misAsistencias.length > 0) {
-          const ultAsist = misAsistencias.sort((a, b) => new Date(b.fecha_checkin || 0).getTime() - new Date(a.fecha_checkin || 0).getTime())[0]
-          if (ultAsist?.fecha_checkin) {
-            ultimaClaseTexto = new Date(ultAsist.fecha_checkin).toLocaleDateString('es-MX')
+          const fechaObj = getFechaObjeto(r)
+          let fechaFormateada = ''
+          if (fechaObj.getTime() > 0) {
+            const fStr = fechaObj.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            const hStr = fechaObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+            fechaFormateada = `${fStr} ${hStr}`
           }
+
+          return `${fechaFormateada} - ${nombreClase} · ${instructor} · ${nombreLugar}`
+        }
+
+        // 1. RESERVAS PRÓXIMAS
+        let reservasProximasTexto = 'Sin reservas'
+        const reservasValidas = misReservas.filter((r: any) => {
+          const st = String(r.estatus || '').toLowerCase()
+          return !st.includes('cancel')
+        })
+
+        if (reservasValidas.length > 0) {
+          const ordenadas = [...reservasValidas].sort((a: any, b: any) => getFechaObjeto(b).getTime() - getFechaObjeto(a).getTime())
+          const txt = obtenerDetalleClase(ordenadas[0])
+          if (txt) reservasProximasTexto = txt
+        }
+
+        // 2. ÚLTIMA CLASE TOMADA
+        let ultimaClaseTexto = 'Sin clases tomadas'
+        if (misAsistencias.length > 0) {
+          const ultAsist = [...misAsistencias].sort((a: any, b: any) => new Date(b.fecha_checkin || 0).getTime() - new Date(a.fecha_checkin || 0).getTime())[0]
+          const txt = obtenerDetalleClase(ultAsist)
+          if (txt) ultimaClaseTexto = txt
+          else if (ultAsist.fecha_checkin) ultimaClaseTexto = new Date(ultAsist.fecha_checkin).toLocaleDateString('es-MX')
+        } else if (reservasValidas.length > 0) {
+          const txt = obtenerDetalleClase(reservasValidas[0])
+          if (txt) ultimaClaseTexto = txt
         } else if (c.ultima_visita) {
           ultimaClaseTexto = new Date(c.ultima_visita).toLocaleDateString('es-MX')
         }
@@ -266,7 +284,7 @@ export default function ClientesPage() {
         let asistioMuestra = 'No'
         if (reservaMuestra) {
           const st = String(reservaMuestra.estatus || '').toLowerCase()
-          if (['asistio', 'completada', 'checkin', 'asistió'].some(e => st.includes(e))) {
+          if (['asistio', 'completada', 'checkin', 'asistió', 'confirmada'].some(e => st.includes(e))) {
             asistioMuestra = 'Sí'
           }
         } else if (c.asistio_muestra) {
@@ -280,6 +298,7 @@ export default function ClientesPage() {
           if (!isNaN(val)) ltvCalculado += val 
         })
         const ltvFinal = ltvCalculado > 0 ? ltvCalculado : parseFloat(c.valor_cliente || c.ltv || 0)
+        const ltvTexto = isNaN(ltvFinal) || ltvFinal === 0 ? '0' : ltvFinal.toFixed(2)
 
         return [
           c.nombre_completo || `${c.nombre || ''} ${c.apellido || ''}`.trim() || 'Sin nombre',
@@ -289,19 +308,23 @@ export default function ClientesPage() {
           c.sucursales?.nombre || 'Sin sucursal',
           canalOrigen,
           nombrePlan,
+          fechaAltaStr,
+          antiguedadStr,
           c.nivel_experiencia || 'No especificado',
           fechaVencimiento ? new Date(fechaVencimiento).toLocaleDateString('es-MX') : 'Sin fecha',
           metodoFinal,
           totalVisitas,
           totalNoShows,
+          pctAsistencia,
           reservasProximasTexto,
           ultimaClaseTexto,
           reservoMuestra,
           asistioMuestra,
-          ltvFinal
+          ltvTexto
         ]
       })
 
+      // Generar archivo CSV
       const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
@@ -313,15 +336,16 @@ export default function ClientesPage() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-    } catch (err) {
-      console.error('Error al exportar clientes:', err)
-      alert('Ocurrió un error al generar la descarga del reporte.')
+      alert('¡Exportación completada con éxito!')
+
+    } catch (err: any) {
+      console.error('Error al exportar:', err)
+      alert(`Error al exportar: ${err?.message || 'Revisa la consola del navegador'}`)
     } finally {
       setExportando(false)
     }
   }
 
-  // ── Bulk Actions ──────────────────────────────────────────────────────────────
   const handleRenovar = async (ids: string[]) => {
     for (const id of ids) {
       const c = clientes.find(x => x.id === id)
@@ -358,7 +382,6 @@ export default function ClientesPage() {
     setEditarOpen(true)
   }
 
-  // ── Métricas ──────────────────────────────────────────────────────────────────
   const activos       = clientes.filter(c => c.estatus === 'Activo' && !c.perdido).length
   const expirados     = clientes.filter(c => {
     const f = c.fecha_vencimiento_memb || c.fecha_venc_plan
@@ -375,7 +398,6 @@ export default function ClientesPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Clientes</h1>
@@ -399,7 +421,6 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      {/* Métricas */}
       <ClientesMetricas
         activos={activos}
         expirados={expirados}
@@ -407,7 +428,6 @@ export default function ClientesPage() {
         perdidos={perdidos}
       />
 
-      {/* Tabla */}
       <ClientesTabla
         clientes={clientes}
         onRefresh={fetchClientes}
@@ -418,7 +438,6 @@ export default function ClientesPage() {
         onEditarCliente={handleEditarCliente}
       />
 
-      {/* Drawers */}
       <DrawerNuevoCliente
         isOpen={nuevoOpen}
         onClose={() => setNuevoOpen(false)}

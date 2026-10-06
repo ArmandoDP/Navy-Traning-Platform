@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, ChevronRight as ChevronR, Wifi, Smartphone, Users, TrendingUp, Clock, Calendar, Star } from 'lucide-react'
 import { BadgeEstatus, BadgeSucursal, AsistenciaBar } from './ClientesBadges'
 import ClientesFilters    from './ClientesFilters'
@@ -24,13 +24,14 @@ interface Cliente {
 }
 
 interface Props {
-  clientes:        Cliente[]
-  onRefresh:       () => void
-  onRenovar:       (ids: string[]) => void
-  onMarcarPerdido: (ids: string[]) => void
-  onCambiarPaquete:(ids: string[]) => void
-  onEditarCliente: (cliente: Cliente) => void
-  onVerCliente:    (cliente: Cliente) => void
+  clientes:           Cliente[]
+  onRefresh:          () => void
+  onRenovar:          (ids: string[]) => void
+  onMarcarPerdido:    (ids: string[]) => void
+  onCambiarPaquete:   (ids: string[]) => void
+  onEditarCliente:    (cliente: Cliente) => void
+  onVerCliente:       (cliente: Cliente) => void
+  onFiltradosChange?: (filtrados: Cliente[]) => void
 }
 
 type Tab = 'todo' | 'vence7' | 'riesgo'
@@ -71,7 +72,16 @@ function getSortVal(c: Cliente, col: string) {
   return ''
 }
 
-export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcarPerdido, onCambiarPaquete, onEditarCliente, onVerCliente }: Props) {
+export default function ClientesTabla({ 
+  clientes, 
+  onRefresh, 
+  onRenovar, 
+  onMarcarPerdido, 
+  onCambiarPaquete, 
+  onEditarCliente, 
+  onVerCliente,
+  onFiltradosChange
+}: Props) {
   const [tab,       setTab]       = useState<Tab>('todo')
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
   const [pagina,    setPagina]    = useState(1)
@@ -103,14 +113,12 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
     const plan = (c.plan || '').toLowerCase()
     const fecha = c.created_at?.slice(0, 10) || ''
 
-    // Coincidencia amplia si el usuario escribe en la barra de búsqueda
     const haceMatchBusqueda = !q || 
       nombreCompleto.includes(q) || 
       email.includes(q) || 
       telefono.includes(q) ||
       sucursal.includes(q)
 
-    // Si hay búsqueda por texto activo (q), ignoramos la restricción rígida de sucursal para encontrar al cliente sin importar dónde esté
     const evalSucursal = q ? true : (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase()))
 
     return (
@@ -122,6 +130,13 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
       (!filtros.estado   || c.estatus === filtros.estado)
     )
   })
+
+  // Sincronizar clientes filtrados con la página principal en tiempo real
+  useEffect(() => {
+    if (onFiltradosChange) {
+      onFiltradosChange(filtrados)
+    }
+  }, [tab, filtros, clientes])
 
   const ordenados = [...filtrados].sort((a, b) => {
     if (!orden.col) return 0
@@ -371,7 +386,7 @@ export default function ClientesTabla({ clientes, onRefresh, onRenovar, onMarcar
         </table>
       </div>
 
-      {/* Paginación dinámicamente extensible */}
+      {/* Paginación */}
       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
         <div className="flex items-center gap-1">
           <button onClick={() => setPagina(p => Math.max(1, p-1))} disabled={pagina === 1}
