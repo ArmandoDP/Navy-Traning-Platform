@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useSucursal } from '@/context/SucursalContext'
 import { Plus } from 'lucide-react'
@@ -15,6 +15,9 @@ export default function ReservasPage() {
   const [loading,   setLoading]   = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
 
+  // Usamos una referencia mutable para almacenar la función de exportación sin provocar re-renders
+  const exportarRef = useRef<(() => void) | null>(null)
+
   const fetchReservas = async () => {
     setLoading(true)
     let q = supabase
@@ -28,7 +31,6 @@ export default function ReservasPage() {
       `)
       .order('created_at', { ascending: false })
 
-    // Filtrar por sucursal via clases
     if (sucursalId) {
       const { data: claseIds } = await supabase.from('clases').select('id').eq('sucursal_id', sucursalId)
       const ids = (claseIds || []).map((c: any) => c.id)
@@ -48,11 +50,16 @@ export default function ReservasPage() {
   const noShows    = reservas.filter(r => r.lista_espera)
   const tasa       = activas.length > 0 ? Math.round(((activas.length - noShows.length) / activas.length) * 100) : 0
 
+  const handleExportar = () => {
+    if (exportarRef.current) {
+      exportarRef.current()
+    }
+  }
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400 text-sm italic">Cargando reservas...</div>
 
   return (
     <div className="space-y-5 bg-gray-50 min-h-screen">
-
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -68,8 +75,16 @@ export default function ReservasPage() {
       </div>
 
       <ReservasMetricas reservas={activas.length} cancelaciones={canceladas.length} noShows={noShows.length} tasaAsistencia={tasa} />
-      <ReservasPaneles />
-      <ReservasTabla reservas={reservas} onRefresh={fetchReservas} />
+      
+      {/* Ejecuta la exportación a través de la referencia */}
+      <ReservasPaneles onExportar={handleExportar} />
+      
+      {/* Guarda la función dentro de exportarRef sin renderizar de nuevo */}
+      <ReservasTabla 
+        reservas={reservas} 
+        onRefresh={fetchReservas} 
+        onExportarData={(fn) => { exportarRef.current = fn }} 
+      />
 
       <ModalCrearReserva isOpen={modalOpen} onClose={() => setModalOpen(false)} onSuccess={fetchReservas} />
     </div>
