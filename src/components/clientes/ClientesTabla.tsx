@@ -131,7 +131,7 @@ export default function ClientesTabla({
     )
   })
 
-  // Sincronizar clientes filtrados con la página principal en tiempo real
+  // Notificar al componente padre cada vez que cambien los clientes filtrados
   useEffect(() => {
     if (onFiltradosChange) {
       onFiltradosChange(filtrados)

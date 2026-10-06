@@ -1,82 +1,114 @@
 'use client'
-import { useEffect, useState } from 'react'
+
+import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useSucursal } from '@/context/SucursalContext'
 import { Upload, Plus, RefreshCw } from 'lucide-react'
-import ClientesMetricas   from '@/components/clientes/ClientesMetricas'
-import ClientesTabla      from '@/components/clientes/ClientesTabla'
+import ClientesMetricas from '@/components/clientes/ClientesMetricas'
+import ClientesTabla from '@/components/clientes/ClientesTabla'
 import DrawerNuevoCliente from '@/components/clientes/DrawerNuevoCliente'
 import DrawerEditarCliente from '@/components/clientes/DrawerEditarCliente'
-import DrawerCliente      from '@/components/clientes/drawer/DrawerCliente'
+import DrawerCliente from '@/components/clientes/drawer/DrawerCliente'
 
 export default function ClientesPage() {
   const { sucursalId, sucursalActiva } = useSucursal()
 
-  const [clientes,        setClientes]        = useState<any[]>([])
-  const [loading,         setLoading]         = useState(true)
-  const [nuevoOpen,       setNuevoOpen]       = useState(false)
+  const [clientes, setClientes] = useState<any[]>([])
+  const [clientesFiltrados, setClientesFiltrados] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [nuevoOpen, setNuevoOpen] = useState(false)
   const [drawerClienteId, setDrawerClienteId] = useState<string | null>(null)
-  const [drawerOpen,      setDrawerOpen]      = useState(false)
-  const [editarCliente,   setEditarCliente]   = useState<any | null>(null)
-  const [editarOpen,      setEditarOpen]      = useState(false)
-  const [exportando,      setExportando]      = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [editarCliente, setEditarCliente] = useState<any | null>(null)
+  const [editarOpen, setEditarOpen] = useState(false)
+  const [exportando, setExportando] = useState(false)
 
   const fetchClientes = async () => {
     setLoading(true)
-    let q = supabase
-      .from('clientes')
-      .select('*, sucursales(nombre, color), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))')
-      .order('created_at', { ascending: false })
+    try {
+      let q = supabase
+        .from('clientes')
+        .select('*, sucursales(nombre, color), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))')
+        .order('created_at', { ascending: false })
 
-    if (sucursalId && sucursalId !== 'global') {
-      q = q.eq('sucursal_id', sucursalId)
+      if (sucursalId && sucursalId !== 'global') {
+        q = q.eq('sucursal_id', sucursalId)
+      }
+
+      const { data, error } = await q
+      if (error) throw error
+
+      if (data) {
+        const ahora = new Date()
+        const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
+
+        const { data: reservas } = await supabase
+          .from('reservas')
+          .select('cliente_id, usuario_id, estatus, status, fecha, horario, created_at')
+
+        const enriquecidos = data.map(c => {
+          const misReservas = reservas?.filter(r => 
+            r.cliente_id === c.id || r.usuario_id === c.id
+          ) || []
+          
+          const misAsistencias = misReservas.filter(r => {
+            const st = String(r.estatus || r.status || '').toLowerCase().trim()
+            if (st.includes('cancel') || st.includes('no show') || st.includes('inasistencia')) return false
+            
+            const fRaw = r.fecha || r.horario || r.created_at
+            const fFecha = fRaw ? new Date(fRaw) : new Date(0)
+            
+            const esEstadoAsistio = ['asistió', 'asistio', 'asistida', 'completada', 'checkin'].includes(st)
+            const esPasadaValida = fFecha.getTime() > 0 && fFecha <= ahora
+
+            return esEstadoAsistio || esPasadaValida
+          })
+
+          const clasesMes = misAsistencias.filter(a => {
+            const f = a.fecha || a.horario || a.created_at
+            return f && new Date(f) >= inicioMes
+          }).length
+
+          const ultimasAsistencias = [...misAsistencias].sort((a, b) => {
+            const fA = new Date(a.fecha || a.horario || a.created_at).getTime()
+            const fB = new Date(b.fecha || b.horario || b.created_at).getTime()
+            return fB - fA
+          })
+
+          const ultimaVisita = ultimasAsistencias[0] 
+            ? (ultimasAsistencias[0].fecha || ultimasAsistencias[0].horario || ultimasAsistencias[0].created_at)
+            : undefined
+
+          const reservasValidas = misReservas.filter(r => {
+            const st = String(r.estatus || r.status || '').toLowerCase()
+            return !st.includes('cancel')
+          })
+
+          const asistenciaPct = reservasValidas.length > 0
+            ? Math.round((misAsistencias.length / reservasValidas.length) * 100)
+            : 0
+
+          return {
+            ...c,
+            clases_mes: clasesMes,
+            ultima_visita: ultimaVisita,
+            asistencia_pct: asistenciaPct,
+          }
+        })
+
+        setClientes(enriquecidos)
+        setClientesFiltrados(enriquecidos)
+      }
+    } catch (err) {
+      console.error('Error al cargar clientes:', err)
+    } finally {
+      setLoading(false)
     }
-
-    const { data, error } = await q
-    if (!error && data) {
-      const inicioMes = new Date()
-      inicioMes.setDate(1)
-      inicioMes.setHours(0, 0, 0, 0)
-
-      const { data: asistencias } = await supabase
-        .from('asistencias')
-        .select('cliente_id, fecha_checkin')
-
-      const { data: reservas } = await supabase
-        .from('reservas')
-        .select('cliente_id, estatus, es_clase_muestra, origen')
-        .neq('estatus', 'Cancelada')
-
-      const enriquecidos = data.map(c => {
-        const asistCliente = asistencias?.filter(a => a.cliente_id === c.id) || []
-        const reservasCliente = reservas?.filter(r => r.cliente_id === c.id) || []
-        
-        const clasesMes = asistCliente.filter(a =>
-          a.fecha_checkin && new Date(a.fecha_checkin) >= inicioMes
-        ).length
-
-        const ultimaVisita = asistCliente.length > 0
-          ? asistCliente.sort((a, b) => new Date(b.fecha_checkin).getTime() - new Date(a.fecha_checkin).getTime())[0].fecha_checkin
-          : undefined
-
-        const asistenciaPct = reservasCliente.length > 0
-          ? Math.round((asistCliente.length / reservasCliente.length) * 100)
-          : 0
-
-        return {
-          ...c,
-          clases_mes:    clasesMes,
-          ultima_visita: ultimaVisita,
-          asistencia_pct: asistenciaPct,
-        }
-      })
-
-      setClientes(enriquecidos)
-    }
-    setLoading(false)
   }
 
-  useEffect(() => { fetchClientes() }, [sucursalId])
+  useEffect(() => {
+    fetchClientes()
+  }, [sucursalId])
 
   const extraerTextoMetodo = (valor: any): string | null => {
     if (!valor) return null
@@ -88,55 +120,67 @@ export default function ClientesPage() {
     return null
   }
 
+  const fetchAllTableComplete = async (tableName: string) => {
+    let allData: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let keepFetching = true
+
+    while (keepFetching) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      if (error) {
+        console.warn(`Error al consultar ${tableName}:`, error)
+        break
+      }
+      if (data && data.length > 0) {
+        allData = [...allData, ...data]
+        if (data.length < pageSize) keepFetching = false
+        else page++
+      } else {
+        keepFetching = false
+      }
+    }
+    return allData
+  }
+
   const handleExportar = async () => {
     try {
       setExportando(true)
 
-      if (!clientes || clientes.length === 0) {
-        alert('No hay clientes cargados en la pantalla para exportar.')
+      // EXPORTAMOS ÚNICAMENTE LOS CLIENTES VISIBLES / FILTRADOS
+      const listaAExportar = clientesFiltrados.length > 0 ? clientesFiltrados : clientes
+
+      if (!listaAExportar || listaAExportar.length === 0) {
+        alert('No hay clientes filtrados en pantalla para exportar.')
         setExportando(false)
         return
       }
 
-      const clienteIds = clientes.map(c => c.id).filter(Boolean)
-
-      // 1. Consultas individuales en paralelo sin relaciones anidadas en Supabase
       const [
-        resReservas,
-        resAsistencias,
-        resPagos,
-        resClases,
-        resSalas,
-        resSucursales
+        reservasAll,
+        pagosAll,
+        clasesAll,
+        salasAll,
+        sucursalesAll
       ] = await Promise.all([
-        supabase.from('reservas').select('*').in('cliente_id', clienteIds),
-        supabase.from('asistencias').select('*').in('cliente_id', clienteIds),
-        supabase.from('pagos').select('*').in('cliente_id', clienteIds),
-        supabase.from('clases').select('*'),
-        supabase.from('salas').select('*'),
-        supabase.from('sucursales').select('*')
+        fetchAllTableComplete('reservas'),
+        fetchAllTableComplete('pagos'),
+        fetchAllTableComplete('clases'),
+        fetchAllTableComplete('salas'),
+        fetchAllTableComplete('sucursales')
       ])
 
-      if (resReservas.error) console.warn('Aviso al traer reservas:', resReservas.error)
-      if (resAsistencias.error) console.warn('Aviso al traer asistencias:', resAsistencias.error)
-      if (resPagos.error) console.warn('Aviso al traer pagos:', resPagos.error)
-      if (resClases.error) console.warn('Aviso al traer clases:', resClases.error)
-
-      const reservasAll    = resReservas.data || []
-      const asistenciasAll = resAsistencias.data || []
-      const pagosAll       = resPagos.data || []
-      const clasesAll      = resClases.data || []
-      const salasAll       = resSalas.data || []
-      const sucursalesAll  = resSucursales.data || []
-
-      // Mapas de búsqueda rápida en memoria
-      const mapaClases:     Record<string, any>    = {}
-      const mapaSalas:      Record<string, string> = {}
+      const mapaClases: Record<string, any> = {}
+      const mapaSalas: Record<string, string> = {}
       const mapaSucursales: Record<string, string> = {}
 
       clasesAll.forEach((cl: any) => { if (cl?.id) mapaClases[cl.id] = cl })
-      salasAll.forEach((sl: any) => { if (sl?.id) mapaSalas[sl.id] = sl.nombre })
-      sucursalesAll.forEach((sc: any) => { if (sc?.id) mapaSucursales[sc.id] = sc.nombre })
+      salasAll.forEach((sl: any) => { if (sl?.id) mapaSalas[sl.id] = sl.nombre || sl.name })
+      sucursalesAll.forEach((sc: any) => { if (sc?.id) mapaSucursales[sc.id] = sc.nombre || sc.name })
 
       const headers = [
         'Nombre Completo',
@@ -163,17 +207,21 @@ export default function ClientesPage() {
 
       const ahora = new Date()
 
-      const rows = clientes.map(c => {
+      const rows = listaAExportar.map(c => {
         const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
         const miMembresia = membresiasList[0]
 
-        const fechaVencimiento = c.fecha_venc_plan || c.fecha_vencimiento_membresia || miMembresia?.fecha_fin
+        const fechaVencimiento = c.fecha_venc_plan || c.fecha_vencimiento_membresia || c.fecha_vencimiento_memb || miMembresia?.fecha_fin
         const paqueteObj = miMembresia?.paquetes ? (Array.isArray(miMembresia.paquetes) ? miMembresia.paquetes[0] : miMembresia.paquetes) : null
-        const nombrePlan = c.plan || paqueteObj?.nombre || 'Sin plan activo'
+        const nombrePlan = c.plan || c.paquete || paqueteObj?.nombre || miMembresia?.notas || 'Sin plan activo'
         
         let canalOrigen = c.origen || c.canal || miMembresia?.origen || 'Prospecto'
-        if (c.plan === 'Wellhub' || c.origen === 'Wellhub') canalOrigen = 'Wellhub'
-        else if (c.plan === 'TotalPass' || c.origen === 'TotalPass') canalOrigen = 'TotalPass'
+        const planLower = String(nombrePlan).toLowerCase()
+        const origenLower = String(canalOrigen).toLowerCase()
+
+        if (planLower.includes('wellhub') || origenLower.includes('wellhub')) canalOrigen = 'Wellhub'
+        else if (planLower.includes('totalpass') || origenLower.includes('totalpass')) canalOrigen = 'TotalPass'
+        else if (planLower.includes('fitpass') || origenLower.includes('fitpass')) canalOrigen = 'Fitpass'
         else if (c.estatus === 'Prospecto' || (!c.plan && (!c.membresias || c.membresias.length === 0))) canalOrigen = 'Prospecto'
         else if (!canalOrigen || canalOrigen === 'Prospecto') canalOrigen = 'Navy'
 
@@ -187,55 +235,76 @@ export default function ClientesPage() {
           antiguedadStr = dias <= 0 ? 'Hoy' : `${dias} días`
         }
 
-        const misPagos = pagosAll.filter((p: any) => p.cliente_id === c.id)
+        const misPagos = pagosAll.filter((p: any) => p.cliente_id === c.id || p.usuario_id === c.id)
         let metodoEncontrado = c.forma_pago || c.metodo_pago
 
         if (!metodoEncontrado && misPagos.length > 0) {
           for (const p of misPagos) {
-            metodoEncontrado = extraerTextoMetodo(p.forma_pago || p.metodo_pago || p.metodo)
+            metodoEncontrado = extraerTextoMetodo(p.forma_pago || p.metodo_pago || p.metodo || p.payment_method)
             if (metodoEncontrado) break
           }
         }
-        const metodoFinal = metodoEncontrado || (['Wellhub', 'TotalPass', 'Fitpass'].includes(canalOrigen) ? canalOrigen : 'Sin registro')
 
-        const misReservas = reservasAll.filter((r: any) => r.cliente_id === c.id)
-        const misAsistencias = asistenciasAll.filter((a: any) => a.cliente_id === c.id)
+        let metodoFinal = 'Sin registro'
+        if (['Wellhub', 'TotalPass', 'Fitpass'].includes(canalOrigen)) {
+          metodoFinal = canalOrigen
+        } else {
+          metodoFinal = metodoEncontrado || 'Sin registro'
+        }
 
-        const totalVisitas = misAsistencias.length > 0 
-          ? misAsistencias.length 
-          : (c.visitas || misReservas.filter((r: any) => {
-              const st = String(r.estatus || '').toLowerCase()
-              return st.includes('asistio') || st.includes('completad') || st.includes('checkin') || st.includes('asistió')
-            }).length || 0)
-
-        const totalNoShows = c.no_shows !== undefined 
-          ? c.no_shows 
-          : misReservas.filter((r: any) => {
-              const st = String(r.estatus || '').toLowerCase()
-              return st.includes('no show') || st.includes('no_show') || st.includes('inasistencia')
-            }).length
-
-        const pctAsistencia = c.asistencia_pct !== undefined 
-          ? `${c.asistencia_pct}%` 
-          : (misReservas.length > 0 ? `${Math.round((totalVisitas / misReservas.length) * 100)}%` : '0%')
-
-        // Extrae el objeto fecha de la reserva o clase asociada
+        const misReservas = reservasAll.filter((r: any) => r.cliente_id === c.id || r.usuario_id === c.id)
+        
         const getFechaObjeto = (r: any): Date => {
           if (!r) return new Date(0)
           const clase = mapaClases[r.clase_id] || {}
-          const fRaw = r.horario || r.fecha || clase.horario || clase.fecha_hora || clase.fecha || r.created_at
+          const fRaw = r.horario || r.fecha || r.fecha_checkin || clase.horario || clase.fecha_hora || clase.fecha || r.created_at
           return fRaw ? new Date(fRaw) : new Date(0)
         }
 
-        // Formatea el detalle completo de la clase
+        let inicioPeriodo = miMembresia?.fecha_inicio ? new Date(miMembresia.fecha_inicio) : null
+        let finPeriodo = miMembresia?.fecha_fin ? new Date(miMembresia.fecha_fin) : null
+
+        if (!inicioPeriodo || isNaN(inicioPeriodo.getTime())) {
+          inicioPeriodo = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
+        }
+        if (!finPeriodo || isNaN(finPeriodo.getTime())) {
+          finPeriodo = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59)
+        }
+
+        const misAsistencias = misReservas.filter((r: any) => {
+          const st = String(r.estatus || r.status || '').toLowerCase().trim()
+          if (st.includes('cancel') || st.includes('no show') || st.includes('inasistencia')) return false
+          
+          const fObj = getFechaObjeto(r)
+          const fTime = fObj.getTime()
+          if (fTime === 0) return false
+
+          const esEstadoAsistio = ['asistió', 'asistio', 'asistida', 'completada', 'checkin'].includes(st)
+          const esPasadaValida = fTime <= ahora.getTime()
+
+          const estaEnPeriodo = fTime >= inicioPeriodo!.getTime() && fTime <= finPeriodo!.getTime()
+
+          return (esEstadoAsistio || esPasadaValida) && estaEnPeriodo
+        })
+
+        const totalVisitas = misAsistencias.length
+
+        const totalNoShows = misReservas.filter((r: any) => {
+          const st = String(r.estatus || r.status || '').toLowerCase()
+          return st.includes('no show') || st.includes('no_show') || st.includes('inasistencia')
+        }).length
+
+        const reservasValidas = misReservas.filter((r: any) => !String(r.estatus || r.status || '').toLowerCase().includes('cancel'))
+        const pctAsistencia = reservasValidas.length > 0 ? `${Math.round((totalVisitas / reservasValidas.length) * 100)}%` : '0%'
+
         const obtenerDetalleClase = (r: any) => {
           if (!r) return null
           const clase = mapaClases[r.clase_id] || {}
 
           const nombreClase = r.nombre_clase || clase.nombre_clase || clase.nombre || 'Clase'
-          const instructor  = r.instructor || clase.instructor || clase.coach || 'Sin instructor'
+          const instructor = r.instructor || clase.instructor || clase.coach || 'Sin instructor'
           
-          const sucursalId  = r.sucursal_id || clase.sucursal_id || c.sucursal_id
+          const sucursalId = r.sucursal_id || clase.sucursal_id || c.sucursal_id
           const nombreLugar = mapaSalas[r.room_id || r.spot_id] || mapaSucursales[sucursalId] || c.sucursales?.nombre || 'Condesa Studio'
 
           const fechaObj = getFechaObjeto(r)
@@ -249,52 +318,42 @@ export default function ClientesPage() {
           return `${fechaFormateada} - ${nombreClase} · ${instructor} · ${nombreLugar}`
         }
 
-        // 1. RESERVAS PRÓXIMAS
+        const reservasFuturas = reservasValidas.filter((r: any) => getFechaObjeto(r).getTime() > ahora.getTime())
         let reservasProximasTexto = 'Sin reservas'
-        const reservasValidas = misReservas.filter((r: any) => {
-          const st = String(r.estatus || '').toLowerCase()
-          return !st.includes('cancel')
-        })
-
-        if (reservasValidas.length > 0) {
-          const ordenadas = [...reservasValidas].sort((a: any, b: any) => getFechaObjeto(b).getTime() - getFechaObjeto(a).getTime())
-          const txt = obtenerDetalleClase(ordenadas[0])
+        if (reservasFuturas.length > 0) {
+          const ordenadasFuturas = [...reservasFuturas].sort((a: any, b: any) => getFechaObjeto(a).getTime() - getFechaObjeto(b).getTime())
+          const txt = obtenerDetalleClase(ordenadasFuturas[0])
           if (txt) reservasProximasTexto = txt
         }
 
-        // 2. ÚLTIMA CLASE TOMADA
         let ultimaClaseTexto = 'Sin clases tomadas'
         if (misAsistencias.length > 0) {
-          const ultAsist = [...misAsistencias].sort((a: any, b: any) => new Date(b.fecha_checkin || 0).getTime() - new Date(a.fecha_checkin || 0).getTime())[0]
+          const ultAsist = [...misAsistencias].sort((a: any, b: any) => getFechaObjeto(b).getTime() - getFechaObjeto(a).getTime())[0]
           const txt = obtenerDetalleClase(ultAsist)
           if (txt) ultimaClaseTexto = txt
-          else if (ultAsist.fecha_checkin) ultimaClaseTexto = new Date(ultAsist.fecha_checkin).toLocaleDateString('es-MX')
-        } else if (reservasValidas.length > 0) {
-          const txt = obtenerDetalleClase(reservasValidas[0])
-          if (txt) ultimaClaseTexto = txt
-        } else if (c.ultima_visita) {
-          ultimaClaseTexto = new Date(c.ultima_visita).toLocaleDateString('es-MX')
+          else {
+            const fObj = getFechaObjeto(ultAsist)
+            if (fObj.getTime() > 0) ultimaClaseTexto = fObj.toLocaleDateString('es-MX')
+          }
         }
 
-        // Clase Muestra
         const reservaMuestra = misReservas.find((r: any) => 
           r.es_clase_muestra === true || String(r.origen || '').toLowerCase().includes('muestra')
         )
         const reservoMuestra = reservaMuestra || c.reservo_muestra ? 'Sí' : 'No'
         let asistioMuestra = 'No'
         if (reservaMuestra) {
-          const st = String(reservaMuestra.estatus || '').toLowerCase()
-          if (['asistio', 'completada', 'checkin', 'asistió', 'confirmada'].some(e => st.includes(e))) {
+          const st = String(reservaMuestra.estatus || reservaMuestra.status || '').toLowerCase()
+          if (['asistio', 'asistió', 'completada', 'checkin', 'confirmada'].some(e => st.includes(e))) {
             asistioMuestra = 'Sí'
           }
         } else if (c.asistio_muestra) {
           asistioMuestra = 'Sí'
         }
 
-        // LTV
         let ltvCalculado = 0
         misPagos.forEach((p: any) => { 
-          const val = parseFloat(p.monto ?? p.amount ?? 0)
+          const val = parseFloat(p.monto ?? p.amount ?? p.total ?? 0)
           if (!isNaN(val)) ltvCalculado += val 
         })
         const ltvFinal = ltvCalculado > 0 ? ltvCalculado : parseFloat(c.valor_cliente || c.ltv || 0)
@@ -324,19 +383,18 @@ export default function ClientesPage() {
         ]
       })
 
-      // Generar archivo CSV
       const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `reporte_clientes_${new Date().toISOString().slice(0,10)}.csv`
+      a.download = `reporte_clientes_filtrados_${new Date().toISOString().slice(0,10)}.csv`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      alert('¡Exportación completada con éxito!')
+     
 
     } catch (err: any) {
       console.error('Error al exportar:', err)
@@ -382,13 +440,13 @@ export default function ClientesPage() {
     setEditarOpen(true)
   }
 
-  const activos       = clientes.filter(c => c.estatus === 'Activo' && !c.perdido).length
-  const expirados     = clientes.filter(c => {
+  const activos = clientes.filter(c => c.estatus === 'Activo' && !c.perdido).length
+  const expirados = clientes.filter(c => {
     const f = c.fecha_vencimiento_memb || c.fecha_venc_plan
     return f && new Date(f) < new Date() && !c.perdido
   }).length
   const pagosFallidos = clientes.filter(c => c.pagos?.some((p: any) => p.estatus === 'Fallido')).length
-  const perdidos      = clientes.filter(c => c.perdido).length
+  const perdidos = clientes.filter(c => c.perdido).length
 
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
@@ -412,7 +470,7 @@ export default function ClientesPage() {
             disabled={exportando}
             className="flex items-center gap-2 border border-gray-200 bg-white text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
           >
-            <Upload size={15}/> {exportando ? 'Exportando...' : 'Exportar CSV'}
+            <Upload size={15}/> {exportando ? 'Exportando...' : `Exportar (${clientesFiltrados.length})`}
           </button>
           <button onClick={() => setNuevoOpen(true)}
             className="flex items-center gap-2 btn-dark font-bold text-sm px-4 py-2.5 rounded-xl transition">
@@ -436,6 +494,7 @@ export default function ClientesPage() {
         onCambiarPaquete={handleCambiarPaquete}
         onVerCliente={handleVerCliente}
         onEditarCliente={handleEditarCliente}
+        onFiltradosChange={setClientesFiltrados}
       />
 
       <DrawerNuevoCliente
