@@ -9,6 +9,18 @@ import FinanzasNomina        from '@/components/finanzas/FinanzasNomina'
 import { useSucursal }       from '@/context/SucursalContext'
 import { supabase }          from '../../../lib/supabase'
 
+// Supabase regresa máximo 1,000 filas por consulta: se piden por páginas
+async function traerTodosLosPagos() {
+  const filas: any[] = []
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await supabase.from('pagos').select('*').range(desde, desde + 999)
+    if (error || !data) break
+    filas.push(...data)
+    if (data.length < 1000) break
+  }
+  return { data: filas, error: null }
+}
+
 type Tab = 'resumen' | 'ingresos' | 'transacciones' | 'fallidos' | 'nomina'
 export type TipoFiltroGalley = 'todos' | 'galley_solo' | 'sucursal_limpia'
 
@@ -132,7 +144,7 @@ export default function FinanzasPage() {
       if (tab === 'ingresos') {
         const [resSucursales, resPagos] = await Promise.all([
           supabase.from('sucursales').select('id, nombre'),
-          supabase.from('pagos').select('*')
+          traerTodosLosPagos()
         ])
 
         const sucursales = resSucursales.data || []
@@ -171,7 +183,7 @@ export default function FinanzasPage() {
           }
 
           const monto = Number(p.monto ?? p.amount ?? 0)
-          const canal = String(p.pasarela || p.metodo_pago || p.canal || p.concepto || '').toLowerCase()
+          const canal = String(p.canal || p.pasarela || p.metodo_pago || p.concepto || '').toLowerCase()
 
           let comisionTransaccion = Number(p.comision ?? p.fee ?? 0)
 
@@ -230,7 +242,7 @@ export default function FinanzasPage() {
       if (tab === 'resumen' || tab === 'transacciones') {
         const [resSucursales, resPagos, resVentas] = await Promise.all([
           supabase.from('sucursales').select('id, nombre'),
-          supabase.from('pagos').select('*'),
+          traerTodosLosPagos(),
           supabase.from('ventas').select(`
             *,
             clientes(nombre_completo, email),
@@ -342,7 +354,7 @@ export default function FinanzasPage() {
       if (tab === 'fallidos') {
         const [resSucursales, resPagos] = await Promise.all([
           supabase.from('sucursales').select('id, nombre'),
-          supabase.from('pagos').select('*')
+          traerTodosLosPagos()
         ])
 
         const mapaSucursales: Record<string, string> = {}

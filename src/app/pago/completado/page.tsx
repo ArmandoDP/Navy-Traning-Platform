@@ -58,6 +58,16 @@ function Contenido() {
           </a>
         )}
 
+        {canal === 'link' && !oxxo && (
+          <div className="mt-6 bg-[#111c2e] border border-[#1e2d40] rounded-2xl p-5 text-left">
+            <p className="text-white font-bold">Entra a la app de Navy</p>
+            <p className="text-slate-400 text-sm mt-1 leading-relaxed">
+              Descarga la app e inicia sesión con el <b className="text-slate-200">mismo correo</b> que usaste al pagar.
+              Te llegará un código para entrar, sin contraseña. Ahí reservas tus clases.
+            </p>
+          </div>
+        )}
+
         {canal === 'app' && (
           <a href={`navyapp://pago/completado?session_id=${sessionId}`}
             className="block mt-6 w-full py-4 rounded-2xl bg-green-500 text-white font-bold">
