@@ -4,6 +4,8 @@ import { X, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import ModalReglaBono from './ModalReglaBono'
 import ToastExito from '@/components/ToastExito'
+import { useAuth }      from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   isOpen:    boolean
@@ -41,6 +43,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
   const [modalBonoOpen,    setModalBonoOpen]     = useState(false)
   const [reglaEditando,    setReglaEditando]     = useState<any>(null)
   const [toast, setToast] = useState(false)
+  const { staff: usuarioActual } = useAuth()
   const [docs, setDocs] = useState<{ tipo: string; file: File | null }[]>([
     { tipo: 'INE',                      file: null },
     { tipo: 'Contrato firmado',         file: null },
@@ -108,9 +111,8 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
   const handleGuardar = async () => {
     if (!form.nombre || !form.tipo) return
     setLoading(true)
-    setToast(true)
-    onSuccess()
-    handleClose()
+
+    const rol = form.rol || 'staff_navy'
 
     // 1. Crear staff
     const { data: staffData, error: staffError } = await supabase
@@ -136,7 +138,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
         contacto_emergencia_nombre:   form.contacto_emergencia_nombre,
         contacto_emergencia_relacion: form.contacto_emergencia_relacion,
         contacto_emergencia_telefono: form.contacto_emergencia_telefono,
-        rol: form.rol || 'staff_navy',
+        rol,
       })
       .select()
       .single()
@@ -149,58 +151,93 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
 
     const staffId = staffData.id
 
-    // Crear usuario en Supabase Auth
+    // 2. Usuario de acceso al CRM
+    let authOk = true
     if (form.email) {
-      await fetch('/api/staff/crear-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: form.email,
-          staff_id: staffId 
-        }),
-      })
+      try {
+        const res = await fetch('/api/staff/crear-auth', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ email: form.email, staff_id: staffId }),
+        })
+        authOk = res.ok
+        if (!res.ok) console.error('Error creando acceso:', await res.text())
+      } catch (e) {
+        authOk = false
+        console.error('Error creando acceso:', e)
+      }
     }
 
-    // 2. Sucursales asignadas
+    // 3. Sucursales asignadas
     if (form.sucursales_ids.length > 0) {
       await supabase.from('staff_sucursales').insert(
         form.sucursales_ids.map(sid => ({ staff_id: staffId, sucursal_id: sid }))
       )
     }
 
-    // 3. Categorías (solo coach)
+    // 4. Categorías (solo coach)
     if (isCoach && form.categorias.length > 0) {
       await supabase.from('staff_categorias').insert(
         form.categorias.map(cat => ({ staff_id: staffId, categoria: cat }))
       )
     }
 
-    // 4. Reglas de bono temporales
+    // 5. Reglas de bono temporales (sin el _tempId interno)
     if (reglasTemp.length > 0) {
       await supabase.from('staff_reglas_bono').insert(
-        reglasTemp.map(r => ({ ...r, staff_id: staffId }))
+        reglasTemp.map(({ _tempId, ...r }) => ({ ...r, staff_id: staffId }))
       )
     }
 
-    // 5. Subir documentos
+    // 6. Documentos
+    const docsSubidos: string[] = []
     for (const doc of docs) {
       if (!doc.file) continue
       const ext  = doc.file.name.split('.').pop()
       const path = `${staffId}/${doc.tipo.replace(/ /g, '_')}_${Date.now()}.${ext}`
-      const { data: storageData } = await supabase.storage
-        .from('staff-documentos')
-        .upload(path, doc.file, { upsert: true })
-      const { data: urlData } = supabase.storage
-        .from('staff-documentos').getPublicUrl(path)
+      await supabase.storage.from('staff-documentos').upload(path, doc.file, { upsert: true })
+      const { data: urlData } = supabase.storage.from('staff-documentos').getPublicUrl(path)
       await supabase.from('staff_documentos').insert({
         staff_id:       staffId,
         tipo:           doc.tipo,
         url:            urlData.publicUrl,
         nombre_archivo: doc.file.name,
       })
+      docsSubidos.push(doc.tipo)
     }
 
+    // 7. Auditoría (sin datos bancarios)
+    const nombreNuevo = `${form.nombre} ${form.primer_apellido || ''}`.trim()
+    await logActividad({
+      tipo:        'staff_creado',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} dio de alta a ${nombreNuevo} como ${form.tipo} con rol ${rol}`,
+      tabla:       'staff',
+      accion:      'INSERT',
+      metadata: {
+        empleado_id:      staffId,
+        nombre:           nombreNuevo,
+        email:            form.email || null,
+        rol,
+        tipo:             form.tipo,
+        nivel:            isCoach ? form.nivel || null : null,
+        tarifa_hora:      form.tarifa_hora ? Number(form.tarifa_hora) : null,
+        sueldo_fijo:      form.sueldo_fijo ? Number(form.sueldo_fijo) : null,
+        sucursales:       form.sucursales_ids,
+        reglas_bono:      reglasTemp.length,
+        documentos:       docsSubidos,
+        acceso_crm:       form.email ? (authOk ? 'creado' : 'falló') : 'sin email',
+      },
+      sucursal_id: form.sucursales_ids[0] || null,
+      staff_id:    usuarioActual?.id,
+    })
+
     setLoading(false)
+
+    if (form.email && !authOk) {
+      alert(`${nombreNuevo} se creó, pero no se pudo crear su acceso al CRM. Revisa que el correo no esté ya registrado.`)
+    }
+
+    setToast(true)
     onSuccess()
     handleClose()
   }

@@ -3,7 +3,9 @@ import { useState, useEffect, useRef } from 'react'
 import { X, Upload, Trash2 }           from 'lucide-react'
 import { supabase }                    from '@/lib/supabase'
 import RoomGrid, { CeldaGrid }         from './RoomGrid'
-import RoomItemSelector, { ItemType }  from './RoomItemSelector'
+import RoomItemSelector, { ItemType } from './RoomItemSelector'
+import { useAuth }      from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   isOpen:     boolean
@@ -55,6 +57,7 @@ export default function DrawerEditarRoom({ isOpen, room, onClose, onSuccess }: P
   const [itemSelected, setItemSelected] = useState<ItemType>(null)
   const [popup,        setPopup]        = useState<{ tipo: 'error'|'info'; mensaje: string } | null>(null)
   const [tieneReservas, setTieneReservas] = useState(false)
+  const { staff: usuarioActual } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -135,6 +138,20 @@ export default function DrawerEditarRoom({ isOpen, room, onClose, onSuccess }: P
     if (!nombre) return
     setLoading(true)
 
+    const spotsAntes   = (room.layout || []).filter((c: any) => c.tipo === 'Rack' || c.tipo === 'Mat').length
+    const spotsDespues = celdas.filter(c => c.tipo === 'Rack' || c.tipo === 'Mat').length
+
+    // Qué cambió
+    const cambios: Record<string, { antes: any; despues: any }> = {}
+    if (room.nombre !== nombre)                   cambios['Nombre']      = { antes: room.nombre, despues: nombre }
+    if ((room.descripcion || '') !== (descripcion || '')) cambios['Descripción'] = { antes: room.descripcion, despues: descripcion }
+    if (Number(room.capacidad) !== Number(capacidad)) cambios['Capacidad'] = { antes: room.capacidad, despues: capacidad }
+    if (room.ancho !== ancho || room.alto !== alto)
+      cambios['Dimensiones'] = { antes: `${room.ancho}x${room.alto}`, despues: `${ancho}x${alto}` }
+    if (spotsAntes !== spotsDespues)              cambios['Spots']       = { antes: spotsAntes, despues: spotsDespues }
+    else if (JSON.stringify(room.layout || []) !== JSON.stringify(celdas))
+      cambios['Layout'] = { antes: 'anterior', despues: 'reacomodado' }
+
     // Actualizar room
     const { error } = await supabase.from('rooms').update({
       nombre,
@@ -169,6 +186,18 @@ export default function DrawerEditarRoom({ isOpen, room, onClose, onSuccess }: P
       }
     }
 
+    if (Object.keys(cambios).length > 0) {
+      await logActividad({
+        tipo:        'room_editado',
+        descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} editó el room "${nombre}": ${Object.keys(cambios).join(', ')}`,
+        tabla:       'rooms',
+        accion:      'UPDATE',
+        metadata:    { room_id: room.id, cambios },
+        sucursal_id: room.sucursal_id || null,
+        staff_id:    usuarioActual?.id,
+      })
+    }
+
     setLoading(false)
     onSuccess()
     onClose()
@@ -181,8 +210,44 @@ export default function DrawerEditarRoom({ isOpen, room, onClose, onSuccess }: P
     }
 
     setLoading(true)
+
+    const { count } = await supabase.from('clases')
+      .select('id', { count: 'exact', head: true })
+      .eq('room_id', room.id)
+    if (count && count > 0) {
+      setPopup({ tipo: 'error', mensaje: `Este room tiene ${count} clases asignadas. Cámbialas de room antes de eliminarlo.` })
+      setLoading(false)
+      return
+    }
+
     await supabase.from('room_spots').delete().eq('room_id', room.id)
-    await supabase.from('rooms').delete().eq('id', room.id)
+
+    const { error } = await supabase.from('rooms').delete().eq('id', room.id)
+    if (error) {
+      setPopup({
+        tipo: 'error',
+        mensaje: 'No se pudo eliminar el room: ' + error.message +
+          '. Probablemente tiene clases asignadas; cámbialas de room primero.',
+      })
+      setLoading(false)
+      return
+    }
+
+    await logActividad({
+      tipo:        'room_eliminado',
+      descripcion: `${usuarioActual?.nombre} ${usuarioActual?.primer_apellido || ''} eliminó el room "${room.nombre}"`,
+      tabla:       'rooms',
+      accion:      'DELETE',
+      metadata:    {
+        room_id:   room.id,
+        nombre:    room.nombre,
+        capacidad: room.capacidad,
+        spots:     (room.layout || []).filter((c: any) => c.tipo === 'Rack' || c.tipo === 'Mat').length,
+      },
+      sucursal_id: room.sucursal_id || null,
+      staff_id:    usuarioActual?.id,
+    })
+
     setLoading(false)
     onSuccess()
     onClose()

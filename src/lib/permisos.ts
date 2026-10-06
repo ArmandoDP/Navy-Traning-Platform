@@ -16,6 +16,7 @@ export type Modulo =
   | 'reportes'
   | 'integraciones'
   | 'configuracion'
+  | 'actividad'
 
 export type Permiso = 'sin_acceso' | 'solo_ver' | 'ver_y_editar' | 'todo'
 
@@ -36,6 +37,7 @@ export const PERMISOS: Record<Rol, Record<Modulo, Permiso>> = {
     reportes:       'todo',
     integraciones:  'todo',
     configuracion:  'todo',
+    actividad:      'todo',
   },
   gerente: {
     dashboard:      'solo_ver',
@@ -53,6 +55,7 @@ export const PERMISOS: Record<Rol, Record<Modulo, Permiso>> = {
     reportes:       'solo_ver',
     integraciones:  'sin_acceso',
     configuracion:  'sin_acceso',
+    actividad:      'solo_ver',
   },
   staff_navy: {
     dashboard:      'sin_acceso',
@@ -70,6 +73,7 @@ export const PERMISOS: Record<Rol, Record<Modulo, Permiso>> = {
     reportes:       'sin_acceso',
     integraciones:  'sin_acceso',
     configuracion:  'sin_acceso',
+    actividad:      'sin_acceso',
   },
   staff_galley: {
     dashboard:      'sin_acceso',
@@ -87,6 +91,7 @@ export const PERMISOS: Record<Rol, Record<Modulo, Permiso>> = {
     reportes:       'sin_acceso',
     integraciones:  'sin_acceso',
     configuracion:  'sin_acceso',
+    actividad:      'sin_acceso',
   },
 }
 
@@ -103,7 +108,6 @@ export function esGlobal(rol: Rol): boolean {
   return rol === 'direccion'
 }
 
-// Rutas del CRM mapeadas a módulos
 export const RUTAS_MODULOS: Record<string, Modulo> = {
   '/dashboard/ejecutivo':    'dashboard',
   '/dashboard/checkin':      'checkin',
@@ -121,4 +125,5 @@ export const RUTAS_MODULOS: Record<string, Modulo> = {
   '/dashboard/reportes':     'reportes',
   '/dashboard/integraciones':'integraciones',
   '/dashboard/configuracion':'configuracion',
+  '/dashboard/actividad':    'actividad',
 }

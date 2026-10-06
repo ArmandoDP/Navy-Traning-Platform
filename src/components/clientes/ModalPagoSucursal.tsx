@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { X, RefreshCw, CheckCircle2, CreditCard, Banknote, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   isOpen:    boolean
@@ -37,6 +39,7 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
   const [loadingPaquetes,    setLoadingPaquetes]    = useState(false)
   const [error,              setError]              = useState('')
   const [membresiaActiva,    setMembresiaActiva]    = useState<any>(null)
+  const { staff } = useAuth()
 
   const paqueteSel = paquetes.find(p => p.id === paqueteId)
 
@@ -152,6 +155,24 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
           email:  cliente.email,
           nombre: cliente.nombre_completo,
         }),
+      })
+
+      await logActividad({
+        tipo:        'pago_sucursal',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} registró pago de $${monto} (${metodo}) para "${cliente.nombre_completo}" — ${paqueteSel?.nombre}`,
+        tabla:       'pagos',
+        accion:      'INSERT',
+        metadata:    { 
+          cliente_id:  cliente.id,
+          monto:       Number(monto),
+          metodo:      metodo,
+          paquete:     paqueteSel?.nombre,
+          referencia:  referencia || null,
+          fecha_inicio: fechaInicio,
+          fecha_fin:    fechaFin,
+        },
+        sucursal_id: cliente.sucursal_id || null,
+        staff_id:    staff?.id,
       })
 
       // 5. Enviar correo comprobante

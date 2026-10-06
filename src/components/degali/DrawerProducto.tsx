@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Plus, Trash2 } from 'lucide-react'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   producto:   any | null
@@ -36,6 +38,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
   const [sucursales,  setSucursales]  = useState<any[]>([])
   const [guardando,   setGuardando]   = useState(false)
   const [activeTab,   setActiveTab]   = useState<'info' | 'receta' | 'precios'>('info')
+  const { staff } = useAuth()
 
   useEffect(() => {
     if (!isOpen) return
@@ -156,6 +159,21 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
         }, { onConflict: 'producto_id,sucursal_id' })
       }
     }
+
+    await logActividad({
+      tipo:        producto ? 'producto_editado' : 'producto_creado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} ${producto ? 'editó' : 'creó'} el producto "${nombre}"`,
+      tabla:       'productos',
+      accion:      producto ? 'UPDATE' : 'INSERT',
+      metadata:    { 
+        producto_id: producto?.id ?? null,
+        nombre,
+        categoria,
+        tipo,
+      },
+      sucursal_id: null,
+      staff_id:    staff?.id,
+    })
 
     setGuardando(false)
     onSuccess()

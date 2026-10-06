@@ -5,6 +5,8 @@ import { X, User, CreditCard, Calendar, Lock, CheckCircle2, AlertCircle, Loader2
 import ToastExito         from '@/components/ToastExito'
 import ModalInvitado      from './ModalInvitado'
 import ModalPagoSucursal  from './ModalPagoSucursal'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   isOpen:    boolean
@@ -84,6 +86,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   const [emailEstado,     setEmailEstado]     = useState<EmailEstado>('idle')
   const [clienteDuplicado, setClienteDuplicado] = useState<any | null>(null)
   const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { staff } = useAuth()
 
   const [form, setForm] = useState({
     nombre: '', primer_apellido: '', segundo_apellido: '',
@@ -260,6 +263,21 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
       }])
       await supabase.from('clientes').update({ fecha_venc_plan: form.fecha_fin_membresia }).eq('id', cli.id)
     }
+
+    await logActividad({
+      tipo:        'cliente_creado_crm',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó al cliente "${form.nombre} ${form.primer_apellido}" (${tipoRegistro})`,
+      tabla:       'clientes',
+      accion:      'INSERT',
+      metadata:    { 
+        cliente_id: cli.id,
+        email:      form.email,
+        origen:     tipoRegistro === 'migracion' ? 'Migración' : 'Nuevo',
+        paquete:    paquete?.nombre || null,
+      },
+      sucursal_id: form.sucursal_id || null,
+      staff_id:    staff?.id,
+    })
 
     return cli
   }

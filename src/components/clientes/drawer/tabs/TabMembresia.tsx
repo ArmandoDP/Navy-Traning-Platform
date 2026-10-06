@@ -5,6 +5,7 @@ import { supabase }        from '@/lib/supabase'
 import { useAuth }         from '@/context/AuthContext'
 import ToastExito          from '@/components/ToastExito'
 import ModalPagoSucursal   from '@/components/clientes/ModalPagoSucursal'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props { cliente: any; reservas: any[]; onRefresh?: () => void }
 
@@ -80,6 +81,16 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
     await supabase.from('membresias')
       .update({ renovacion_cancelada: true })
       .eq('id', membresiaActiva.id)
+    
+    await logActividad({
+      tipo:        'renovacion_cancelada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} canceló la renovación de "${cliente.nombre_completo}"`,
+      tabla:       'membresias',
+      accion:      'UPDATE',
+      metadata:    { cliente_id: cliente.id, membresia_id: membresiaActiva?.id },
+      sucursal_id: cliente.sucursal_id || null,
+      staff_id:    staff?.id,
+    })
     fetchMembresias()
     setToast('Renovación automática cancelada')
   }
@@ -89,6 +100,16 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
     await supabase.from('membresias')
       .update({ renovacion_cancelada: false })
       .eq('id', membresiaActiva.id)
+    
+    await logActividad({
+      tipo:        'renovacion_reactivada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} reactivó la renovación de "${cliente.nombre_completo}"`,
+      tabla:       'membresias',
+      accion:      'UPDATE',
+      metadata:    { cliente_id: cliente.id, membresia_id: membresiaActiva?.id },
+      sucursal_id: cliente.sucursal_id || null,
+      staff_id:    staff?.id,
+    })
     fetchMembresias()
     setToast('Renovación automática reactivada')
   }
@@ -158,6 +179,16 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         fecha_fin:       fechaFinDisplay,
         tiene_membresia: tieneMembresia,
       }),
+    })
+
+    await logActividad({
+      tipo:        'paquete_asignado_cortesia',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} asignó cortesía "${paquete.nombre}" a "${cliente.nombre_completo}"`,
+      tabla:       'membresias',
+      accion:      'INSERT',
+      metadata: { cliente_id: cliente.id, membresia_id: membresiaActiva?.id },
+      sucursal_id: cliente.sucursal_id || null,
+      staff_id:    staff?.id,
     })
 
     setModalPaquete(false)

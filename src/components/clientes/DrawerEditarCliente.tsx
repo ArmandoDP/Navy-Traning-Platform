@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, User, CreditCard, Lock, Calendar, CheckCircle2, XCircle, RefreshCw, Mail } from 'lucide-react'
 import ToastExito from '@/components/ToastExito'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   isOpen: boolean
@@ -50,6 +52,7 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
   const [paquetes, setPaquetes] = useState<Paquete[]>([])
   const [membresia, setMembresia] = useState<any>(null)
+  const { staff } = useAuth()
 
   const [form, setForm] = useState({
     nombre: '',
@@ -176,7 +179,20 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
 
         if (errMemb) throw errMemb
       }
-
+      await logActividad({
+        tipo:        'cliente_editado',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} editó el perfil de "${nombreCompleto}"`,
+        tabla:       'clientes',
+        accion:      'UPDATE',
+        metadata:    { 
+          cliente_id:  cliente.id, 
+          email:       form.email,
+          estatus:     form.estatus,
+          paquete:     paquete?.nombre || null,
+        },
+        sucursal_id: form.sucursal_id || null,
+        staff_id:    staff?.id,
+      })
       setToast(true)
       onSuccess()
     } catch (err: any) {
@@ -193,12 +209,22 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: cliente.supabase_user_id,
+          userId:    cliente.supabase_user_id,
           clienteId: cliente.id,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error al restablecer la contraseña')
+
+      await logActividad({
+        tipo:        'password_reseteado',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} reseteó la contraseña de "${cliente.nombre_completo}"`,
+        tabla:       'clientes',
+        accion:      'UPDATE',
+        metadata:    { cliente_id: cliente.id, email: cliente.email },
+        sucursal_id: cliente.sucursal_id || null,
+        staff_id:    staff?.id,
+      })
 
       alert(`Nueva contraseña temporal: ${data.tempPassword}`)
       onSuccess()
@@ -217,6 +243,16 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
           nombre: cliente.nombre_completo,
           password: cliente.password_temporal || '—',
         }),
+      })
+
+      await logActividad({
+        tipo:        'correo_reenviado',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} reenvió correo de bienvenida a "${cliente.nombre_completo}"`,
+        tabla:       'clientes',
+        accion:      'UPDATE',
+        metadata:    { cliente_id: cliente.id, email: cliente.email },
+        sucursal_id: cliente.sucursal_id || null,
+        staff_id:    staff?.id,
       })
 
       if (!res.ok) throw new Error('Error en el servidor de correo')

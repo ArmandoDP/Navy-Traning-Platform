@@ -6,6 +6,7 @@ import PasoProspecto from './PasoProspecto'
 import PasoClase from './PasoClase'
 import PasoSpot from './PasoSpot'
 import { useAuth } from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 export type ReservaAEditar = {
   id: string
@@ -184,6 +185,16 @@ export default function DrawerClaseMuestra({ isOpen, onClose, onSuccess, reserva
         }),
       })
 
+      // 5. Registrar actividad
+      await logActividad({
+        tipo:        'prospecto_creado',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} registró al prospecto "${prospecto.nombre}" en clase muestra`,
+        tabla:       'clientes',
+        accion:      'INSERT',
+        metadata:    { nombre: prospecto.nombre, email: prospecto.email, sucursal_id: clase.sucursalId },
+        sucursal_id: clase.sucursalId,
+        staff_id:    staff?.id,
+      })
       onSuccess()
       handleClose()
     } catch (e: any) {

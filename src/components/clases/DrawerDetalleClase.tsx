@@ -8,6 +8,9 @@ import {
 import { supabase }   from '@/lib/supabase'
 import ToastExito     from '@/components/ToastExito'
 import TabAsistencia from './TabAsistencia'
+import { useAuth }       from '@/context/AuthContext'
+import { logActividad }  from '@/lib/log-actividad'
+import ModalEditarClase from '../ModalEditarClase'
 
 interface Props {
   isOpen:    boolean
@@ -40,7 +43,9 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [publicandoWellhub,   setPublicandoWellhub]   = useState(false)
   const [publicandoTotalpass, setPublicandoTotalpass] = useState(false)
   const [wellhubExito,        setWellhubExito]        = useState(false)
-  const [totalpassExito,      setTotalpassExito]      = useState(false)
+  const [totalpassExito, setTotalpassExito] = useState(false)
+  const { staff, esGlobal } = useAuth()
+  const [modalEditar, setModalEditar] = useState(false)
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -238,6 +243,17 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
       }
 
       await supabase.from('clases').delete().eq('id', claseId)
+
+      // ← Registrar quién eliminó
+      await logActividad({
+        tipo:        'clase_eliminada',
+        descripcion: `${staff?.nombre} ${staff?.primer_apellido} eliminó "${clase?.nombre_clase}"`,
+        tabla:       'clases',
+        accion:      'DELETE',
+        metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+        sucursal_id: clase?.sucursal_id,
+        staff_id:    staff?.id,
+      })
       
       setModalEliminar(false)
       onSuccess()
@@ -321,6 +337,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error cancelando clase:', e)
     }
+
+    await logActividad({
+      tipo:        'clase_cancelada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} canceló "${clase?.nombre_clase}"`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
     fetchData()
     onSuccess()
   }
@@ -343,6 +369,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error actualizando horario Wellhub:', e)
     }
+
+    await logActividad({
+      tipo:        'clase_wellhub_actualizada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} actualizó horario en Wellhub de "${clase?.nombre_clase}"`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
   }
 
   const handlePublicarWellhub = async () => {
@@ -369,6 +405,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error publicando en Wellhub:', e)
     }
+    
+    await logActividad({
+      tipo:        'clase_publicada_wellhub',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} publicó "${clase?.nombre_clase}" en Wellhub`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
     setPublicandoWellhub(false)
   }
 
@@ -403,6 +449,16 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     } catch (e) {
       console.error('Error publicando en TotalPass:', e)
     }
+
+    await logActividad({
+      tipo:        'clase_publicada_totalpass',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} publicó "${clase?.nombre_clase}" en TotalPass`,
+      tabla:       'clases',
+      accion:      'UPDATE',
+      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
+      sucursal_id: clase?.sucursal_id,
+      staff_id:    staff?.id,
+    })
     setPublicandoTotalpass(false)
   }
 
@@ -525,6 +581,13 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               </div>
               {clase.descripcion && (
                 <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">{clase.descripcion}</p>
+              )}
+
+              {esGlobal && (
+                <button onClick={() => setModalEditar(true)}
+                  className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50">
+                  ✏️ Editar clase
+                </button>
               )}
               <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                {/* Plataformas externas */}
@@ -803,6 +866,12 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             onClose={() => setToastError(false)}
           />
         )}
+        <ModalEditarClase
+          isOpen={modalEditar}
+          claseId={claseId}
+          onClose={() => setModalEditar(false)}
+          onSuccess={onSuccess}
+        />
       </div>
 
       {modalEliminar && (

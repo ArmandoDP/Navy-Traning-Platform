@@ -5,7 +5,9 @@ import { supabase }            from '@/lib/supabase'
 import TabInfoBase             from './TabInfoBase'
 import TabSucursalesYPrecio    from './TabSucursalesYPrecio'
 import TabSplitsRevenue        from './TabSplitsRevenue'
-import ToastExito              from '@/components/ToastExito'
+import ToastExito from '@/components/ToastExito'
+import { useAuth }      from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   isOpen:    boolean
@@ -34,6 +36,7 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
   const [series,     setSeries]     = useState<any[]>([])
   const [roomsSelected, setRoomsSelected] = useState<string[]>([])
   const [accesosSucursales, setAccesosSucursales] = useState<string[]>([])
+  const { staff } = useAuth()
 
   const [form, setForm] = useState({
     nombre:                   '',
@@ -224,6 +227,32 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
       return
     }
 
+    const data = await res.json()
+      const preciosActivos = precios
+        .filter(p => p.activo && p.precio_app)
+        .map(p => ({
+          sucursal: sucursales.find(s => s.id === p.sucursal_id)?.nombre || p.sucursal_id,
+          precio:   Number(p.precio_app),
+        }))
+
+    await logActividad({
+      tipo:        paquete?.id ? 'paquete_modificado' : 'paquete_creado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido || ''} ${paquete?.id ? 'modificó' : 'creó'} el paquete "${form.nombre}" (${estatus})`,
+      tabla:       'paquetes',
+      accion:      paquete?.id ? 'UPDATE' : 'INSERT',
+      metadata: {
+        paquete_id:       paquete?.id || data?.id,
+        nombre:           form.nombre,
+        estatus,
+        vigencia_dias:    form.vigencia_dias,
+        clases_incluidas: form.clases_incluidas,
+        es_recurrente:    form.es_recurrente,
+        precios:          preciosActivos,
+      },
+      sucursal_id: null,
+      staff_id:    staff?.id,
+    })
+
     setLoading(false)
     setToast(true)
     onSuccess()
@@ -264,12 +293,30 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
   }
 
   const handleEliminar = async () => {
-    if (!paquete?.id || !confirm('¿Eliminar este paquete?')) return
-    await fetch('/api/paquetes', {
-      method: 'DELETE',
+    if (!paquete?.id || !confirm('¿Eliminar este paquete? Esta acción no se puede deshacer.')) return
+
+    const res = await fetch('/api/paquetes', {
+      method:  'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: paquete.id }),
+      body:    JSON.stringify({ id: paquete.id }),
     })
+
+    if (!res.ok) {
+      const err = await res.json()
+      alert('Error: ' + err.error)
+      return
+    }
+
+    await logActividad({
+      tipo:        'paquete_eliminado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido || ''} eliminó el paquete "${paquete.nombre}"`,
+      tabla:       'paquetes',
+      accion:      'DELETE',
+      metadata:    { paquete_id: paquete.id, nombre: paquete.nombre },
+      sucursal_id: null,
+      staff_id:    staff?.id,
+    })
+
     onSuccess()
     handleClose()
   }

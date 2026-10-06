@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase }                  from '@/lib/supabase'
-import { actualizarCuposSlotWellhub, crearClaseWellhub, crearSlotWellhub } from '@/lib/wellhub'
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
+import { crearClaseWellhub, crearSlotWellhub } from '@/lib/wellhub'
+
+// Supabase puede regresar la relación como objeto o como arreglo según los tipos
+function nombreCoach(staff: any): string | undefined {
+  const s = Array.isArray(staff) ? staff[0] : staff
+  if (!s) return undefined
+  const nombre = `${s.nombre || ''} ${s.primer_apellido || ''}`.replace(/\s+/g, ' ').trim()
+  return nombre || undefined
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { claseId, nombre, descripcion, horario, duracionMinutos, capacidadMax } = await req.json()
 
-    // 0. Obtener la sucursal de la clase
+    // 0. Datos de la clase
     const { data: clase } = await supabase
       .from('clases')
       .select('sucursal_id, salon, coach_id, wellhub_slot_id, wellhub_class_id, staff(nombre, primer_apellido)')
@@ -17,35 +25,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Clase sin sucursal asignada' }, { status: 400 })
     }
 
-    // ← NUEVO: Si ya está publicada, no crear duplicado
+    // Si ya está publicada, no crear duplicado
     if (clase.wellhub_slot_id && clase.wellhub_class_id) {
       console.log(`Clase ${claseId} ya publicada en Wellhub — slot ${clase.wellhub_slot_id}`)
       return NextResponse.json({
-        success:          true,
+        success:           true,
         already_published: true,
-        wellhub_class_id: clase.wellhub_class_id,
-        wellhub_slot_id:  clase.wellhub_slot_id,
+        wellhub_class_id:  clase.wellhub_class_id,
+        wellhub_slot_id:   clase.wellhub_slot_id,
       })
     }
 
-    const sucursalId = clase.sucursal_id
+    const sucursalId  = clase.sucursal_id
+    const coachNombre = nombreCoach(clase.staff)
 
     // 1. Crear la clase en Wellhub
     const claseData      = await crearClaseWellhub(nombre, descripcion || nombre, sucursalId)
     const wellhubClassId = claseData.classes[0].id
 
-    // Obtener reservas activas de la clase
-    const { count: reservasActivas } = await supabase
-      .from('reservas')
-      .select('id', { count: 'exact' })
-      .eq('clase_id', claseId)
-      .neq('estatus', 'Cancelada')
-
-    const coachNombre = clase.staff && Array.isArray(clase.staff) && clase.staff.length > 0
-      ? `${clase.staff[0].nombre} ${clase.staff[0].primer_apellido}`.trim()
-      : undefined
-
-    // 2. Crear el slot
+    // 2. Crear el slot con el coach
     const slotData = await crearSlotWellhub(String(wellhubClassId), sucursalId, {
       fechaInicio: horario,
       duracionMin: duracionMinutos,
@@ -53,18 +51,9 @@ export async function POST(req: NextRequest) {
       room:        clase.salon || 'Sala Principal',
       coach:       coachNombre,
     })
-
     const wellhubSlotId = slotData.results[0].id
-    
-    // Actualizar total_booked con reservas existentes
-    if (reservasActivas && reservasActivas > 0) {
-      await actualizarCuposSlotWellhub(
-        String(wellhubSlotId),
-        reservasActivas,
-        String(wellhubClassId),
-        sucursalId
-      )
-    }
+
+    console.log(`Wellhub publicado: ${nombre} | class ${wellhubClassId} | slot ${wellhubSlotId} | coach ${coachNombre || '(sin coach)'}`)
 
     // 3. Guardar referencias en Supabase
     await supabase.from('clases').update({
@@ -72,10 +61,22 @@ export async function POST(req: NextRequest) {
       wellhub_slot_id:  String(wellhubSlotId),
     }).eq('id', claseId)
 
+    // 4. Cupos con el conteo real (por si la clase ya tenía reservas)
+    try {
+      await fetch(`${process.env.BACKEND_URL}/sync/cupos`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ clase_id: claseId }),
+      })
+    } catch (e: any) {
+      console.error('Error sincronizando cupos al publicar:', e.message)
+    }
+
     return NextResponse.json({
       success:          true,
       wellhub_class_id: wellhubClassId,
       wellhub_slot_id:  wellhubSlotId,
+      coach:            coachNombre || null,
     })
 
   } catch (err: any) {

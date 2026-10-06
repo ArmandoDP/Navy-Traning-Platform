@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, RefreshCw, Trash2 } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
 
 interface Props {
   insumo: any
@@ -21,6 +23,7 @@ export default function ModalEditarInsumo({ insumo, sucursalId, onClose, onSucce
   const [stockActual, setStockActual] = useState<number | ''>(insumo.stock_actual || 0)
   const [stockMinimo, setStockMinimo] = useState<number | ''>(insumo.stock_minimo || 0)
   const [stockReorden, setStockReorden] = useState<number | ''>(insumo.stock_reorden || 0)
+  const { staff } = useAuth()
   
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -62,6 +65,21 @@ export default function ModalEditarInsumo({ insumo, sucursalId, onClose, onSucce
       return
     }
 
+    await logActividad({
+      tipo:        'insumo_editado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} editó el insumo "${nombre}"`,
+      tabla:       'insumos',
+      accion:      'UPDATE',
+      metadata:    { 
+        insumo_id:      insumo.insumo_id,
+        nombre,
+        costo_unitario: Number(costoUnitario),
+        stock_actual:   Number(stockActual),
+      },
+      sucursal_id: null,
+      staff_id:    staff?.id,
+    })
+
     onSuccess()
     setLoading(false)
   }
@@ -86,6 +104,15 @@ export default function ModalEditarInsumo({ insumo, sucursalId, onClose, onSucce
     // 2. Intentar eliminar del catálogo de insumos si ya no hay registros
     await supabase.from('insumos').delete().eq('id', insumo.insumo_id)
 
+    await logActividad({
+      tipo:        'insumo_eliminado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} eliminó "${insumo.insumos?.nombre}" del inventario`,
+      tabla:       'inventario_insumos',
+      accion:      'DELETE',
+      metadata:    { insumo_id: insumo.insumo_id, nombre: insumo.insumos?.nombre },
+      sucursal_id: null,
+      staff_id:    staff?.id,
+    })
     onSuccess()
     setDeleting(false)
   }
