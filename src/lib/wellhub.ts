@@ -1,4 +1,8 @@
+// src/lib/wellhub.ts
 const WELLHUB_BASE_URL = 'https://api.partners.gympass.com'  // ← producción
+
+// Minutos antes de la clase en que ya no se puede cancelar en Wellhub
+export const WELLHUB_CANCELACION_MIN = Number(process.env.WELLHUB_CANCELACION_MIN || 720)  // 12 horas
 
 // Mapeo sucursal → gym_id y product_id de producción
 const WELLHUB_SUCURSAL_CONFIG: Record<string, { gymId: string; productId: number }> = {
@@ -6,7 +10,7 @@ const WELLHUB_SUCURSAL_CONFIG: Record<string, { gymId: string; productId: number
   'f8f798a8-d89b-4874-a53a-cdcb6325ad2a': { gymId: '848638', productId: 953551 }, // Condesa Studio
 }
 
-// Fallback al env cuando no se pasa sucursal (ej. webhooks)
+// Fallback al env cuando no se pasa sucursal
 function getGymId(sucursalId?: string): string {
   if (sucursalId && WELLHUB_SUCURSAL_CONFIG[sucursalId]) {
     return WELLHUB_SUCURSAL_CONFIG[sucursalId].gymId
@@ -28,6 +32,11 @@ function wellhubHeaders() {
   }
 }
 
+// Fecha límite para cancelar: X minutos antes del inicio
+export function limiteCancelacion(fechaInicio: string, minutos = WELLHUB_CANCELACION_MIN): string {
+  return new Date(new Date(fechaInicio).getTime() - minutos * 60 * 1000).toISOString()
+}
+
 export async function validarAccesoWellhub(gympassId: string, sucursalId?: string) {
   const gymId = getGymId(sucursalId)
   const res = await fetch(`${WELLHUB_BASE_URL}/access/v1/validate`, {
@@ -37,7 +46,7 @@ export async function validarAccesoWellhub(gympassId: string, sucursalId?: strin
   })
   const text = await res.text()
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
-  if (!res.ok) throw new Error(data?.message || `Error ${res.status}`)
+  if (!res.ok) throw new Error(data?.message || `Error ${res.status} (gym ${gymId})`)
   return data
 }
 
@@ -70,15 +79,14 @@ export async function crearSlotWellhub(classId: string, sucursalId: string, para
   duracionMin: number
   capacidad:   number
   room?:       string
-  coach?:      string  // ← agrega esto
+  coach?:      string
 }) {
   const { gymId, productId } = getWellhubConfig(sucursalId)
   const url = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots`
 
-  const occurDate = new Date(params.fechaInicio).toISOString()
-
   const payload: any = {
-    occur_date:        occurDate,
+    occur_date:        new Date(params.fechaInicio).toISOString(),
+    cancellable_until: limiteCancelacion(params.fechaInicio),
     status:            1,
     room:              params.room || 'Sala Principal',
     length_in_minutes: params.duracionMin,
@@ -109,11 +117,10 @@ export async function confirmarBookingWellhub(bookingNumber: string, classId: nu
     method:  'PATCH',
     headers: wellhubHeaders(),
     body: JSON.stringify({
-      status: confirmar ? "RESERVED" : "REJECTED",
-      ...(confirmar ? {} : { reason_category: "CLASS_IS_FULL" }),
+      status: confirmar ? 'RESERVED' : 'REJECTED',
+      ...(confirmar ? {} : { reason_category: 'CLASS_IS_FULL' }),
     }),
   })
-
   const text = await res.text()
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
   if (!res.ok) throw new Error(data?.message || `Error ${res.status}: ${text}`)
@@ -146,7 +153,7 @@ export async function actualizarHorarioSlotWellhub(slotId: string, fechaInicio: 
   const res = await fetch(url, {
     method:  'PATCH',
     headers: wellhubHeaders(),
-    body: JSON.stringify({ occur_date: occurDate }),
+    body: JSON.stringify({ occur_date: occurDate, cancellable_until: limiteCancelacion(fechaInicio) }),
   })
   const text = await res.text()
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }
@@ -175,9 +182,7 @@ export async function actualizarCoachSlotWellhub(slotId: string, classId: string
   const res   = await fetch(url, {
     method:  'PATCH',
     headers: wellhubHeaders(),
-    body: JSON.stringify({
-      instructors: [{ name: coach, substitute: false }]
-    }),
+    body: JSON.stringify({ instructors: [{ name: coach, substitute: false }] }),
   })
   const text = await res.text()
   let data; try { data = JSON.parse(text) } catch { data = { raw: text } }

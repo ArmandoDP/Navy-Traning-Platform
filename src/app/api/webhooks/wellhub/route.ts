@@ -58,6 +58,21 @@ export async function POST(req: NextRequest) {
         metadata:     body,
       }).select().single()
 
+      // Wellhub manda dos avisos por visita (checkin y checkin-booking-occurred).
+      // Si la visita ya se validó con el otro aviso, no se vuelve a validar.
+      const yaValidada = async () => {
+        const desde = new Date(Date.now() - 3 * 3600 * 1000).toISOString()
+        const { data } = await supabase.from('wellhub_checkins').select('id')
+          .eq('unique_token', user.unique_token).eq('validado', true)
+          .gte('created_at', desde).neq('id', checkin?.id).limit(1)
+        return !!data?.length
+      }
+
+      if (await yaValidada()) {
+        await supabase.from('wellhub_checkins').update({ validado: true }).eq('id', checkin?.id)
+        return NextResponse.json({ received: true, validado: true, duplicado: true })
+      }
+
       try {
         // Validar contra el gym donde ocurrió el check-in (antes iba al gym por defecto)
         await validarAccesoWellhub(user.unique_token, GYM_SUCURSAL[gymId])
@@ -82,6 +97,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ received: true, validado: true })
 
       } catch (errValidacion: any) {
+        // Los dos avisos llegan casi al mismo tiempo: si el otro sí validó, este no es error
+        await new Promise(r => setTimeout(r, 1500))
+        if (await yaValidada()) {
+          await supabase.from('wellhub_checkins').update({ validado: true }).eq('id', checkin?.id)
+          return NextResponse.json({ received: true, validado: true, duplicado: true })
+        }
+
         console.error(`❌ Check-in Wellhub no validado: ${user.email} (gym ${gymId}):`, errValidacion.message)
         await supabase.from('alertas').insert({
           tipo:        'pago_fallido',
@@ -104,13 +126,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'booking_number faltante' }, { status: 400 })
       }
 
-      // Anti-duplicado: el mismo aviso llegando dos veces
-      const { data: existenteBooking } = await supabase
-        .from('wellhub_bookings').select('id')
-        .eq('booking_number', slot.booking_number).maybeSingle()
+      // Apartar el booking: si el mismo aviso llega dos veces al mismo tiempo, el segundo choca
+      // con el índice único y se descarta
+      const { data: booking, error: errApartar } = await supabase.from('wellhub_bookings').insert({
+        booking_number:   slot.booking_number,
+        gympass_user_id:  user?.unique_token,
+        wellhub_slot_id:  String(slot.id),
+        wellhub_class_id: String(slot.class_id),
+        estatus:          'Procesando',
+        metadata:         body,
+      }).select().single()
 
-      if (existenteBooking) {
-        console.log(`Booking ${slot.booking_number} ya procesado — ignorando duplicado`)
+      if (errApartar) {
+        console.log(`Booking ${slot.booking_number} ya procesado — ignorando duplicado (${errApartar.code})`)
         return NextResponse.json({ received: true, duplicado: true })
       }
 
@@ -151,16 +179,9 @@ export async function POST(req: NextRequest) {
         reservaExistente = ex?.[0]?.id || null
       }
 
-      const { data: booking } = await supabase.from('wellhub_bookings').insert({
-        booking_number:   slot.booking_number,
-        gympass_user_id:  user?.unique_token,
-        wellhub_slot_id:  String(slot.id),
-        wellhub_class_id: String(slot.class_id),
-        estatus:          'Pendiente',
-        cliente_id:       clienteId,
-        reserva_id:       reservaExistente,
-        metadata:         body,
-      }).select().single()
+      await supabase.from('wellhub_bookings')
+        .update({ estatus: 'Pendiente', cliente_id: clienteId, reserva_id: reservaExistente })
+        .eq('id', booking?.id)
 
       let activas = 0
       if (clase) {
