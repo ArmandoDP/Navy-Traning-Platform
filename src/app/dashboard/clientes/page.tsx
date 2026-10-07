@@ -9,7 +9,19 @@ import ClientesTabla from '@/components/clientes/ClientesTabla'
 import DrawerNuevoCliente from '@/components/clientes/DrawerNuevoCliente'
 import DrawerEditarCliente from '@/components/clientes/DrawerEditarCliente'
 import DrawerCliente from '@/components/clientes/drawer/DrawerCliente'
-import ModalLinkPago from '@/components/pagos/ModalLinkPago'
+
+// Formateador estricto para evitar desfases por zona horaria UTC
+const formatearFechaLocal = (fRaw: any): string => {
+  if (!fRaw) return 'Sin fecha'
+  const str = String(fRaw).trim()
+  if (str.length >= 10 && str.includes('-')) {
+    const [year, month, day] = str.slice(0, 10).split('-')
+    if (year && month && day) return `${day}/${month}/${year}`
+  }
+  const d = new Date(fRaw)
+  if (isNaN(d.getTime())) return 'Sin fecha'
+  return d.toLocaleDateString('es-MX', { timeZone: 'America/Mexico_City' })
+}
 
 export default function ClientesPage() {
   const { sucursalId, sucursalActiva } = useSucursal()
@@ -23,30 +35,58 @@ export default function ClientesPage() {
   const [editarCliente, setEditarCliente] = useState<any | null>(null)
   const [editarOpen, setEditarOpen] = useState(false)
   const [exportando, setExportando] = useState(false)
-  const [modalLink, setModalLink] = useState(false)
+
+  // Cargar registros por lotes desde Supabase (tipado corregido con string | null)
+  const fetchAllTableComplete = async (tableName: string, sucursalFiltro?: string | null) => {
+    let allData: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let keepFetching = true
+
+    while (keepFetching) {
+      let q = supabase
+        .from(tableName)
+        .select(
+          tableName === 'clientes'
+            ? '*, sucursales(nombre, color), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))'
+            : '*'
+        )
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+
+      if (tableName === 'clientes') {
+        q = q.order('created_at', { ascending: false })
+        if (sucursalFiltro && sucursalFiltro !== 'global') {
+          q = q.eq('sucursal_id', sucursalFiltro)
+        }
+      }
+
+      const { data, error } = await q
+
+      if (error) {
+        console.warn(`Error al consultar ${tableName}:`, error)
+        break
+      }
+      if (data && data.length > 0) {
+        allData = [...allData, ...data]
+        if (data.length < pageSize) keepFetching = false
+        else page++
+      } else {
+        keepFetching = false
+      }
+    }
+    return allData
+  }
 
   const fetchClientes = async () => {
     setLoading(true)
     try {
-      let q = supabase
-        .from('clientes')
-        .select('*, sucursales(nombre, color), membresias(id, fecha_inicio, fecha_fin, estatus, origen, paquete_id, notas, paquetes(nombre))')
-        .order('created_at', { ascending: false })
-
-      if (sucursalId && sucursalId !== 'global') {
-        q = q.eq('sucursal_id', sucursalId)
-      }
-
-      const { data, error } = await q
-      if (error) throw error
+      const data = await fetchAllTableComplete('clientes', sucursalId)
 
       if (data) {
         const ahora = new Date()
         const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
 
-        const { data: reservas } = await supabase
-          .from('reservas')
-          .select('cliente_id, usuario_id, estatus, status, fecha, horario, created_at')
+        const reservas = await fetchAllTableComplete('reservas')
 
         const enriquecidos = data.map(c => {
           const misReservas = reservas?.filter(r => 
@@ -122,33 +162,6 @@ export default function ClientesPage() {
     return null
   }
 
-  const fetchAllTableComplete = async (tableName: string) => {
-    let allData: any[] = []
-    let page = 0
-    const pageSize = 1000
-    let keepFetching = true
-
-    while (keepFetching) {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .range(page * pageSize, (page + 1) * pageSize - 1)
-
-      if (error) {
-        console.warn(`Error al consultar ${tableName}:`, error)
-        break
-      }
-      if (data && data.length > 0) {
-        allData = [...allData, ...data]
-        if (data.length < pageSize) keepFetching = false
-        else page++
-      } else {
-        keepFetching = false
-      }
-    }
-    return allData
-  }
-
   const handleExportar = async () => {
     try {
       setExportando(true)
@@ -182,6 +195,18 @@ export default function ClientesPage() {
       salasAll.forEach((sl: any) => { if (sl?.id) mapaSalas[sl.id] = sl.nombre || sl.name })
       sucursalesAll.forEach((sc: any) => { if (sc?.id) mapaSucursales[sc.id] = sc.nombre || sc.name })
 
+      const ahora = new Date()
+
+      // Evaluar si corresponde a la sección por vencer
+      const esSeccionPorVencer = listaAExportar.every(c => {
+        const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
+        const miMembresiaActiva = membresiasList.find((m: any) => String(m.estatus).toLowerCase() === 'activa')
+        const fVenc = miMembresiaActiva?.fecha_fin ? new Date(miMembresiaActiva.fecha_fin) : null
+        if (!fVenc) return false
+        const dias = Math.ceil((fVenc.getTime() - ahora.getTime()) / (1000 * 3600 * 24))
+        return dias >= 0 && dias <= 7
+      }) || listaAExportar.length < 50
+
       const headers = [
         'Nombre Completo',
         'Email',
@@ -190,10 +215,11 @@ export default function ClientesPage() {
         'Estudio / Sucursal',
         'Canal / Plataforma Registro',
         'Plan Actual',
+        ...(esSeccionPorVencer ? ['Días / Estatus Vencimiento'] : []),
         'Fecha Alta',
         'Antigüedad',
         'Nivel Experiencia',
-        'Fecha Vencimiento Plan',
+        'Fecha Vencimiento Plan Actual',
         'Método de Pago',
         'Clases Tomadas (Visitas)',
         'No Shows',
@@ -205,28 +231,37 @@ export default function ClientesPage() {
         'Valor de Cliente (LTV MXN)'
       ]
 
-      const ahora = new Date()
-
       const rows = listaAExportar.map(c => {
         const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
-        const miMembresia = membresiasList.find((m: any) => m.estatus === 'activa') || membresiasList[0]
+        const miMembresiaActiva = membresiasList.find((m: any) => String(m.estatus).toLowerCase() === 'activa')
 
-        const fechaVencimiento = miMembresia?.fecha_fin || c.fecha_venc_plan || c.fecha_vencimiento_membresia || c.fecha_vencimiento_memb
-        const paqueteObj = miMembresia?.paquetes ? (Array.isArray(miMembresia.paquetes) ? miMembresia.paquetes[0] : miMembresia.paquetes) : null
-        const nombrePlan = c.plan || c.paquete || paqueteObj?.nombre || miMembresia?.notas || 'Sin plan activo'
+        const fechaVencimiento = miMembresiaActiva?.fecha_fin || null
+        const fechaVencimientoTexto = fechaVencimiento ? formatearFechaLocal(fechaVencimiento) : 'Sin plan activo'
+
+        let estatusVencimientoTexto = '—'
+        if (fechaVencimiento) {
+          const fVencObj = new Date(fechaVencimiento)
+          const dias = Math.ceil((fVencObj.getTime() - ahora.getTime()) / (1000 * 3600 * 24))
+          if (dias < 0) estatusVencimientoTexto = '⛔ Expirado'
+          else if (dias === 0) estatusVencimientoTexto = '⚠️ Vence hoy'
+          else estatusVencimientoTexto = `⚠️ Vence en ${dias}d`
+        }
+
+        const paqueteObj = miMembresiaActiva?.paquetes ? (Array.isArray(miMembresiaActiva.paquetes) ? miMembresiaActiva.paquetes[0] : miMembresiaActiva.paquetes) : null
+        const nombrePlan = miMembresiaActiva ? (c.plan || c.paquete || paqueteObj?.nombre || miMembresiaActiva?.notas || 'Plan Activo') : 'Sin plan activo'
         
-        let canalOrigen = c.origen || c.canal || miMembresia?.origen || 'Prospecto'
+        let canalOrigen = c.origen || c.canal || miMembresiaActiva?.origen || 'Prospecto'
         const planLower = String(nombrePlan).toLowerCase()
         const origenLower = String(canalOrigen).toLowerCase()
 
         if (planLower.includes('wellhub') || origenLower.includes('wellhub')) canalOrigen = 'Wellhub'
         else if (planLower.includes('totalpass') || origenLower.includes('totalpass')) canalOrigen = 'TotalPass'
         else if (planLower.includes('fitpass') || origenLower.includes('fitpass')) canalOrigen = 'Fitpass'
-        else if (c.estatus === 'Prospecto' || (!c.plan && (!c.membresias || c.membresias.length === 0))) canalOrigen = 'Prospecto'
+        else if (c.estatus === 'Prospecto' || (!c.plan && !miMembresiaActiva)) canalOrigen = 'Prospecto'
         else if (!canalOrigen || canalOrigen === 'Prospecto') canalOrigen = 'Navy'
 
         const fechaAltaStr = (c.created_at || c.fecha_alta_original) 
-          ? new Date(c.fecha_alta_original || c.created_at).toLocaleDateString('es-MX') 
+          ? formatearFechaLocal(c.fecha_alta_original || c.created_at)
           : 'Sin fecha'
           
         let antiguedadStr = 'Hoy'
@@ -262,8 +297,8 @@ export default function ClientesPage() {
           return fRaw ? new Date(fRaw) : new Date(0)
         }
 
-        let inicioPeriodo = miMembresia?.fecha_inicio ? new Date(miMembresia.fecha_inicio) : null
-        let finPeriodo = miMembresia?.fecha_fin ? new Date(miMembresia.fecha_fin) : null
+        let inicioPeriodo = miMembresiaActiva?.fecha_inicio ? new Date(miMembresiaActiva.fecha_inicio) : null
+        let finPeriodo = miMembresiaActiva?.fecha_fin ? new Date(miMembresiaActiva.fecha_fin) : null
 
         if (!inicioPeriodo || isNaN(inicioPeriodo.getTime())) {
           inicioPeriodo = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
@@ -311,8 +346,8 @@ export default function ClientesPage() {
           const fechaObj = getFechaObjeto(r)
           let fechaFormateada = ''
           if (fechaObj.getTime() > 0) {
-            const fStr = fechaObj.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
-            const hStr = fechaObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+            const fStr = formatearFechaLocal(fechaObj)
+            const hStr = fechaObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Mexico_City' })
             fechaFormateada = `${fStr} ${hStr}`
           }
 
@@ -334,7 +369,7 @@ export default function ClientesPage() {
           if (txt) ultimaClaseTexto = txt
           else {
             const fObj = getFechaObjeto(ultAsist)
-            if (fObj.getTime() > 0) ultimaClaseTexto = fObj.toLocaleDateString('es-MX')
+            if (fObj.getTime() > 0) ultimaClaseTexto = formatearFechaLocal(fObj)
           }
         }
 
@@ -368,10 +403,11 @@ export default function ClientesPage() {
           c.sucursales?.nombre || 'Sin sucursal',
           canalOrigen,
           nombrePlan,
+          ...(esSeccionPorVencer ? [estatusVencimientoTexto] : []),
           fechaAltaStr,
           antiguedadStr,
           c.nivel_experiencia || 'No especificado',
-          fechaVencimiento ? new Date(fechaVencimiento).toLocaleDateString('es-MX') : 'Sin fecha',
+          fechaVencimientoTexto,
           metodoFinal,
           totalVisitas,
           totalNoShows,
@@ -389,7 +425,7 @@ export default function ClientesPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `reporte_clientes_filtrados_${new Date().toISOString().slice(0,10)}.csv`
+      a.download = `reporte_clientes_${esSeccionPorVencer ? 'vence_7_dias' : 'filtrados'}_${new Date().toISOString().slice(0,10)}.csv`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -470,10 +506,6 @@ export default function ClientesPage() {
           >
             <Upload size={15}/> {exportando ? 'Exportando...' : `Exportar (${clientesFiltrados.length})`}
           </button>
-          <button onClick={() => setModalLink(true)}
-            className="px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl">
-            🔗 Link de pago
-          </button>
           <button onClick={() => setNuevoOpen(true)}
             className="flex items-center gap-2 btn-dark font-bold text-sm px-4 py-2.5 rounded-xl transition">
             <Plus size={15}/> Nuevo cliente
@@ -522,9 +554,6 @@ export default function ClientesPage() {
           setEditarCliente(null)
         }}
       />
-
-      <ModalLinkPago isOpen={modalLink} onClose={() => setModalLink(false)} />
-
     </div>
   )
 }
