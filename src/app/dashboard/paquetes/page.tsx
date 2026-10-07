@@ -6,6 +6,7 @@ import { Plus, RefreshCw }     from 'lucide-react'
 import PaquetesMetricas        from '@/components/paquetes/PaquetesMetricas'
 import PaquetesTabla           from '@/components/paquetes/PaquetesTabla'
 import DrawerPaquete           from '@/components/paquetes/drawer/DrawerPaquete'
+import ModalLinkPago from '@/components/pagos/ModalLinkPago'
 
 export default function PaquetesPage() {
   const { sucursalId, sucursalActiva } = useSucursal()
@@ -17,6 +18,7 @@ export default function PaquetesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paqueteActivo, setPaqueteActivo] = useState<any>(null)
   const [verticales, setVerticales] = useState<any[]>([])
+  const [modalLink, setModalLink] = useState(false)
 
   const fetchPaquetes = async () => {
     setLoading(true)
@@ -90,10 +92,16 @@ export default function PaquetesPage() {
             {sucursalActiva && ` · ${sucursalActiva.nombre}`}
           </p>
         </div>
-        <button onClick={() => { setPaqueteActivo(null); setDrawerOpen(true) }}
-          className="flex items-center gap-2 btn-dark font-bold text-sm px-4 py-2.5 rounded-xl transition">
-          <Plus size={15} /> Nuevo paquete
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setModalLink(true)}
+            className="px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl">
+            🔗 Link de pago
+          </button>
+          <button onClick={() => { setPaqueteActivo(null); setDrawerOpen(true) }}
+            className="flex items-center gap-2 btn-dark font-bold text-sm px-4 py-2.5 rounded-xl transition">
+            <Plus size={15} /> Nuevo paquete
+          </button>
+        </div>
       </div>
 
       {/* Métricas */}
@@ -127,6 +135,9 @@ export default function PaquetesPage() {
           setPaqueteActivo(null)
         }}
       />
+
+      <ModalLinkPago isOpen={modalLink} onClose={() => setModalLink(false)} />
+
     </div>
   )
 }

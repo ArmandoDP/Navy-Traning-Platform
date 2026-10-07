@@ -9,6 +9,7 @@ import ClientesTabla from '@/components/clientes/ClientesTabla'
 import DrawerNuevoCliente from '@/components/clientes/DrawerNuevoCliente'
 import DrawerEditarCliente from '@/components/clientes/DrawerEditarCliente'
 import DrawerCliente from '@/components/clientes/drawer/DrawerCliente'
+import ModalLinkPago from '@/components/pagos/ModalLinkPago'
 
 export default function ClientesPage() {
   const { sucursalId, sucursalActiva } = useSucursal()
@@ -22,6 +23,7 @@ export default function ClientesPage() {
   const [editarCliente, setEditarCliente] = useState<any | null>(null)
   const [editarOpen, setEditarOpen] = useState(false)
   const [exportando, setExportando] = useState(false)
+  const [modalLink, setModalLink] = useState(false)
 
   const fetchClientes = async () => {
     setLoading(true)
@@ -472,6 +474,10 @@ export default function ClientesPage() {
           >
             <Upload size={15}/> {exportando ? 'Exportando...' : `Exportar (${clientesFiltrados.length})`}
           </button>
+          <button onClick={() => setModalLink(true)}
+            className="px-4 py-2 bg-gray-900 text-white text-sm font-bold rounded-xl">
+            🔗 Link de pago
+          </button>
           <button onClick={() => setNuevoOpen(true)}
             className="flex items-center gap-2 btn-dark font-bold text-sm px-4 py-2.5 rounded-xl transition">
             <Plus size={15}/> Nuevo cliente
@@ -520,6 +526,9 @@ export default function ClientesPage() {
           setEditarCliente(null)
         }}
       />
+
+      <ModalLinkPago isOpen={modalLink} onClose={() => setModalLink(false)} />
+
     </div>
   )
 }
