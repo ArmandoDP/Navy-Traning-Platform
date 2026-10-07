@@ -10,6 +10,33 @@ interface Props {
 }
 
 const CANALES = ['Navy','OrkestaPay','Stripe','Fitpass','Totalpass','Wellhub']
+const DIRECTOS = ['Navy', 'OrkestaPay', 'Stripe']
+
+// Si el pago no trae la comisión real (pagos viejos), se estima igual que el reporte descargable
+function comisionDe(p: any): number {
+  if (p.comision !== null && p.comision !== undefined) return Number(p.comision)
+  const m = Number(p.monto || 0)
+  switch (p.canal) {
+    case 'Stripe':     return m * 0.036 + (m > 0 ? 3 : 0)
+    case 'OrkestaPay': return m * 0.029
+    case 'Fitpass':
+    case 'Totalpass':
+    case 'Wellhub':    return m * 0.15
+    default:           return m * 0.015
+  }
+}
+
+// Supabase regresa máximo 1,000 filas por consulta: se piden por páginas
+async function todasLasFilas(armar: () => any) {
+  const filas: any[] = []
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await armar().range(desde, desde + 999)
+    if (error || !data) break
+    filas.push(...data)
+    if (data.length < 1000) break
+  }
+  return filas
+}
 const CANAL_COLORS: Record<string, string> = {
   Navy: '#171B24', OrkestaPay: '#ec4899', Stripe: '#6366f1', Fitpass: '#9ca3af', Totalpass: '#22c55e', Wellhub: '#f59e0b'
 }
@@ -19,18 +46,28 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin, sucursalId }: 
   const [pagos,          setPagos]          = useState<any[]>([])
   const [sucursales,     setSucursales]     = useState<any[]>([])
   const [totalBrutoAnt,  setTotalBrutoAnt]  = useState(0)
+  const [oxxoPendiente,  setOxxoPendiente]  = useState({ total: 0, n: 0 })
 
   useEffect(() => {
     const fetch = async () => {
       setLoading(true)
 
-      let qPagos = supabase.from('pagos').select('monto, canal, sucursal_id, estatus')
-        .gte('fecha_pago', fechaInicio).lte('fecha_pago', fechaFin + 'T23:59:59')
-        .eq('estatus', 'Completado')
-      if (sucursalId) qPagos = qPagos.eq('sucursal_id', sucursalId)
+      const p = await todasLasFilas(() => {
+        let q = supabase.from('pagos').select('monto, canal, sucursal_id, estatus, comision')
+          .gte('fecha_pago', fechaInicio).lte('fecha_pago', fechaFin + 'T23:59:59')
+          .eq('estatus', 'Completado')
+        if (sucursalId) q = q.eq('sucursal_id', sucursalId)
+        return q
+      })
 
-      const resPagos = await qPagos
-      const p = resPagos.data || []
+      const pend = await todasLasFilas(() => {
+        let q = supabase.from('pagos').select('monto')
+          .gte('fecha_pago', fechaInicio).lte('fecha_pago', fechaFin + 'T23:59:59')
+          .eq('estatus', 'Pendiente').eq('metodo_pago', 'OXXO')
+        if (sucursalId) q = q.eq('sucursal_id', sucursalId)
+        return q
+      })
+      setOxxoPendiente({ total: pend.reduce((a, x) => a + Number(x.monto || 0), 0), n: pend.length })
 
       const resSucs = await supabase.from('sucursales').select('id, nombre, color').eq('estatus', 'Activa')
       const s = resSucs.data || []
@@ -44,15 +81,14 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin, sucursalId }: 
       const fechaFinAnt = new Date(fechaFin)
       fechaFinAnt.setMonth(fechaFinAnt.getMonth() - 1)
 
-      let qPagosAnt = supabase
-        .from('pagos')
-        .select('monto, estatus')
-        .gte('fecha_pago', fechaInicioAnt.toISOString().split('T')[0])
-        .lte('fecha_pago', fechaFinAnt.toISOString().split('T')[0] + 'T23:59:59')
-        .eq('estatus', 'Completado')
-      if (sucursalId) qPagosAnt = qPagosAnt.eq('sucursal_id', sucursalId)
-
-      const { data: pagosAnt } = await qPagosAnt
+      const pagosAnt = await todasLasFilas(() => {
+        let q = supabase.from('pagos').select('monto, estatus')
+          .gte('fecha_pago', fechaInicioAnt.toISOString().split('T')[0])
+          .lte('fecha_pago', fechaFinAnt.toISOString().split('T')[0] + 'T23:59:59')
+          .eq('estatus', 'Completado')
+        if (sucursalId) q = q.eq('sucursal_id', sucursalId)
+        return q
+      })
       if (pagosAnt) {
         setTotalBrutoAnt(pagosAnt.reduce((a, item) => a + (item.monto || 0), 0))
       } else {
@@ -65,10 +101,10 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin, sucursalId }: 
   }, [fechaInicio, fechaFin, sucursalId])
 
   const totalBruto   = pagos.reduce((a, p) => a + (p.monto || 0), 0)
-  const comisiones   = Math.round(totalBruto * 0.055)
+  const comisiones   = Math.round(pagos.reduce((a, p) => a + comisionDe(p), 0))
   const neto         = totalBruto - comisiones
   const pctDirecto   = totalBruto > 0
-    ? Math.round((pagos.filter(p => p.canal === 'Navy').reduce((a, p) => a + p.monto, 0) / totalBruto) * 100)
+    ? Math.round((pagos.filter(p => DIRECTOS.includes(p.canal)).reduce((a, p) => a + p.monto, 0) / totalBruto) * 100)
     : 0
 
   // Barras por sucursal
@@ -91,7 +127,7 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin, sucursalId }: 
   const tablaData = sucursales.map(s => {
     const pagosSuc = pagos.filter(p => p.sucursal_id === s.id)
     const bruto    = pagosSuc.reduce((a, p) => a + p.monto, 0)
-    const com      = Math.round(bruto * 0.055)
+    const com      = Math.round(pagosSuc.reduce((a, p) => a + comisionDe(p), 0))
     const row: any = { nombre: s.nombre, color: s.color, bruto, comision: com, neto: bruto - com }
     CANALES.forEach(c => {
       row[c] = pagosSuc.filter(p => p.canal === c).reduce((a, p) => a + p.monto, 0)
@@ -108,13 +144,20 @@ export default function FinanzasIngresos({ fechaInicio, fechaFin, sucursalId }: 
 
   return (
     <div className="space-y-5">
+      {oxxoPendiente.n > 0 && (
+        <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3 text-sm text-amber-800">
+          <span className="text-lg">🧾</span>
+          <span><b>${oxxoPendiente.total.toLocaleString('es-MX')}</b> en {oxxoPendiente.n} ficha{oxxoPendiente.n === 1 ? '' : 's'} OXXO pendiente{oxxoPendiente.n === 1 ? '' : 's'} de pago. Se suman al ingreso cuando el cliente paga.</span>
+        </div>
+      )}
+
       {/* Métricas */}
       <div className="grid grid-cols-4 gap-4">
         {[
           { label: 'Ingreso bruto',        val: `$${(totalBruto/1000).toFixed(1)}k`,  sub: `${totalBrutoAnt > 0 ? ((totalBruto - totalBrutoAnt) / totalBrutoAnt * 100).toFixed(1) : '0'}% vs mes anterior`, color: 'text-emerald-600' },
-          { label: 'Comisiones plataformas', val: `$${(comisiones/1000).toFixed(1)}k`, sub: 'Stripe + Fitpass + Wellhub', color: 'text-emerald-600' },
+          { label: 'Comisiones',            val: `$${(comisiones/1000).toFixed(1)}k`, sub: 'Stripe real · demás estimadas', color: 'text-emerald-600' },
           { label: 'Ingreso neto',          val: `$${(neto/1000).toFixed(1)}k`,        sub: `${totalBruto > 0 ? Math.round(neto/totalBruto*100) : 0}% del bruto`, color: 'text-emerald-600' },
-          { label: '% Canal directo',       val: `${pctDirecto}%`,                     sub: 'Sin comisión', color: 'text-gray-900' },
+          { label: '% Canal directo',       val: `${pctDirecto}%`,                     sub: 'App, CRM y sucursal', color: 'text-gray-900' },
         ].map(m => (
           <div key={m.label} className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
             <p className="text-xs text-gray-400 font-medium">{m.label}</p>
