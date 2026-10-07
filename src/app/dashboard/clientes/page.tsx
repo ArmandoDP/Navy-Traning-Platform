@@ -151,11 +151,9 @@ export default function ClientesPage() {
     try {
       setExportando(true)
 
-      // EXPORTAMOS ÚNICAMENTE LOS CLIENTES VISIBLES / FILTRADOS
       const listaAExportar = clientesFiltrados.length > 0 ? clientesFiltrados : clientes
 
       if (!listaAExportar || listaAExportar.length === 0) {
-        alert('No hay clientes filtrados en pantalla para exportar.')
         setExportando(false)
         return
       }
@@ -209,9 +207,9 @@ export default function ClientesPage() {
 
       const rows = listaAExportar.map(c => {
         const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
-        const miMembresia = membresiasList[0]
+        const miMembresia = membresiasList.find((m: any) => m.estatus === 'activa') || membresiasList[0]
 
-        const fechaVencimiento = c.fecha_venc_plan || c.fecha_vencimiento_membresia || c.fecha_vencimiento_memb || miMembresia?.fecha_fin
+        const fechaVencimiento = miMembresia?.fecha_fin || c.fecha_venc_plan || c.fecha_vencimiento_membresia || c.fecha_vencimiento_memb
         const paqueteObj = miMembresia?.paquetes ? (Array.isArray(miMembresia.paquetes) ? miMembresia.paquetes[0] : miMembresia.paquetes) : null
         const nombrePlan = c.plan || c.paquete || paqueteObj?.nombre || miMembresia?.notas || 'Sin plan activo'
         
@@ -230,8 +228,9 @@ export default function ClientesPage() {
           : 'Sin fecha'
           
         let antiguedadStr = 'Hoy'
-        if (c.created_at || c.fecha_alta_original) {
-          const dias = Math.floor((ahora.getTime() - new Date(c.fecha_alta_original || c.created_at).getTime()) / (1000 * 3600 * 24))
+        const fAltaRaw = c.fecha_alta_original || c.created_at
+        if (fAltaRaw) {
+          const dias = Math.floor((ahora.getTime() - new Date(fAltaRaw).getTime()) / (1000 * 3600 * 24))
           antiguedadStr = dias <= 0 ? 'Hoy' : `${dias} días`
         }
 
@@ -394,11 +393,8 @@ export default function ClientesPage() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-     
-
     } catch (err: any) {
       console.error('Error al exportar:', err)
-      alert(`Error al exportar: ${err?.message || 'Revisa la consola del navegador'}`)
     } finally {
       setExportando(false)
     }

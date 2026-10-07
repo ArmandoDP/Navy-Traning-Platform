@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, ChevronRight as ChevronR, Wifi, Smartphone, Users, TrendingUp, Clock, Calendar, Star } from 'lucide-react'
 import { BadgeEstatus, BadgeSucursal, AsistenciaBar } from './ClientesBadges'
-import ClientesFilters    from './ClientesFilters'
+import ClientesFilters from './ClientesFilters'
 import ClientesBulkActions from './ClientesBulkActions'
 
 interface Cliente {
@@ -24,21 +24,31 @@ interface Cliente {
 }
 
 interface Props {
-  clientes:           Cliente[]
-  onRefresh:          () => void
-  onRenovar:          (ids: string[]) => void
-  onMarcarPerdido:    (ids: string[]) => void
-  onCambiarPaquete:   (ids: string[]) => void
-  onEditarCliente:    (cliente: Cliente) => void
-  onVerCliente:       (cliente: Cliente) => void
+  clientes: Cliente[]
+  onRefresh: () => void
+  onRenovar: (ids: string[]) => void
+  onMarcarPerdido: (ids: string[]) => void
+  onCambiarPaquete: (ids: string[]) => void
+  onEditarCliente: (cliente: Cliente) => void
+  onVerCliente: (cliente: Cliente) => void
   onFiltradosChange?: (filtrados: Cliente[]) => void
 }
 
 type Tab = 'todo' | 'vence7' | 'riesgo'
 const POR_PAGINA = 15
 
+// Función para obtener siempre la fecha de vencimiento correcta de la membresía activa
+const getFechaVencimientoReal = (c: any): Date | null => {
+  const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
+  const membresiaActiva = membresiasList.find((m: any) => m.estatus === 'activa') || membresiasList[0]
+  const fRaw = membresiaActiva?.fecha_fin || c.fecha_venc_plan || c.fecha_vencimiento_membresia || c.fecha_vencimiento_memb
+  if (!fRaw) return null
+  const d = new Date(fRaw)
+  return isNaN(d.getTime()) ? null : d
+}
+
 function getCanal(c: Cliente): string {
-  if (c.plan === 'Wellhub' || c.origen === 'Wellhub')     return 'Wellhub'
+  if (c.plan === 'Wellhub' || c.origen === 'Wellhub') return 'Wellhub'
   if (c.plan === 'TotalPass' || c.origen === 'TotalPass') return 'TotalPass'
   if (c.estatus === 'Prospecto' || c.origen === 'Clase Muestra' || (!c.plan && (!c.membresias || c.membresias.length === 0))) return 'Prospecto'
   return 'Navy'
@@ -46,10 +56,10 @@ function getCanal(c: Cliente): string {
 
 function BadgeCanal({ canal }: { canal: string }) {
   const map: Record<string, { cls: string; icon: React.ReactNode }> = {
-    'Navy':      { cls: 'bg-gray-900 text-white',         icon: <Users size={9} /> },
-    'Wellhub':   { cls: 'bg-pink-600 text-white',         icon: <Wifi size={9} /> },
-    'TotalPass': { cls: 'bg-purple-600 text-white',       icon: <Smartphone size={9} /> },
-    'Prospecto': { cls: 'bg-amber-100 text-amber-700',    icon: <span className="text-[8px]">👤</span> },
+    'Navy': { cls: 'bg-gray-900 text-white', icon: <Users size={9} /> },
+    'Wellhub': { cls: 'bg-pink-600 text-white', icon: <Wifi size={9} /> },
+    'TotalPass': { cls: 'bg-purple-600 text-white', icon: <Smartphone size={9} /> },
+    'Prospecto': { cls: 'bg-amber-100 text-amber-700', icon: <span className="text-[8px]">👤</span> },
   }
   const { cls, icon } = map[canal] || { cls: 'bg-gray-100 text-gray-600', icon: null }
   return (
@@ -60,15 +70,15 @@ function BadgeCanal({ canal }: { canal: string }) {
 }
 
 function getSortVal(c: Cliente, col: string) {
-  if (col === 'nombre')       return c.nombre_completo || ''
-  if (col === 'sucursal')     return c.sucursales?.nombre || ''
-  if (col === 'plan')         return c.plan || ''
-  if (col === 'fecha')        return c.created_at || ''
-  if (col === 'estado')       return c.estatus || ''
-  if (col === 'asistencia')   return c.asistencia_pct || 0
-  if (col === 'clases_mes')   return c.clases_mes || 0
-  if (col === 'ultima_visita')return c.ultima_visita || ''
-  if (col === 'canal')        return getCanal(c)
+  if (col === 'nombre') return c.nombre_completo || ''
+  if (col === 'sucursal') return c.sucursales?.nombre || ''
+  if (col === 'plan') return c.plan || ''
+  if (col === 'fecha') return c.created_at || ''
+  if (col === 'estado') return c.estatus || ''
+  if (col === 'asistencia') return c.asistencia_pct || 0
+  if (col === 'clases_mes') return c.clases_mes || 0
+  if (col === 'ultima_visita') return c.ultima_visita || ''
+  if (col === 'canal') return getCanal(c)
   return ''
 }
 
@@ -82,27 +92,40 @@ export default function ClientesTabla({
   onVerCliente,
   onFiltradosChange
 }: Props) {
-  const [tab,       setTab]       = useState<Tab>('todo')
+  const [tab, setTab] = useState<Tab>('todo')
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set())
-  const [pagina,    setPagina]    = useState(1)
-  const [orden,     setOrden]     = useState<{ col: string; dir: 'asc'|'desc' }>({ col: '', dir: 'asc' })
-  const [filtros, setFiltros]     = useState({ nombre: '', sucursal: '', plan: '', fecha: '', estado: '', canal: '' })
+  const [pagina, setPagina] = useState(1)
+  const [orden, setOrden] = useState<{ col: string; dir: 'asc'|'desc' }>({ col: '', dir: 'asc' })
+  const [filtros, setFiltros] = useState({ 
+    nombre: '', 
+    sucursal: '', 
+    plan: '', 
+    fechaInicio: '', 
+    fechaFin: '', 
+    estado: '', 
+    canal: '' 
+  })
 
   const hoy = new Date()
 
+  // Filtrado por Pestañas (Tab "Vence en 7 días" corregido)
   const porTab = clientes.filter(c => {
-    if (tab === 'todo')   return true
+    if (tab === 'todo') return true
+    
     if (tab === 'vence7') {
-      const fecha = c.fecha_vencimiento_memb || c.fecha_venc_plan
-      if (!fecha) return false
-      const dias = Math.ceil((new Date(fecha).getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+      const fechaVenc = getFechaVencimientoReal(c)
+      if (!fechaVenc) return false
+      
+      // Diferencia en días enteros respecto a hoy
+      const dias = Math.ceil((fechaVenc.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
       return dias >= 0 && dias <= 7
     }
+
     if (tab === 'riesgo') return (c.asistencia_pct || 0) < 50
     return true
   })
 
-  // ── Búsqueda Global y Filtrado Flexible ────────────
+  // Búsqueda Global y Filtros
   const filtrados = porTab.filter(c => {
     const q = (filtros.nombre || '').toLowerCase().trim()
 
@@ -111,7 +134,7 @@ export default function ClientesTabla({
     const telefono = ((c as any).telefono || '').toLowerCase()
     const sucursal = (c.sucursales?.nombre || '').toLowerCase()
     const plan = (c.plan || '').toLowerCase()
-    const fecha = c.created_at?.slice(0, 10) || ''
+    const fechaAlta = (c.fecha_alta_original || c.created_at || '').slice(0, 10)
 
     const haceMatchBusqueda = !q || 
       nombreCompleto.includes(q) || 
@@ -121,17 +144,20 @@ export default function ClientesTabla({
 
     const evalSucursal = q ? true : (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase()))
 
+    let coincideRangoFecha = true
+    if (filtros.fechaInicio && fechaAlta < filtros.fechaInicio) coincideRangoFecha = false
+    if (filtros.fechaFin && fechaAlta > filtros.fechaFin) coincideRangoFecha = false
+
     return (
       haceMatchBusqueda &&
       evalSucursal &&
-      (!filtros.plan     || plan.includes(filtros.plan.toLowerCase())) &&
-      (!filtros.fecha    || fecha === filtros.fecha) &&
-      (!filtros.canal    || getCanal(c) === filtros.canal) &&
-      (!filtros.estado   || c.estatus === filtros.estado)
+      coincideRangoFecha &&
+      (!filtros.plan || plan.includes(filtros.plan.toLowerCase())) &&
+      (!filtros.canal || getCanal(c) === filtros.canal) &&
+      (!filtros.estado || c.estatus === filtros.estado)
     )
   })
 
-  // Notificar al componente padre cada vez que cambien los clientes filtrados
   useEffect(() => {
     if (onFiltradosChange) {
       onFiltradosChange(filtrados)
@@ -158,16 +184,19 @@ export default function ClientesTabla({
   }
 
   const setFiltro = (k: string, v: string) => { setFiltros(p => ({ ...p, [k]: v })); setPagina(1) }
-  const limpiar = () => { setFiltros({ nombre:'', sucursal:'', plan:'', fecha:'', estado:'', canal:'' }); setPagina(1) }
+  const limpiar = () => { 
+    setFiltros({ nombre: '', sucursal: '', plan: '', fechaInicio: '', fechaFin: '', estado: '', canal: '' })
+    setPagina(1) 
+  }
   const toggleOrden = (col: string) => setOrden(o => ({ col, dir: o.col === col && o.dir === 'asc' ? 'desc' : 'asc' }))
   const sortIcon = (col: string) => <span className="text-gray-300 ml-0.5 text-[10px]">{orden.col === col ? (orden.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
   const antiguedad = (fecha: string) => {
     if (!fecha) return { label: '—', color: 'text-gray-300' }
     const dias = Math.floor((hoy.getTime() - new Date(fecha).getTime()) / (1000 * 3600 * 24))
-    if (dias < 1)   return { label: 'Hoy',              color: 'text-emerald-600 font-bold' }
-    if (dias < 7)   return { label: `${dias} días`,     color: 'text-emerald-500' }
-    if (dias < 30)  return { label: `${Math.floor(dias/7)} semanas`,  color: 'text-blue-500' }
+    if (dias < 1) return { label: 'Hoy', color: 'text-emerald-600 font-bold' }
+    if (dias < 7) return { label: `${dias} días`, color: 'text-emerald-500' }
+    if (dias < 30) return { label: `${Math.floor(dias/7)} semanas`, color: 'text-blue-500' }
     if (dias < 365) return { label: `${Math.floor(dias/30)} ${Math.floor(dias/30) === 1 ? 'mes' : 'meses'}`, color: 'text-gray-600' }
     const años = Math.floor(dias/365)
     return { label: `${años} ${años === 1 ? 'año' : 'años'}`, color: 'text-purple-600 font-bold' }
@@ -176,29 +205,29 @@ export default function ClientesTabla({
   const ultimaVisita = (fecha?: string) => {
     if (!fecha) return { label: 'Sin visitas aún', color: 'text-gray-300 italic' }
     const dias = Math.floor((hoy.getTime() - new Date(fecha).getTime()) / (1000 * 3600 * 24))
-    if (dias === 0) return { label: '🟢 Hoy',             color: 'text-emerald-600 font-bold' }
-    if (dias === 1) return { label: '🟡 Ayer',            color: 'text-emerald-500 font-semibold' }
-    if (dias < 7)   return { label: `Hace ${dias} días`,  color: 'text-blue-500' }
-    if (dias < 14)  return { label: 'Hace 1 semana',      color: 'text-amber-500' }
-    if (dias < 30)  return { label: `Hace ${Math.floor(dias/7)} semanas`, color: 'text-amber-500' }
-    if (dias < 60)  return { label: 'Hace 1 mes',         color: 'text-red-400' }
+    if (dias === 0) return { label: '🟢 Hoy', color: 'text-emerald-600 font-bold' }
+    if (dias === 1) return { label: '🟡 Ayer', color: 'text-emerald-500 font-semibold' }
+    if (dias < 7) return { label: `Hace ${dias} días`, color: 'text-blue-500' }
+    if (dias < 14) return { label: 'Hace 1 semana', color: 'text-amber-500' }
+    if (dias < 30) return { label: `Hace ${Math.floor(dias/7)} semanas`, color: 'text-amber-500' }
+    if (dias < 60) return { label: 'Hace 1 mes', color: 'text-red-400' }
     return { label: new Date(fecha).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }), color: 'text-red-500 font-semibold' }
   }
 
   const clasesMesLabel = (n?: number) => {
     if (n == null) return { label: '—', color: 'text-gray-300' }
-    if (n === 0)   return { label: 'Ninguna', color: 'text-gray-300 italic text-[11px]' }
-    if (n >= 12)   return { label: `🔥 ${n} clases`, color: 'text-emerald-600 font-bold' }
-    if (n >= 8)    return { label: `⚡ ${n} clases`, color: 'text-emerald-500 font-bold' }
-    if (n >= 4)    return { label: `${n} clases`, color: 'text-blue-500 font-semibold' }
+    if (n === 0) return { label: 'Ninguna', color: 'text-gray-300 italic text-[11px]' }
+    if (n >= 12) return { label: `🔥 ${n} clases`, color: 'text-emerald-600 font-bold' }
+    if (n >= 8) return { label: `⚡ ${n} clases`, color: 'text-emerald-500 font-bold' }
+    if (n >= 4) return { label: `${n} clases`, color: 'text-blue-500 font-semibold' }
     return { label: `${n} ${n === 1 ? 'clase' : 'clases'}`, color: 'text-gray-500' }
   }
 
   const vencimientoLabel = (c: Cliente) => {
-    const fecha = c.fecha_vencimiento_memb || c.fecha_venc_plan
+    const fecha = getFechaVencimientoReal(c)
     if (!fecha) return null
-    const dias = Math.ceil((new Date(fecha).getTime() - hoy.getTime()) / (1000 * 3600 * 24))
-    if (dias < 0)  return <span className="text-[10px] text-red-400 font-bold">⛔ Expirado</span>
+    const dias = Math.ceil((fecha.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+    if (dias < 0) return <span className="text-[10px] text-red-400 font-bold">⛔ Expirado</span>
     if (dias === 0) return <span className="text-[10px] text-red-500 font-bold">⚠️ Vence hoy</span>
     if (dias <= 3) return <span className="text-[10px] text-red-400 font-bold">⚠️ Vence en {dias}d</span>
     if (dias <= 7) return <span className="text-[10px] text-amber-500 font-semibold">⏰ Vence en {dias}d</span>
@@ -206,7 +235,7 @@ export default function ClientesTabla({
   }
 
   const TABS = [
-    { key: 'todo',   label: '⊙ Todo' },
+    { key: 'todo', label: '⊙ Todo' },
     { key: 'vence7', label: '⏰ Vence en 7 días' },
     { key: 'riesgo', label: '⚠ Riesgo de No-show' },
   ]
@@ -279,7 +308,7 @@ export default function ClientesTabla({
             {paginados.length === 0 ? (
               <tr><td colSpan={12} className="px-4 py-12 text-center text-gray-400 italic text-sm">No hay clientes</td></tr>
             ) : paginados.map(c => {
-              const antData   = antiguedad(c.fecha_alta_original || c.created_at)
+              const antData = antiguedad(c.fecha_alta_original || c.created_at)
               const visitData = ultimaVisita(c.ultima_visita)
               const clasesData = clasesMesLabel(c.clases_mes)
               return (
