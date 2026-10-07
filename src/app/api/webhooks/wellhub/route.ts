@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse }              from 'next/server'
-import { supabaseAdmin as supabase }              from '@/lib/supabase-admin'
+// src/app/api/webhooks/wellhub/route.ts
+import { NextRequest, NextResponse }                     from 'next/server'
+import { supabaseAdmin as supabase }                     from '@/lib/supabase-admin'
 import { validarAccesoWellhub, confirmarBookingWellhub } from '@/lib/wellhub'
 
 const GYM_SUCURSAL: Record<string, string> = {
@@ -21,6 +22,14 @@ async function sincronizarCupos(claseId: string) {
   }
 }
 
+// Busca al cliente por correo sin importar mayúsculas ni duplicados
+async function buscarCliente(email?: string | null) {
+  if (!email) return null
+  const { data } = await supabase.from('clientes').select('id')
+    .ilike('email', email.trim()).limit(1)
+  return data?.[0] || null
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
   console.log('Webhook Wellhub recibido:', body.event_type)
@@ -29,17 +38,14 @@ export async function POST(req: NextRequest) {
 
     // ── CHECK-IN ─────────────────────────────────────────────────────────────
     if (body.event_type === 'checkin' || body.event_type === 'checkin-booking-occurred') {
-      const user = body.event_data?.user
+      const user  = body.event_data?.user
+      const gymId = String(body.event_data?.gym?.id || '')
 
       if (!user?.unique_token) {
         return NextResponse.json({ error: 'unique_token faltante' }, { status: 400 })
       }
 
-      const { data: clienteExistente } = await supabase
-        .from('clientes')
-        .select('id')
-        .eq('email', user.email)
-        .maybeSingle()
+      const clienteExistente = await buscarCliente(user.email)
 
       const { data: checkin } = await supabase.from('wellhub_checkins').insert({
         unique_token: user.unique_token,
@@ -47,13 +53,14 @@ export async function POST(req: NextRequest) {
         apellido:     user.last_name,
         email:        user.email,
         telefono:     user.phone_number,
-        gym_id:       body.event_data?.gym?.id?.toString(),
+        gym_id:       gymId,
         cliente_id:   clienteExistente?.id || null,
         metadata:     body,
       }).select().single()
 
       try {
-        await validarAccesoWellhub(user.unique_token)
+        // Validar contra el gym donde ocurrió el check-in (antes iba al gym por defecto)
+        await validarAccesoWellhub(user.unique_token, GYM_SUCURSAL[gymId])
 
         await supabase.from('wellhub_checkins')
           .update({ validado: true })
@@ -62,24 +69,26 @@ export async function POST(req: NextRequest) {
         if (!clienteExistente && user.email) {
           await supabase.from('clientes').insert({
             nombre_completo: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email,
-            email:           user.email,
+            email:           user.email.trim().toLowerCase(),
             telefono:        user.phone_number || null,
             estatus:         'Activo',
             plan:            'Wellhub',
             origen:          'Wellhub',
-            sucursal_id:     GYM_SUCURSAL[String(body.event_data?.gym?.id)] || null,
+            sucursal_id:     GYM_SUCURSAL[gymId] || null,
           })
         }
 
+        console.log(`✅ Check-in Wellhub validado: ${user.email} (gym ${gymId})`)
         return NextResponse.json({ received: true, validado: true })
 
       } catch (errValidacion: any) {
+        console.error(`❌ Check-in Wellhub no validado: ${user.email} (gym ${gymId}):`, errValidacion.message)
         await supabase.from('alertas').insert({
           tipo:        'pago_fallido',
           categoria:   'operacion',
           titulo:      `Check-in Wellhub sin acceso válido — ${user.first_name || ''} ${user.last_name || ''}`.trim(),
           descripcion: errValidacion.message,
-          metadata:    { unique_token: user.unique_token },
+          metadata:    { unique_token: user.unique_token, gym_id: gymId },
         })
 
         return NextResponse.json({ received: true, validado: false }, { status: 200 })
@@ -95,12 +104,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'booking_number faltante' }, { status: 400 })
       }
 
-      // Anti-duplicado por booking_number
+      // Anti-duplicado: el mismo aviso llegando dos veces
       const { data: existenteBooking } = await supabase
-        .from('wellhub_bookings')
-        .select('id')
-        .eq('booking_number', slot.booking_number)
-        .maybeSingle()
+        .from('wellhub_bookings').select('id')
+        .eq('booking_number', slot.booking_number).maybeSingle()
 
       if (existenteBooking) {
         console.log(`Booking ${slot.booking_number} ya procesado — ignorando duplicado`)
@@ -114,16 +121,12 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       // Buscar / crear cliente
-      let { data: clienteExistente } = await supabase
-        .from('clientes')
-        .select('id')
-        .eq('email', user.email)
-        .maybeSingle()
+      let clienteExistente = await buscarCliente(user?.email)
 
-      if (!clienteExistente && user.email) {
+      if (!clienteExistente && user?.email) {
         const { data: nuevoCliente, error: errorCliente } = await supabase.from('clientes').insert({
           nombre_completo: user.name || user.email,
-          email:           user.email,
+          email:           user.email.trim().toLowerCase(),
           telefono:        user.phone_number || null,
           estatus:         'Activo',
           plan:            'Wellhub',
@@ -137,77 +140,69 @@ export async function POST(req: NextRequest) {
 
       const clienteId = clienteExistente?.id ?? null
 
-      // Anti-duplicado por cliente + clase
+      // Si ya tiene reserva activa en esta clase, se reutiliza y se CONFIRMA la nueva solicitud
+      // (antes se ignoraba y Wellhub la dejaba colgada aunque hubiera lugar)
+      let reservaExistente: string | null = null
       if (clase && clienteId) {
-        const { data: reservaExistente } = await supabase
-          .from('reservas')
-          .select('id')
-          .eq('cliente_id', clienteId)
-          .eq('clase_id', clase.id)
-          .neq('estatus', 'Cancelada')
-          .maybeSingle()
-
-        if (reservaExistente) {
-          console.log('Reserva duplicada ignorada:', clienteId, clase.id)
-          return NextResponse.json({ ok: true, duplicado: true })
-        }
+        const { data: ex } = await supabase
+          .from('reservas').select('id')
+          .eq('cliente_id', clienteId).eq('clase_id', clase.id)
+          .neq('estatus', 'Cancelada').limit(1)
+        reservaExistente = ex?.[0]?.id || null
       }
 
       const { data: booking } = await supabase.from('wellhub_bookings').insert({
         booking_number:   slot.booking_number,
-        gympass_user_id:  user.unique_token,
+        gympass_user_id:  user?.unique_token,
         wellhub_slot_id:  String(slot.id),
         wellhub_class_id: String(slot.class_id),
         estatus:          'Pendiente',
         cliente_id:       clienteId,
+        reserva_id:       reservaExistente,
         metadata:         body,
       }).select().single()
 
-      // Cupo real = reservas activas en la BD
       let activas = 0
       if (clase) {
         const { count } = await supabase
-          .from('reservas')
-          .select('id', { count: 'exact', head: true })
-          .eq('clase_id', clase.id)
-          .neq('estatus', 'Cancelada')
+          .from('reservas').select('id', { count: 'exact', head: true })
+          .eq('clase_id', clase.id).neq('estatus', 'Cancelada')
         activas = count || 0
       }
 
-      const hayCupo = clase ? activas < clase.capacidad_max : true
+      const hayCupo = !clase || !!reservaExistente || activas < clase.capacidad_max
 
       if (hayCupo) {
         try {
           await confirmarBookingWellhub(slot.booking_number, slot.class_id, true, String(slot.gym_id))
 
-          await supabase.from('wellhub_bookings')
-            .update({ estatus: 'Confirmado' })
-            .eq('id', booking?.id)
-
-          if (clase) {
-            const { error: insertError } = await supabase.from('reservas').insert({
+          let reservaId = reservaExistente
+          if (clase && !reservaId) {
+            const { data: nueva, error: insertError } = await supabase.from('reservas').insert({
               clase_id:       clase.id,
               cliente_id:     clienteId,
               estatus:        'Confirmada',
               origen:         'Wellhub',
-              nombre_externo: null,
-              email_externo:  null,
-            })
-
-            if (insertError) {
-              console.warn('Error al insertar reserva Wellhub:', insertError.message)
-            }
-
-            // Supabase + Wellhub + TotalPass con el conteo real
-            await sincronizarCupos(clase.id)
+              nombre_externo: clienteId ? null : (user?.name || null),
+              email_externo:  clienteId ? null : (user?.email || null),
+            }).select('id').single()
+            if (insertError) console.warn('Error al insertar reserva Wellhub:', insertError.message)
+            reservaId = nueva?.id || null
           }
+
+          await supabase.from('wellhub_bookings')
+            .update({ estatus: 'Confirmado', reserva_id: reservaId })
+            .eq('id', booking?.id)
+
+          if (clase) await sincronizarCupos(clase.id)
 
         } catch (errConfirm: any) {
           console.error('❌ Error confirmando booking en Wellhub:', errConfirm.message)
         }
       } else {
         try {
-          await confirmarBookingWellhub(slot.booking_number, slot.class_id, false)
+          // Rechazo al gym correcto (antes iba al gym por defecto y no llegaba)
+          await confirmarBookingWellhub(slot.booking_number, slot.class_id, false, String(slot.gym_id))
           await supabase.from('wellhub_bookings')
             .update({ estatus: 'Rechazado' })
             .eq('id', booking?.id)
@@ -235,30 +230,33 @@ export async function POST(req: NextRequest) {
       if (bookingNumber) {
         const { data: booking } = await supabase
           .from('wellhub_bookings')
-          .select('id, cliente_id, wellhub_slot_id')
+          .select('id, cliente_id, wellhub_slot_id, reserva_id, estatus')
           .eq('booking_number', bookingNumber)
           .maybeSingle()
 
-        if (booking) {
+        if (booking && booking.estatus !== 'Cancelado') {
           await supabase.from('wellhub_bookings')
             .update({ estatus: 'Cancelado' })
             .eq('id', booking.id)
 
           const { data: clase } = await supabase
-            .from('clases')
-            .select('id')
+            .from('clases').select('id')
             .eq('wellhub_slot_id', booking.wellhub_slot_id)
             .maybeSingle()
 
           if (clase) {
-            if (booking.cliente_id) {
-              await supabase.from('reservas')
-                .update({ estatus: 'Cancelada' })
-                .eq('clase_id', clase.id)
-                .eq('cliente_id', booking.cliente_id)
+            if (booking.reserva_id) {
+              await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', booking.reserva_id)
+            } else if (booking.cliente_id) {
+              // Bookings viejos sin reserva_id: solo la reserva Wellhub de ese cliente en esa clase
+              const { data: r } = await supabase.from('reservas').select('id')
+                .eq('clase_id', clase.id).eq('cliente_id', booking.cliente_id)
+                .eq('origen', 'Wellhub').neq('estatus', 'Cancelada').limit(1)
+              if (r?.[0]) await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', r[0].id)
             }
 
             await sincronizarCupos(clase.id)
+            console.log(`🔓 Wellhub cancelado: ${bookingNumber} → lugar liberado`)
           }
 
           if (body.event_type === 'booking-late-cancelation') {
