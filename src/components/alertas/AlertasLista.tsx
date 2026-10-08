@@ -1,21 +1,37 @@
 'use client'
 import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { supabase }  from '@/lib/supabase'
 
-const TIPO_CONFIG: Record<string, { icon: string; bg: string; color: string }> = {
-  pago_fallido:    { icon: '⊗', bg: '#fef2f2', color: '#ef4444' },
-  lista_espera:    { icon: '⏱', bg: '#fffbeb', color: '#f59e0b' },
-  membresia_vence: { icon: '⚠', bg: '#fffbeb', color: '#f59e0b' },
-  retencion:       { icon: '⚑', bg: '#fffbeb', color: '#f59e0b' },
-  no_show:         { icon: '⊗', bg: '#fef2f2', color: '#ef4444' },
-  recordatorio:    { icon: '🔔', bg: '#eff6ff', color: '#3b82f6' },
+const TIPO_CONFIG: Record<string, { icon: string; bg: string; color: string; etiqueta?: string }> = {
+  // Problemas
+  pago_fallido:       { icon: '⊗', bg: '#fef2f2', color: '#ef4444' },
+  no_show:            { icon: '⊗', bg: '#fef2f2', color: '#ef4444' },
+  checkin_fallido:    { icon: '✕', bg: '#fef2f2', color: '#ef4444', etiqueta: 'Revisar' },
+  // Avisos
+  lista_espera:       { icon: '⏱', bg: '#fffbeb', color: '#f59e0b' },
+  membresia_vence:    { icon: '⚠', bg: '#fffbeb', color: '#f59e0b' },
+  retencion:          { icon: '⚑', bg: '#fffbeb', color: '#f59e0b' },
+  cancelacion_tardia: { icon: '⏱', bg: '#fffbeb', color: '#f59e0b', etiqueta: 'Tardía' },
+  // Todo bien
+  cancelacion_ok:     { icon: '✓', bg: '#ecfdf5', color: '#10b981', etiqueta: 'A tiempo' },
+  checkin_ok:         { icon: '✓', bg: '#ecfdf5', color: '#10b981', etiqueta: 'Validado' },
+  // Informativas
+  recordatorio:       { icon: '🔔', bg: '#eff6ff', color: '#3b82f6' },
 }
 
-type Categoria = 'todas' | 'operacion' | 'recordatorio' | 'asistencia' | 'vencimiento'
+// Color de la etiqueta de cada plataforma
+const CANALES: Record<string, string> = {
+  Wellhub:   'bg-pink-100 text-pink-700',
+  TotalPass: 'bg-emerald-100 text-emerald-700',
+  App:       'bg-gray-900 text-white',
+  CRM:       'bg-indigo-100 text-indigo-700',
+}
+
+type Categoria = 'todas' | 'plataformas' | 'operacion' | 'recordatorio' | 'asistencia' | 'vencimiento'
 
 const TABS: { key: Categoria; label: string }[] = [
   { key: 'todas',        label: 'Todas'         },
+  { key: 'plataformas',  label: 'Reservas y check-ins' },
   { key: 'operacion',    label: 'Operación'     },
   { key: 'recordatorio', label: 'Recordatorios' },
   { key: 'asistencia',   label: 'Asistencia'    },
@@ -24,12 +40,13 @@ const TABS: { key: Categoria; label: string }[] = [
 
 const tiempoRelativo = (fecha: string) => {
   const diff = Date.now() - new Date(fecha).getTime()
-  const min  = Math.floor(diff / 60000)
+  const min  = Math.max(0, Math.floor(diff / 60000))
   const hrs  = Math.floor(diff / 3600000)
   const dias = Math.floor(diff / 86400000)
+  if (min < 1)   return 'Justo ahora'
   if (min < 60)  return `Hace ${min} min`
   if (hrs < 24)  return `Hace ${hrs}h`
-  return `Hace ${dias} días`
+  return dias === 1 ? 'Hace 1 día' : `Hace ${dias} días`
 }
 
 interface Props {
@@ -74,10 +91,10 @@ export default function AlertasLista({ alertas, loading, onMarcarLeida, onMarcar
 
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
         {/* Tabs */}
-        <div className="grid grid-cols-5 border-b border-gray-100">
+        <div className="flex overflow-x-auto border-b border-gray-100">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`flex items-center justify-center gap-1.5 px-5 py-4 text-sm font-medium transition border-b-2 whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-4 text-sm font-medium transition border-b-2 whitespace-nowrap ${
                 tab === t.key
                   ? 'border-gray-900 text-gray-900 font-bold'
                   : 'border-transparent text-gray-400 hover:text-gray-700'
@@ -92,6 +109,14 @@ export default function AlertasLista({ alertas, loading, onMarcarLeida, onMarcar
           ))}
         </div>
 
+        {tab === 'plataformas' && (
+          <div className="flex flex-wrap items-center gap-4 px-6 py-3 bg-gray-50 border-b border-gray-100 text-[11px] text-gray-500">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Todo bien: canceló a tiempo o su visita se validó</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> Canceló con menos de 12 h (su lugar sí se liberó)</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Hay que revisarlo</span>
+          </div>
+        )}
+
         {filtradas.length === 0 ? (
           <div className="py-16 text-center text-gray-400 text-sm italic">
             No hay alertas pendientes
@@ -99,8 +124,9 @@ export default function AlertasLista({ alertas, loading, onMarcarLeida, onMarcar
         ) : (
           <div className="divide-y divide-gray-50">
             {filtradas.map(alerta => {
-              const cfg     = TIPO_CONFIG[alerta.tipo] || TIPO_CONFIG['recordatorio']
+              const cfg      = TIPO_CONFIG[alerta.tipo] || TIPO_CONFIG['recordatorio']
               const acciones = getAcciones(alerta)
+              const canal    = alerta.metadata?.canal as string | undefined
               return (
                 <div key={alerta.id}
                   className={`flex items-start gap-4 px-6 py-4 hover:bg-gray-50 transition relative ${
@@ -109,15 +135,28 @@ export default function AlertasLista({ alertas, loading, onMarcarLeida, onMarcar
                   {!alerta.leida && (
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-indigo-500" />
                   )}
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-lg"
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-lg font-black"
                     style={{ backgroundColor: cfg.bg, color: cfg.color }}>
                     {cfg.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!alerta.leida ? 'font-black text-gray-900' : 'font-semibold text-gray-700'}`}>
-                      {alerta.titulo}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{alerta.descripcion}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className={`text-sm ${!alerta.leida ? 'font-black text-gray-900' : 'font-semibold text-gray-700'}`}>
+                        {alerta.titulo}
+                      </p>
+                      {cfg.etiqueta && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wide"
+                          style={{ backgroundColor: cfg.bg, color: cfg.color }}>
+                          {cfg.etiqueta}
+                        </span>
+                      )}
+                      {canal && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wide ${CANALES[canal] || 'bg-gray-100 text-gray-600'}`}>
+                          {canal}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">{alerta.descripcion}</p>
                     <p className="text-[11px] text-gray-300 mt-1">{tiempoRelativo(alerta.created_at)}</p>
                   </div>
                   <div className="relative flex-shrink-0" onClick={e => e.stopPropagation()}>

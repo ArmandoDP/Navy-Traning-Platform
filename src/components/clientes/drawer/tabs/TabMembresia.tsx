@@ -5,9 +5,15 @@ import { supabase }        from '@/lib/supabase'
 import { useAuth }         from '@/context/AuthContext'
 import ToastExito          from '@/components/ToastExito'
 import ModalPagoSucursal   from '@/components/clientes/ModalPagoSucursal'
+import ModalFechasMembresia from '@/components/clientes/ModalFechasMembresia'
 import { logActividad } from '@/lib/log-actividad'
 
 interface Props { cliente: any; reservas: any[]; onRefresh?: () => void }
+
+// Fecha de hoy en CDMX y formato de fechas 'YYYY-MM-DD' sin que la zona horaria las mueva un día
+const hoyCDMX = () => new Date(Date.now() - 6 * 3600 * 1000).toISOString().split('T')[0]
+const fechaLarga = (d?: string | null) =>
+  d ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'
 
 export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const { staff } = useAuth()
@@ -24,6 +30,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const [membresiaActiva, setMembresiaActiva]  = useState<any>(null)
   const [membresiaEnCola, setMembresiaEnCola]  = useState<any>(null)
   const [loadingMemb,     setLoadingMemb]      = useState(true)
+  const [membFechas, setMembFechas] = useState<string | null>(null)
 
   
   const clasesUsadas = reservas.filter(r => r.estatus === 'Confirmada').length
@@ -47,11 +54,17 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       .order('fecha_inicio', { ascending: true })
 
     if (data && data.length > 0) {
-      const hoy = new Date().toISOString().split('T')[0]
-      const activa  = data.find(m => m.fecha_inicio <= hoy)
-      const enCola  = data.find(m => m.fecha_inicio > hoy)
+      const hoy = hoyCDMX()
+      // La vigente hoy: si hay varias, la que vence primero (igual que la app)
+      const activa = data
+        .filter(m => m.fecha_inicio <= hoy && m.fecha_fin >= hoy)
+        .sort((a, b) => a.fecha_fin.localeCompare(b.fecha_fin))[0]
+      const enCola = data.find(m => m.fecha_inicio > hoy)
       setMembresiaActiva(activa || null)
       setMembresiaEnCola(enCola || null)
+    } else {
+      setMembresiaActiva(null)
+      setMembresiaEnCola(null)
     }
     setLoadingMemb(false)
   }
@@ -215,6 +228,16 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         }}
       />
 
+      <ModalFechasMembresia
+        isOpen={!!membFechas}
+        membresiaId={membFechas}
+        onClose={() => setMembFechas(null)}
+        onSuccess={() => {
+          fetchMembresias()
+          onRefresh?.()
+        }}
+      />
+
       {/* Modal asignar paquete */}
       {modalPaquete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -224,7 +247,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
               <h3 className="text-lg font-black text-gray-900 mb-1">Asignar paquete gratis</h3>
               <p className="text-xs text-gray-400">
                 {fechaVenc && new Date(fechaVenc) > new Date()
-                  ? `Se activará al terminar el plan actual (${new Date(fechaVenc).toLocaleDateString('es-MX')})`
+                  ? `Se activará al terminar el plan actual (${new Date(`${String(fechaVenc).slice(0, 10)}T12:00:00`).toLocaleDateString('es-MX')})`
                   : 'Se activará inmediatamente'}
               </p>
             </div>
@@ -303,7 +326,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
           <div className="flex items-center gap-2 text-sm mb-4">
             <Calendar size={14} className="text-gray-400"/>
             <span className="font-bold text-gray-700">
-              Vence el {new Date(fechaVenc).toLocaleDateString('es-MX', { year:'numeric', month:'2-digit', day:'2-digit' }).replace(/\//g,'-')}
+              Vence el {new Date(`${String(fechaVenc).slice(0, 10)}T12:00:00`).toLocaleDateString('es-MX', { year:'numeric', month:'2-digit', day:'2-digit' }).replace(/\//g,'-')}
             </span>
             {diasVenc !== null && (
               <span className={`text-xs font-medium ${diasVenc <= 7 ? 'text-orange-500' : 'text-gray-400'}`}>
@@ -359,6 +382,18 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
             </button>
           )}
 
+          {esDireccion && membresiaActiva && (
+            <button onClick={() => setMembFechas(membresiaActiva.id)}
+              className="flex items-center gap-1.5 px-3 py-2 border border-indigo-200 bg-indigo-50 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition">
+              <Calendar size={12}/> Editar fechas · {membresiaActiva.paquetes?.nombre}
+            </button>
+          )}
+          {membresiaActiva?.activacion_pendiente && (
+            <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">
+              <Clock size={12}/> Arranca con su primera reserva
+            </span>
+          )}
+
           <button onClick={() => setToast('Pausar membresía estará disponible próximamente.')}
             className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition">
             <Pause size={12}/> Pausar membresía
@@ -376,6 +411,12 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
           <div className="flex items-center gap-2 mb-3">
             <Clock size={14} className="text-indigo-500" />
             <p className="text-xs font-black text-indigo-600 uppercase tracking-wide">Próximo paquete en cola</p>
+            {esDireccion && (
+              <button onClick={() => setMembFechas(membresiaEnCola.id)}
+                className="ml-auto text-xs font-bold text-indigo-600 hover:underline">
+                Editar fechas
+              </button>
+            )}
           </div>
           <div className="space-y-2">
             <div className="flex justify-between">
@@ -385,13 +426,13 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
             <div className="flex justify-between">
               <span className="text-xs text-gray-500">Inicia el</span>
               <span className="text-xs font-bold text-gray-900">
-                {new Date(membresiaEnCola.fecha_inicio).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {fechaLarga(membresiaEnCola.fecha_inicio)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-xs text-gray-500">Termina el</span>
               <span className="text-xs font-bold text-gray-900">
-                {new Date(membresiaEnCola.fecha_fin).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {fechaLarga(membresiaEnCola.fecha_fin)}
               </span>
             </div>
             <div className="flex justify-between">
