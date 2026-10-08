@@ -94,6 +94,15 @@ export async function POST(req: NextRequest) {
         }
 
         console.log(`✅ Check-in Wellhub validado: ${user.email} (gym ${gymId})`)
+        await supabase.from('alertas').insert({
+          tipo:        'checkin_ok',
+          categoria:   'plataformas',
+          titulo:      `Check-in Wellhub validado — ${`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Usuario'}`,
+          descripcion: 'Llegó a Navy · visita validada, Wellhub la paga',
+          cliente_id:  clienteExistente?.id || null,
+          sucursal_id: GYM_SUCURSAL[gymId] || null,
+          metadata:    { gym_id: gymId, canal: 'Wellhub' },
+        })
         return NextResponse.json({ received: true, validado: true })
 
       } catch (errValidacion: any) {
@@ -106,11 +115,13 @@ export async function POST(req: NextRequest) {
 
         console.error(`❌ Check-in Wellhub no validado: ${user.email} (gym ${gymId}):`, errValidacion.message)
         await supabase.from('alertas').insert({
-          tipo:        'pago_fallido',
-          categoria:   'operacion',
-          titulo:      `Check-in Wellhub sin acceso válido — ${user.first_name || ''} ${user.last_name || ''}`.trim(),
-          descripcion: errValidacion.message,
-          metadata:    { unique_token: user.unique_token, gym_id: gymId },
+          tipo:        'checkin_fallido',
+          categoria:   'plataformas',
+          titulo:      `Check-in Wellhub no validado — ${`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Usuario'}`,
+          descripcion: `Wellhub no aceptó la visita (${errValidacion.message}). Si se repite, revisa que su Wellhub esté activo.`,
+          cliente_id:  clienteExistente?.id || null,
+          sucursal_id: GYM_SUCURSAL[gymId] || null,
+          metadata:    { unique_token: user.unique_token, gym_id: gymId, canal: 'Wellhub' },
         })
 
         return NextResponse.json({ received: true, validado: false }, { status: 200 })
@@ -280,16 +291,7 @@ export async function POST(req: NextRequest) {
             console.log(`🔓 Wellhub cancelado: ${bookingNumber} → lugar liberado`)
           }
 
-          if (body.event_type === 'booking-late-cancelation') {
-            await supabase.from('alertas').insert({
-              tipo:        'no_show',
-              categoria:   'asistencia',
-              titulo:      'Cancelación tardía — Wellhub',
-              descripcion: `Booking ${bookingNumber} cancelado fuera de la ventana permitida`,
-              cliente_id:  booking.cliente_id,
-              metadata:    { booking_number: bookingNumber },
-            })
-          }
+          // La alerta de cancelación (a tiempo / tardía) la crea la base de datos al cancelar la reserva
         }
       }
 
