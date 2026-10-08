@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { supabase }            from '@/lib/supabase'
-import { useSucursal }         from '@/context/SucursalContext'
-import { Plus, RefreshCw }     from 'lucide-react'
+import { supabase }          from '@/lib/supabase'
+import { useSucursal }        from '@/context/SucursalContext'
+import { Plus, RefreshCw }    from 'lucide-react'
 import PaquetesMetricas        from '@/components/paquetes/PaquetesMetricas'
 import PaquetesTabla           from '@/components/paquetes/PaquetesTabla'
 import DrawerPaquete           from '@/components/paquetes/drawer/DrawerPaquete'
@@ -22,7 +22,7 @@ export default function PaquetesPage() {
 
   const fetchPaquetes = async () => {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('paquetes')
       .select(`
         *,
@@ -35,6 +35,10 @@ export default function PaquetesPage() {
       `)
       .order('created_at', { ascending: false })
 
+    if (error) {
+      console.error('Error al cargar paquetes:', error)
+    }
+
     if (data) {
       const filtrado = sucursalId
         ? data.filter(p =>
@@ -46,9 +50,39 @@ export default function PaquetesPage() {
     setLoading(false)
   }
 
+  // FUNCIÓN CORREGIDA: Actualiza estatus y visibilidad en Supabase simultáneamente
   const handleToggleVisibilidad = async (paqueteId: string, visible: boolean) => {
-    await supabase.from('paquetes').update({ visible_en_app: visible }).eq('id', paqueteId)
-    setPaquetes(prev => prev.map(p => p.id === paqueteId ? { ...p, visible_en_app: visible } : p))
+    const nuevoEstatus = visible ? 'Activo' : 'Inactivo'
+
+    // 1. Actualización optimista inmediata en la UI local
+    setPaquetes(prev =>
+      prev.map(p =>
+        p.id === paqueteId
+          ? { ...p, visible_en_app: visible, estatus: nuevoEstatus, activo: visible }
+          : p
+      )
+    )
+
+    try {
+      // 2. Guardar en Supabase actualizando tanto visibilidad como estatus
+      const { error } = await supabase
+        .from('paquetes')
+        .update({
+          visible_en_app: visible,
+          activo: visible,
+          estatus: nuevoEstatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', paqueteId)
+
+      if (error) {
+        throw error
+      }
+    } catch (err: any) {
+      console.error('Error al actualizar visibilidad del paquete:', err)
+      // Si falla en base de datos, revertimos el cambio recargando
+      fetchPaquetes()
+    }
   }
 
   const fetchCatalogos = async () => {
@@ -63,16 +97,20 @@ export default function PaquetesPage() {
   }
 
   useEffect(() => {
-    fetchPaquetes()
-    fetchCatalogos()
+    fetchClientesYCatalogos()
   }, [sucursalId])
 
-  // Métricas
-  const activos        = paquetes.filter(p => p.estatus === 'Activo')
-  const totalPaquetes  = activos.length
-  const miembrosActivos = 0   // pendiente — viene de clientes con ese paquete
-  const ingresosTotales = 0   // pendiente — viene de pagos
-  const tasaAsistencia  = 0   // pendiente — viene de asistencias
+  const fetchClientesYCatalogos = async () => {
+    await fetchPaquetes()
+    await fetchCatalogos()
+  }
+
+  // Métricas dinámicas basadas en el estatus
+  const activos         = paquetes.filter(p => p.estatus === 'Activo' || p.visible_en_app === true)
+  const totalPaquetes   = activos.length
+  const miembrosActivos = 0   // pendiente
+  const ingresosTotales = 0   // pendiente
+  const tasaAsistencia  = 0   // pendiente
 
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-gray-400 gap-2">
@@ -130,7 +168,7 @@ export default function PaquetesPage() {
         verticales={verticales}
         onClose={() => { setDrawerOpen(false); setPaqueteActivo(null) }}
         onSuccess={async () => { 
-          await fetchPaquetes()  // ← espera que termine
+          await fetchPaquetes()
           setDrawerOpen(false)
           setPaqueteActivo(null)
         }}
