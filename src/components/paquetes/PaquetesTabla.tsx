@@ -72,7 +72,9 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
     <span className="text-gray-300 ml-0.5 text-[10px]">{orden.col === col ? (orden.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
 
   // Filtrar por tab
-  const porTab = paquetes.filter(p => p.estatus === tab)
+  // Los que quedaron como "Inactivo" con el toggle anterior se ven en Pausados en vez de desaparecer
+  const enTab  = (p: Paquete, t: TabEstatus) => p.estatus === t || (t === 'Pausado' && p.estatus === 'Inactivo')
+  const porTab = paquetes.filter(p => enTab(p, tab))
 
   // Filtrar
   const filtrados = porTab.filter(p => {
@@ -100,7 +102,7 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
   const totalPags = Math.max(Math.ceil(ordenados.length / POR_PAGINA), 1)
   const paginados = ordenados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA)
 
-  const conteo = (estatus: TabEstatus) => paquetes.filter(p => p.estatus === estatus).length
+  const conteo = (estatus: TabEstatus) => paquetes.filter(p => enTab(p, estatus)).length
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -167,7 +169,8 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
                 <p className="text-[10px] font-bold text-gray-300 uppercase normal-case">Este mes</p>
                 </th>
                 <th className="px-5 py-3 text-center">
-                  Activo/Inactivo
+                  <p>Visible en app</p>
+                  <p className="text-[10px] font-bold text-gray-300 uppercase normal-case">Se puede comprar</p>
                 </th>
                 <th className="px-5 py-3 w-8" />
             </tr>
@@ -175,7 +178,7 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
           <tbody className="divide-y divide-gray-50">
             {paginados.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-gray-400 italic text-sm">
+                <td colSpan={9} className="px-5 py-12 text-center text-gray-400 italic text-sm">
                   No hay paquetes
                 </td>
               </tr>
@@ -250,7 +253,6 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
                   {/* Vendidos */}
                   <td className="px-5 py-3.5">
                     <p className="text-sm font-bold text-gray-900">{p._vendidos ?? '—'}</p>
-                    {p._vendidos && <p className="text-[11px] text-gray-400">42 renos</p>}
                   </td>
 
                   {/* Ingresos */}
@@ -259,20 +261,28 @@ export default function PaquetesTabla({ paquetes, series, sucursales, verticales
                   </td>
 
                   <td className="px-5 py-3.5 text-center">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onToggleVisibilidad(p.id, p.visible_en_app !== false ? false : true)
-                      }}
-                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
-                        p.visible_en_app !== false ? 'bg-emerald-500' : 'bg-gray-200'
-                      }`}>
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
-                        p.visible_en_app !== false ? 'translate-x-6' : 'translate-x-0'
-                      }`} />
-                    </button>
+                    <div className="inline-flex flex-col items-center gap-1"
+                      title={p.visible_en_app !== false
+                        ? 'Aparece en la app para comprar. Apágalo para ocultarlo.'
+                        : 'Oculto en la app. Solo se puede vender con link de pago o en sucursal.'}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onToggleVisibilidad(p.id, p.visible_en_app === false)
+                        }}
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${
+                          p.visible_en_app !== false ? 'bg-emerald-500' : 'bg-gray-200'
+                        }`}>
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-200 ${
+                          p.visible_en_app !== false ? 'translate-x-6' : 'translate-x-0'
+                        }`} />
+                      </button>
+                      <span className={`text-[10px] font-bold ${p.visible_en_app !== false ? 'text-emerald-600' : 'text-gray-400'}`}>
+                        {p.visible_en_app !== false ? 'En la app' : 'Oculto'}
+                      </span>
+                    </div>
                   </td>
-                  
+
                   {/* Flecha */}
                   <td className="px-5 py-3.5">
                     <button onClick={() => onVer(p)}

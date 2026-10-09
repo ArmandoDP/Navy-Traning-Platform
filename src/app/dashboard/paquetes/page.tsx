@@ -50,37 +50,14 @@ export default function PaquetesPage() {
     setLoading(false)
   }
 
-  // FUNCIÓN CORREGIDA: Actualiza estatus y visibilidad en Supabase simultáneamente
+  // El toggle solo decide si el paquete aparece en la app para comprar.
+  // No cambia su estatus (Activo, Borrador, Pausado, Archivado): eso se maneja desde el paquete.
   const handleToggleVisibilidad = async (paqueteId: string, visible: boolean) => {
-    const nuevoEstatus = visible ? 'Activo' : 'Inactivo'
-
-    // 1. Actualización optimista inmediata en la UI local
-    setPaquetes(prev =>
-      prev.map(p =>
-        p.id === paqueteId
-          ? { ...p, visible_en_app: visible, estatus: nuevoEstatus, activo: visible }
-          : p
-      )
-    )
-
-    try {
-      // 2. Guardar en Supabase actualizando tanto visibilidad como estatus
-      const { error } = await supabase
-        .from('paquetes')
-        .update({
-          visible_en_app: visible,
-          activo: visible,
-          estatus: nuevoEstatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', paqueteId)
-
-      if (error) {
-        throw error
-      }
-    } catch (err: any) {
-      console.error('Error al actualizar visibilidad del paquete:', err)
-      // Si falla en base de datos, revertimos el cambio recargando
+    setPaquetes(prev => prev.map(p => p.id === paqueteId ? { ...p, visible_en_app: visible } : p))
+    const { error } = await supabase.from('paquetes').update({ visible_en_app: visible }).eq('id', paqueteId)
+    if (error) {
+      console.error('Error al cambiar la visibilidad del paquete:', error)
+      alert('No se pudo guardar el cambio. Inténtalo de nuevo.')
       fetchPaquetes()
     }
   }
@@ -105,8 +82,8 @@ export default function PaquetesPage() {
     await fetchCatalogos()
   }
 
-  // Métricas dinámicas basadas en el estatus
-  const activos         = paquetes.filter(p => p.estatus === 'Activo' || p.visible_en_app === true)
+  // Métricas
+  const activos         = paquetes.filter(p => p.estatus === 'Activo')
   const totalPaquetes   = activos.length
   const miembrosActivos = 0   // pendiente
   const ingresosTotales = 0   // pendiente
@@ -167,7 +144,7 @@ export default function PaquetesPage() {
         paquete={paqueteActivo}
         verticales={verticales}
         onClose={() => { setDrawerOpen(false); setPaqueteActivo(null) }}
-        onSuccess={async () => { 
+        onSuccess={async () => {
           await fetchPaquetes()
           setDrawerOpen(false)
           setPaqueteActivo(null)

@@ -1,262 +1,248 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
-import { supabase }       from '@/lib/supabase'
-import { X, User, CreditCard, Calendar, Lock, CheckCircle2, AlertCircle, Loader2, Search } from 'lucide-react'
-import ToastExito         from '@/components/ToastExito'
-import ModalInvitado      from './ModalInvitado'
-import ModalPagoSucursal  from './ModalPagoSucursal'
-import { logActividad } from '@/lib/log-actividad'
-import { useAuth } from '@/context/AuthContext'
+// src/components/clientes/DrawerNuevoCliente.tsx — alta de cliente (nuevo o migración desde el sistema anterior)
+import { useState, useEffect, useRef, ReactNode } from 'react'
+import { supabase } from '@/lib/supabase'
+import { X, User, Phone, MapPin, CreditCard, Sparkles, Package, Calendar, CheckCircle2, AlertCircle,
+         AlertTriangle, Loader2, UserPlus } from 'lucide-react'
+import ToastExito        from '@/components/ToastExito'
+import ModalInvitado     from './ModalInvitado'
+import ModalPagoSucursal from './ModalPagoSucursal'
+import { logActividad }  from '@/lib/log-actividad'
+import { useAuth }       from '@/context/AuthContext'
 
-interface Props {
-  isOpen:    boolean
-  onClose:   () => void
-  onSuccess: () => void
-}
-
+interface Props { isOpen: boolean; onClose: () => void; onSuccess: () => void }
 interface Sucursal { id: string; nombre: string }
 interface Paquete  { id: string; nombre: string; vigencia_dias?: number; max_usuarios?: number }
 
-const SEXOS       = ['Masculino', 'Femenino', 'Prefiero no decir']
-const FORMAS_PAGO = ['Efectivo', 'Tarjeta', 'Transferencia', 'OXXO', 'Terminal']
+const SEXOS = ['Masculino', 'Femenino', 'Prefiero no decir']
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/
+const hoy = () => new Date(Date.now() - 6 * 3600 * 1000).toISOString().split('T')[0]
 
-function generarPasswordTemporal(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  return 'NAVY-' + Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-}
+const formVacio = () => ({
+  nombre: '', primer_apellido: '', segundo_apellido: '',
+  email: '', telefono: '', fecha_nacimiento: '', sexo: '',
+  sucursal_id: '', paquete_id: '',
+  fecha_inicio_membresia: hoy(), fecha_fin_membresia: '', fecha_alta_original: '', notas_migracion: '',
+})
+type Form = ReturnType<typeof formVacio>
 
-function calcularFechaFin(fechaInicio: string, diasVigencia: number): string {
-  const d = new Date(fechaInicio)
-  d.setDate(d.getDate() + diasVigencia)
+// El acceso a la app ya no usa contraseña; el servicio de alta la pide, así que se genera una que nadie usa
+const passwordInterna = () =>
+  'NAVY-' + Array.from({ length: 12 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('')
+
+const sumarDias = (fecha: string, dias: number) => {
+  const d = new Date(`${fecha}T12:00:00`); d.setDate(d.getDate() + dias)
   return d.toISOString().split('T')[0]
 }
 
-function validarEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+function validar(f: Form, tipo: 'nuevo' | 'migracion') {
+  const e: Record<string, string> = {}
+  if (!f.nombre.trim())          e.nombre = 'Escribe su nombre.'
+  if (!f.primer_apellido.trim()) e.primer_apellido = 'Escribe su primer apellido.'
+  if (!EMAIL_RE.test(f.email.trim())) e.email = 'Escribe un correo válido, por ejemplo ana@gmail.com.'
+  if (f.telefono.replace(/\D/g, '').length !== 10) e.telefono = 'El teléfono debe tener 10 dígitos.'
+  if (!f.fecha_nacimiento) e.fecha_nacimiento = 'Elige su fecha de nacimiento.'
+  else {
+    const edad = (Date.now() - new Date(`${f.fecha_nacimiento}T12:00:00`).getTime()) / (365.25 * 86400000)
+    if (edad < 0) e.fecha_nacimiento = 'La fecha no puede ser en el futuro.'
+    else if (edad < 5 || edad > 100) e.fecha_nacimiento = 'Revisa el año de nacimiento.'
+  }
+  if (!f.sexo)        e.sexo = 'Elige una opción.'
+  if (!f.sucursal_id) e.sucursal_id = 'Elige su sucursal.'
+  if (tipo === 'migracion' && f.paquete_id && !f.fecha_fin_membresia) e.fecha_fin_membresia = 'Pon la fecha de vencimiento.'
+  return e
 }
 
-// ── Sub-componentes ──────────────────────────────────────────────────────────
+const NOMBRES_CAMPO: Record<string, string> = {
+  nombre: 'nombre', primer_apellido: 'primer apellido', email: 'correo', telefono: 'teléfono',
+  fecha_nacimiento: 'fecha de nacimiento', sexo: 'sexo', sucursal_id: 'sucursal', fecha_fin_membresia: 'vencimiento',
+}
 
-function Field({ label, required, error, hint, children }: {
-  label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode
-}) {
+// ── Piezas visuales ──────────────────────────────────────────────────────────
+const base = 'w-full border rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none transition bg-white placeholder:text-gray-400'
+const cls = (error?: string, ok?: boolean) =>
+  `${base} ${error ? 'border-red-300 bg-red-50/40 focus:ring-2 focus:ring-red-50'
+    : ok ? 'border-emerald-300 focus:ring-2 focus:ring-emerald-50'
+    : 'border-gray-200 focus:border-gray-400 focus:ring-2 focus:ring-gray-100'}`
+
+function Field({ label, required, error, hint, children }:
+  { label: string; required?: boolean; error?: string; hint?: ReactNode; children: ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">
+      <label className="text-[13px] font-bold text-gray-800">
         {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
-      {error && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={11}/>{error}</p>}
-      {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}
+      {error
+        ? <p className="text-[11px] text-red-600 flex items-center gap-1"><AlertCircle size={11} />{error}</p>
+        : hint && <p className="text-[11px] leading-4 text-gray-400">{hint}</p>}
     </div>
   )
 }
 
-function Section({ icon, title }: { icon: React.ReactNode; title: string }) {
+function Section({ icon, titulo, descripcion, children }: { icon: ReactNode; titulo: string; descripcion?: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-2.5 pt-2 pb-1">
-      <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">{icon}</div>
-      <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">{title}</h3>
-      <div className="flex-1 h-px bg-gray-100" />
-    </div>
+    <section className="bg-white border border-gray-100 rounded-2xl p-5 space-y-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-xl bg-gray-50 text-gray-500 flex items-center justify-center shrink-0">{icon}</div>
+        <div>
+          <h3 className="text-sm font-black text-gray-900">{titulo}</h3>
+          {descripcion && <p className="text-xs text-gray-400 mt-0.5 leading-5">{descripcion}</p>}
+        </div>
+      </div>
+      {children}
+    </section>
   )
 }
 
-const inputBase = "w-full border rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none transition bg-white placeholder:text-gray-400"
-const inputCls  = `${inputBase} border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50`
-const inputErr  = `${inputBase} border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-50 bg-red-50/30`
-const inputOk   = `${inputBase} border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-50`
-const selectCls = `${inputCls} appearance-none cursor-pointer`
-
-// ── Estado del correo ────────────────────────────────────────────────────────
-type EmailEstado = 'idle' | 'checking' | 'nuevo' | 'duplicado' | 'invalido'
+type EstadoCorreo = 'idle' | 'revisando' | 'disponible' | 'duplicado' | 'invalido'
 
 export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props) {
-  const [loading,         setLoading]         = useState(false)
-  const [toast,           setToast]           = useState(false)
-  const [nuevoId,         setNuevoId]         = useState<string | null>(null)
-  const [nuevoCliente,    setNuevoCliente]    = useState<any | null>(null)
-  const [modalPago,       setModalPago]       = useState(false)
-  const [sucursales,      setSucursales]      = useState<Sucursal[]>([])
-  const [paquetes,        setPaquetes]        = useState<Paquete[]>([])
-  const [modalInvitado,   setModalInvitado]   = useState(false)
-  const [titularId,       setTitularId]       = useState<string | null>(null)
-  const [adquirirPaquete, setAdquirirPaquete] = useState(false)
-  const [tipoRegistro,    setTipoRegistro]    = useState<'nuevo' | 'migracion'>('nuevo')
-  const [emailEstado,     setEmailEstado]     = useState<EmailEstado>('idle')
-  const [clienteDuplicado, setClienteDuplicado] = useState<any | null>(null)
-  const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { staff } = useAuth()
+  const [form,        setForm]        = useState<Form>(formVacio())
+  const [tipo,        setTipo]        = useState<'nuevo' | 'migracion'>('nuevo')
+  const [cobrarAhora, setCobrarAhora] = useState(false)
+  const [tocados,     setTocados]     = useState<Record<string, boolean>>({})
+  const [intento,     setIntento]     = useState(false)
+  const [errorGeneral, setErrorGeneral] = useState('')
+  const [guardando,   setGuardando]   = useState(false)
 
-  const [form, setForm] = useState({
-    nombre: '', primer_apellido: '', segundo_apellido: '',
-    email: '', telefono: '', fecha_nacimiento: '', sexo: '',
-    sucursal_id: '', paquete_id: '', forma_pago: '',
-    fecha_inicio_membresia: new Date().toISOString().split('T')[0],
-    fecha_fin_membresia: '', fecha_alta_original: '', notas_migracion: '',
-  })
-  const [errores, setErrores] = useState<Record<string, string>>({})
+  const [sucursales, setSucursales] = useState<Sucursal[]>([])
+  const [paquetes,   setPaquetes]   = useState<Paquete[]>([])
 
-  const set = (k: string, v: string) => {
-    setForm(p => ({ ...p, [k]: v }))
-    setErrores(p => ({ ...p, [k]: '' }))
+  const [estadoCorreo, setEstadoCorreo] = useState<EstadoCorreo>('idle')
+  const [duplicado,    setDuplicado]    = useState<any | null>(null)
+  const [telDuplicado, setTelDuplicado] = useState<any | null>(null)
+  const timerCorreo = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timerTel    = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [toast,         setToast]         = useState(false)
+  const [nuevoId,       setNuevoId]       = useState<string | null>(null)
+  const [nuevoCliente,  setNuevoCliente]  = useState<any | null>(null)
+  const [modalPago,     setModalPago]     = useState(false)
+  const [titularId,     setTitularId]     = useState<string | null>(null)
+
+  const set = (k: keyof Form, v: string) => setForm(p => ({ ...p, [k]: v }))
+  const tocar = (k: string) => setTocados(p => ({ ...p, [k]: true }))
+
+  const errores = validar(form, tipo)
+  if (estadoCorreo === 'duplicado') errores.email = 'Este correo ya pertenece a otro cliente.'
+  const err = (k: string) => (tocados[k] || intento) ? errores[k] : undefined
+  const faltan = Object.keys(errores)
+
+  const reset = () => {
+    setForm(formVacio()); setTipo('nuevo'); setCobrarAhora(false); setTocados({}); setIntento(false)
+    setErrorGeneral(''); setEstadoCorreo('idle'); setDuplicado(null); setTelDuplicado(null)
   }
+  const cerrar = () => { onClose(); reset() }
 
-  const paqueteSeleccionado = paquetes.find(p => p.id === form.paquete_id)
-  const diasRestantes = form.fecha_fin_membresia
-    ? Math.max(0, Math.ceil((new Date(form.fecha_fin_membresia).getTime() - Date.now()) / 86400000))
-    : null
-
-  // Cargar sucursales al abrir
   useEffect(() => {
     if (!isOpen) return
-    resetForm()
+    reset()
     supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre')
-      .then(({ data }) => { if (data) setSucursales(data) })
+      .then(({ data }) => setSucursales(data || []))
   }, [isOpen])
 
-  // Cargar paquetes al cambiar sucursal
+  // Paquetes de la sucursal elegida (para migración)
   useEffect(() => {
+    setForm(p => ({ ...p, paquete_id: '', fecha_fin_membresia: '' }))
     if (!form.sucursal_id) { setPaquetes([]); return }
     supabase.from('paquetes')
       .select('id, nombre, vigencia_dias, max_usuarios, paquete_precios!inner(sucursal_id)')
-      .eq('estatus', 'Activo')
-      .eq('paquete_precios.sucursal_id', form.sucursal_id)
-      .order('nombre')
-      .then(({ data }) => { if (data) setPaquetes(data) })
-    setForm(p => ({ ...p, paquete_id: '', fecha_fin_membresia: '' }))
+      .eq('estatus', 'Activo').eq('paquete_precios.sucursal_id', form.sucursal_id).order('nombre')
+      .then(({ data }) => setPaquetes((data as any[]) || []))
   }, [form.sucursal_id])
 
-  // Calcular fecha fin automáticamente
   useEffect(() => {
-    const paquete = paquetes.find(p => p.id === form.paquete_id)
-    if (paquete?.vigencia_dias && form.fecha_inicio_membresia) {
-      setForm(p => ({ ...p, fecha_fin_membresia: calcularFechaFin(form.fecha_inicio_membresia, paquete.vigencia_dias ?? 30) }))
-    }
+    const paq = paquetes.find(p => p.id === form.paquete_id)
+    if (paq?.vigencia_dias && form.fecha_inicio_membresia)
+      setForm(p => ({ ...p, fecha_fin_membresia: sumarDias(form.fecha_inicio_membresia, paq.vigencia_dias ?? 30) }))
   }, [form.paquete_id, form.fecha_inicio_membresia, paquetes])
 
-  // Validar correo en tiempo real con debounce
+  // Correo: válido y sin dueño (sin importar mayúsculas)
   useEffect(() => {
-    if (emailTimer.current) clearTimeout(emailTimer.current)
-    const email = form.email.trim()
-    if (!email) { setEmailEstado('idle'); setClienteDuplicado(null); return }
-    if (!validarEmail(email)) { setEmailEstado('invalido'); return }
-
-    setEmailEstado('checking')
-    emailTimer.current = setTimeout(async () => {
-      const { data } = await supabase
-        .from('clientes')
-        .select('id, nombre_completo, email, plan, sucursales(nombre)')
-        .eq('email', email)
-        .maybeSingle()
-      if (data) {
-        setEmailEstado('duplicado')
-        setClienteDuplicado(data)
-      } else {
-        setEmailEstado('nuevo')
-        setClienteDuplicado(null)
-      }
-    }, 600)
+    if (timerCorreo.current) clearTimeout(timerCorreo.current)
+    const email = form.email.trim().toLowerCase()
+    setDuplicado(null)
+    if (!email) { setEstadoCorreo('idle'); return }
+    if (!EMAIL_RE.test(email)) { setEstadoCorreo('invalido'); return }
+    setEstadoCorreo('revisando')
+    timerCorreo.current = setTimeout(async () => {
+      const { data } = await supabase.from('clientes')
+        .select('id, nombre_completo, email, plan, origen, sucursales(nombre)')
+        .ilike('email', email).limit(1).maybeSingle()
+      setDuplicado(data)
+      setEstadoCorreo(data ? 'duplicado' : 'disponible')
+    }, 500)
   }, [form.email])
 
-  const resetForm = () => {
-    setForm({
-      nombre: '', primer_apellido: '', segundo_apellido: '',
-      email: '', telefono: '', fecha_nacimiento: '', sexo: '',
-      sucursal_id: '', paquete_id: '', forma_pago: '',
-      fecha_inicio_membresia: new Date().toISOString().split('T')[0],
-      fecha_fin_membresia: '', fecha_alta_original: '', notas_migracion: '',
-    })
-    setErrores({})
-    setEmailEstado('idle')
-    setClienteDuplicado(null)
-    setTipoRegistro('nuevo')
-    setAdquirirPaquete(false)
-    setNuevoCliente(null)
-  }
+  // Teléfono repetido: solo aviso (en una familia pueden compartir teléfono)
+  useEffect(() => {
+    if (timerTel.current) clearTimeout(timerTel.current)
+    const tel = form.telefono.replace(/\D/g, '')
+    setTelDuplicado(null)
+    if (tel.length !== 10) return
+    timerTel.current = setTimeout(async () => {
+      const { data } = await supabase.from('clientes').select('id, nombre_completo, email')
+        .ilike('telefono', `%${tel}`).limit(1).maybeSingle()
+      setTelDuplicado(data)
+    }, 500)
+  }, [form.telefono])
 
-  const validarForm = (): boolean => {
-    const err: Record<string, string> = {}
-    if (!form.nombre.trim())        err.nombre = 'El nombre es requerido'
-    if (!form.primer_apellido.trim()) err.primer_apellido = 'El apellido es requerido'
-    if (!form.email.trim())         err.email = 'El correo es requerido'
-    else if (!validarEmail(form.email)) err.email = 'Correo no válido'
-    else if (emailEstado === 'duplicado') err.email = 'Este correo ya está registrado'
-    if (!form.sucursal_id)          err.sucursal_id = 'Selecciona una sucursal'
-    setErrores(err)
-    return Object.keys(err).length === 0
-  }
-
-  const crearClienteEnBD = async () => {
-    const passwordTemporal = generarPasswordTemporal()
+  const crearEnBase = async () => {
+    const email = form.email.trim().toLowerCase()
     const paquete = paquetes.find(p => p.id === form.paquete_id)
 
-    // 1. Crear en Auth — con fallback si ya existe
+    // 1. Acceso a la app (o el que ya exista con ese correo)
     let supabaseUserId: string | null = null
     const resAuth = await fetch('/api/clientes/crear-usuario', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email: form.email, password: passwordTemporal }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: passwordInterna() }),
     })
     const dataAuth = await resAuth.json()
-
-    if (dataAuth.userId) {
-      supabaseUserId = dataAuth.userId
-    } else if (dataAuth.error?.toLowerCase().includes('already registered')) {
-      // Ya existe en Auth — buscar UUID
-      const resBuscar = await fetch('/api/clientes/buscar-usuario', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: form.email }),
+    if (dataAuth.userId) supabaseUserId = dataAuth.userId
+    else if (dataAuth.error?.toLowerCase().includes('already registered')) {
+      const r = await fetch('/api/clientes/buscar-usuario', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
       })
-      const dataBuscar = await resBuscar.json()
-      supabaseUserId = dataBuscar.userId || null
+      supabaseUserId = (await r.json()).userId || null
     }
+    if (!supabaseUserId) throw new Error('No se pudo crear su acceso a la app. Revisa el correo e inténtalo de nuevo.')
 
-    if (!supabaseUserId) {
-      throw new Error('No se pudo crear el acceso a la app. Verifica el correo e intenta de nuevo.')
-    }
-
-    // 2. Insertar en clientes
+    // 2. Cliente
+    const nombreCompleto = [form.nombre, form.primer_apellido, form.segundo_apellido].map(x => x.trim()).filter(Boolean).join(' ')
     const { data: cli, error } = await supabase.from('clientes').insert([{
-      nombre_completo:       `${form.nombre} ${form.primer_apellido} ${form.segundo_apellido}`.trim(),
-      primer_apellido:       form.primer_apellido,
-      segundo_apellido:      form.segundo_apellido,
-      email:                 form.email,
-      telefono:              form.telefono,
-      fecha_nacimiento:      form.fecha_nacimiento || null,
-      sexo:                  form.sexo,
-      sucursal_id:           form.sucursal_id || null,
-      paquete_id:            tipoRegistro === 'migracion' ? (form.paquete_id || null) : null,
-      plan:                  tipoRegistro === 'migracion' ? (paquete?.nombre || '') : '',
-      forma_pago:            form.forma_pago,
-      estatus:               'Activo',
-      origen:                tipoRegistro === 'migracion' ? 'Migración' : 'Nuevo',
-      supabase_user_id:      supabaseUserId,
-      password_temporal:     passwordTemporal,
-      debe_cambiar_password: true,
-      fecha_alta_original:   tipoRegistro === 'migracion'
-        ? (form.fecha_alta_original || new Date().toISOString().split('T')[0])
-        : new Date().toISOString().split('T')[0],
+      nombre_completo:     nombreCompleto,
+      primer_apellido:     form.primer_apellido.trim(),
+      segundo_apellido:    form.segundo_apellido.trim(),
+      email,
+      telefono:            form.telefono.replace(/\D/g, ''),
+      fecha_nacimiento:    form.fecha_nacimiento,
+      sexo:                form.sexo,
+      sucursal_id:         form.sucursal_id,
+      paquete_id:          tipo === 'migracion' ? (form.paquete_id || null) : null,
+      plan:                tipo === 'migracion' ? (paquete?.nombre || '') : '',
+      estatus:             'Activo',
+      origen:              tipo === 'migracion' ? 'Migración' : 'Nuevo',
+      supabase_user_id:    supabaseUserId,
+      fecha_alta_original: tipo === 'migracion' ? (form.fecha_alta_original || hoy()) : hoy(),
     }]).select().single()
-
     if (error) throw new Error(error.message)
 
-    // 3. Correo de bienvenida
-    await fetch('/api/correo/bienvenida-cliente', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email: form.email, nombre: form.nombre }),
-    })
+    // 3. Bienvenida
+    fetch('/api/correo/bienvenida-cliente', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, nombre: form.nombre.trim() }),
+    }).catch(() => {})
 
-    // 4. Migración: membresía sin pago
-    if (tipoRegistro === 'migracion' && form.paquete_id && form.fecha_fin_membresia) {
+    // 4. Migración: su membresía del sistema anterior, sin pago
+    if (tipo === 'migracion' && form.paquete_id && form.fecha_fin_membresia) {
       await supabase.from('membresias').insert([{
         cliente_id:    cli.id,
         paquete_id:    form.paquete_id,
         fecha_inicio:  form.fecha_inicio_membresia,
         fecha_fin:     form.fecha_fin_membresia,
-        estatus:       new Date(form.fecha_fin_membresia) > new Date() ? 'Activa' : 'Vencida',
+        estatus:       form.fecha_fin_membresia >= hoy() ? 'Activa' : 'Vencida',
         precio_pagado: 0,
         origen:        'Migración',
         notas:         form.notas_migracion || null,
@@ -266,341 +252,253 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
 
     await logActividad({
       tipo:        'cliente_creado_crm',
-      descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó al cliente "${form.nombre} ${form.primer_apellido}" (${tipoRegistro})`,
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} creó al cliente "${nombreCompleto}" (${tipo === 'migracion' ? 'migración' : 'nuevo'})`,
       tabla:       'clientes',
       accion:      'INSERT',
-      metadata:    { 
-        cliente_id: cli.id,
-        email:      form.email,
-        origen:     tipoRegistro === 'migracion' ? 'Migración' : 'Nuevo',
-        paquete:    paquete?.nombre || null,
-      },
-      sucursal_id: form.sucursal_id || null,
+      metadata:    { cliente_id: cli.id, email, origen: tipo === 'migracion' ? 'Migración' : 'Nuevo', paquete: paquete?.nombre || null },
+      sucursal_id: form.sucursal_id,
       staff_id:    staff?.id,
     })
-
-    return cli
+    return { cli, paquete }
   }
 
-  const handleCrear = async () => {
-    if (!validarForm()) return
-    if (emailEstado === 'checking') return
-    setLoading(true)
+  const crear = async () => {
+    setIntento(true)
+    if (faltan.length || estadoCorreo === 'revisando') return
+    setGuardando(true); setErrorGeneral('')
     try {
-      const cli = await crearClienteEnBD()
-      const paqueteCompleto = paquetes.find(p => p.id === form.paquete_id) as any
-      if (paqueteCompleto?.max_usuarios === 2 && cli) {
-        setTitularId(cli.id)
-        setModalInvitado(true)
-        setLoading(false)
-        return
-      }
-      setNuevoId(cli?.id || null)
-      setLoading(false)
-      if (tipoRegistro === 'nuevo' && adquirirPaquete) {
-        setNuevoCliente(cli)
-        setModalPago(true)
-      } else {
-        setToast(true)
-        onSuccess()
-        onClose()
-        resetForm()
-      }
+      const { cli, paquete } = await crearEnBase()
+      setNuevoId(cli.id)
+      if (paquete?.max_usuarios === 2) { setTitularId(cli.id); setGuardando(false); return }
+      if (tipo === 'nuevo' && cobrarAhora) { setNuevoCliente(cli); setModalPago(true); setGuardando(false); return }
+      setToast(true); onSuccess(); cerrar()
     } catch (e: any) {
-      setErrores({ general: e.message })
-      setLoading(false)
+      setErrorGeneral(e.message || 'No se pudo crear el cliente.')
     }
+    setGuardando(false)
   }
 
-  // ── Email status icon ──────────────────────────────────────────────────────
-  const EmailIcon = () => {
-    if (emailEstado === 'checking') return <Loader2 size={14} className="animate-spin text-gray-400" />
-    if (emailEstado === 'nuevo')    return <CheckCircle2 size={14} className="text-emerald-500" />
-    if (emailEstado === 'duplicado') return <AlertCircle size={14} className="text-red-500" />
-    if (emailEstado === 'invalido') return <AlertCircle size={14} className="text-amber-500" />
-    return null
-  }
+  const iconoCorreo = {
+    revisando:  <Loader2 size={14} className="animate-spin text-gray-400" />,
+    disponible: <CheckCircle2 size={14} className="text-emerald-500" />,
+    duplicado:  <AlertCircle size={14} className="text-red-500" />,
+    invalido:   <AlertCircle size={14} className="text-amber-500" />,
+    idle:       null,
+  }[estadoCorreo]
 
-  const emailInputCls = emailEstado === 'duplicado' || emailEstado === 'invalido' ? inputErr
-    : emailEstado === 'nuevo' ? inputOk : inputCls
-
-  const canCreate = emailEstado === 'nuevo' || emailEstado === 'idle'
+  const paq = paquetes.find(p => p.id === form.paquete_id)
+  const diasRestantes = form.fecha_fin_membresia
+    ? Math.ceil((new Date(`${form.fecha_fin_membresia}T23:59:59`).getTime() - Date.now()) / 86400000) : null
 
   return (
     <>
       {toast && (
-        <ToastExito titulo="Cliente creado" mensaje="El cliente ya puede acceder a la app."
+        <ToastExito titulo="Cliente creado" mensaje="Ya puede entrar a la app con su correo."
           onClose={() => setToast(false)}
-          onVer={nuevoId ? () => window.location.href = `/dashboard/clientes/${nuevoId}` : undefined} />
+          onVer={nuevoId ? () => { window.location.href = `/dashboard/clientes/${nuevoId}` } : undefined} />
       )}
-      {modalInvitado && titularId && (
+      {titularId && (
         <ModalInvitado titularId={titularId}
-          onClose={() => { setModalInvitado(false); onSuccess(); onClose(); resetForm() }} />
+          onClose={() => { setTitularId(null); onSuccess(); cerrar() }} />
       )}
       {nuevoCliente && (
         <ModalPagoSucursal isOpen={modalPago} cliente={nuevoCliente}
-          onClose={() => { setModalPago(false); setNuevoCliente(null); onClose(); resetForm() }}
-          onSuccess={() => { setModalPago(false); setNuevoCliente(null); setToast(true); onSuccess(); onClose(); resetForm() }} />
+          onClose={() => { setModalPago(false); setNuevoCliente(null); onSuccess(); cerrar() }}
+          onSuccess={() => { setModalPago(false); setNuevoCliente(null); setToast(true); onSuccess(); cerrar() }} />
       )}
 
-      {/* Backdrop */}
-      <div onClick={onClose} className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
+      <div onClick={cerrar} className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
         isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} />
 
-      {/* Drawer */}
-      <div className={`fixed top-0 right-0 z-50 h-full w-full max-w-lg bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
+      <div className={`fixed top-0 right-0 z-50 h-full w-full max-w-xl bg-gray-50 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
         isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gray-900 flex items-center justify-center">
-              <User size={16} className="text-white" />
+        {/* Encabezado */}
+        <div className="bg-white px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center shrink-0"><UserPlus size={20} /></div>
+            <div className="flex-1">
+              <h2 className="text-lg font-black text-gray-900">Nuevo cliente</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Al crearlo, podrá entrar a la app con su correo. Los campos con <span className="text-red-500">*</span> son obligatorios.</p>
             </div>
-            <div>
-              <h2 className="text-base font-black text-gray-900">Nuevo cliente</h2>
-              <p className="text-xs text-gray-400">Alta de cliente en Navy</p>
-            </div>
+            <button onClick={cerrar} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><X size={18} /></button>
           </div>
-          <button onClick={() => { onClose(); resetForm() }}
-            className="p-2 hover:bg-gray-100 rounded-xl transition text-gray-400">
-            <X size={18}/>
-          </button>
-        </div>
 
-        {/* Tabs tipo registro */}
-        <div className="flex gap-1.5 bg-gray-100 rounded-xl p-1 mx-6 mt-4">
-          {[
-            { key: 'nuevo',     label: '✨ Nuevo cliente',  desc: 'Primera vez en Navy' },
-            { key: 'migracion', label: '📦 Migración',      desc: 'Ya era cliente antes' },
-          ].map(t => (
-            <button key={t.key} type="button"
-              onClick={() => setTipoRegistro(t.key as any)}
-              className={`flex-1 py-2 px-3 rounded-lg text-left transition ${
-                tipoRegistro === t.key ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-              }`}>
-              <p className="text-xs font-bold">{t.label}</p>
-              <p className="text-[10px] text-gray-400">{t.desc}</p>
-            </button>
-          ))}
+          {/* Tipo de alta */}
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            {([
+              { key: 'nuevo',     icon: <Sparkles size={15} />, titulo: 'Cliente nuevo',  desc: 'Es su primera vez en Navy' },
+              { key: 'migracion', icon: <Package size={15} />,  titulo: 'Migración',      desc: 'Ya era cliente en el sistema anterior' },
+            ] as const).map(t => (
+              <button key={t.key} type="button" onClick={() => setTipo(t.key)}
+                className={`text-left rounded-xl border-2 px-3.5 py-3 transition ${
+                  tipo === t.key ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}>
+                <p className="text-sm font-black flex items-center gap-1.5">{t.icon} {t.titulo}</p>
+                <p className={`text-[11px] mt-0.5 ${tipo === t.key ? 'text-gray-300' : 'text-gray-400'}`}>{t.desc}</p>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Formulario */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
-          <Section icon={<User size={13}/>} title="Datos personales" />
-
-          {/* Correo PRIMERO — validación en tiempo real */}
-          <Field label="Correo electrónico" required
-            error={errores.email}
-            hint={emailEstado === 'nuevo' ? '✓ Correo disponible' : emailEstado === 'checking' ? 'Verificando...' : undefined}>
-            <div className="relative">
-              <input type="email" placeholder="nombre@email.com"
-                className={emailInputCls}
-                value={form.email}
-                onChange={e => set('email', e.target.value.toLowerCase().trim())} />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <EmailIcon />
+          <Section icon={<Phone size={15} />} titulo="Contacto" descripcion="El correo es con el que va a entrar a la app; revisamos que no esté registrado.">
+            <Field label="Correo" required error={err('email')}
+              hint={estadoCorreo === 'disponible' ? '✓ Correo disponible' : estadoCorreo === 'revisando' ? 'Revisando…' : undefined}>
+              <div className="relative">
+                <input type="email" placeholder="nombre@correo.com" className={cls(err('email'), estadoCorreo === 'disponible')}
+                  value={form.email} onBlur={() => tocar('email')}
+                  onChange={e => set('email', e.target.value.replace(/\s/g, '').toLowerCase())} />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">{iconoCorreo}</div>
               </div>
+            </Field>
+
+            {estadoCorreo === 'duplicado' && duplicado && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2">
+                <p className="text-xs font-black text-amber-800 flex items-center gap-1.5"><AlertTriangle size={13} /> Este correo ya es de otro cliente</p>
+                <a href={`/dashboard/clientes/${duplicado.id}`} className="block bg-white rounded-lg px-3 py-2.5 border border-amber-100 hover:border-amber-300 transition">
+                  <p className="text-sm font-bold text-gray-900">{duplicado.nombre_completo || 'Sin nombre'}</p>
+                  <p className="text-xs text-gray-500">{duplicado.email} · {duplicado.origen || 'sin origen'}{duplicado.sucursales?.nombre ? ` · ${duplicado.sucursales.nombre}` : ''}</p>
+                  <p className="text-[11px] text-indigo-600 font-bold mt-1">Ver su ficha →</p>
+                </a>
+              </div>
+            )}
+
+            <Field label="Teléfono celular" required error={err('telefono')} hint="10 dígitos, sin lada. Lo usamos para WhatsApp.">
+              <input inputMode="numeric" placeholder="55 1234 5678" className={cls(err('telefono'))}
+                value={form.telefono} onBlur={() => tocar('telefono')}
+                onChange={e => set('telefono', e.target.value.replace(/\D/g, '').slice(0, 10))} />
+            </Field>
+            {telDuplicado && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                Ojo: <b>{telDuplicado.nombre_completo || telDuplicado.email}</b> ya tiene este teléfono. Si es la misma persona, no la registres dos veces.
+              </p>
+            )}
+          </Section>
+
+          <Section icon={<User size={15} />} titulo="Identidad" descripcion="Así va a aparecer en reservas, listas y correos.">
+            <Field label="Nombre(s)" required error={err('nombre')}>
+              <input placeholder="Ej. Ana" className={cls(err('nombre'))} value={form.nombre}
+                onBlur={() => tocar('nombre')} onChange={e => set('nombre', e.target.value)} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Primer apellido" required error={err('primer_apellido')}>
+                <input className={cls(err('primer_apellido'))} value={form.primer_apellido}
+                  onBlur={() => tocar('primer_apellido')} onChange={e => set('primer_apellido', e.target.value)} />
+              </Field>
+              <Field label="Segundo apellido">
+                <input className={cls()} value={form.segundo_apellido} onChange={e => set('segundo_apellido', e.target.value)} />
+              </Field>
             </div>
-          </Field>
-
-          {/* Alerta correo duplicado */}
-          {emailEstado === 'duplicado' && clienteDuplicado && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <AlertCircle size={14} className="text-amber-600 flex-shrink-0" />
-                <p className="text-xs font-bold text-amber-700">Este correo ya está registrado</p>
+            <Field label="Fecha de nacimiento" required error={err('fecha_nacimiento')}>
+              <input type="date" max={hoy()} className={cls(err('fecha_nacimiento'))} value={form.fecha_nacimiento}
+                onBlur={() => tocar('fecha_nacimiento')} onChange={e => set('fecha_nacimiento', e.target.value)} />
+            </Field>
+            <Field label="Sexo" required error={err('sexo')}>
+              <div className="grid grid-cols-3 gap-2">
+                {SEXOS.map(op => (
+                  <button key={op} type="button" onClick={() => { set('sexo', op); tocar('sexo') }}
+                    className={`py-2.5 rounded-xl text-xs font-bold border transition ${
+                      form.sexo === op ? 'bg-gray-900 text-white border-gray-900'
+                      : err('sexo') ? 'bg-white text-gray-600 border-red-300' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}>
+                    {op}
+                  </button>
+                ))}
               </div>
-              <div className="bg-white rounded-lg px-3 py-2.5 border border-amber-100">
-                <p className="text-sm font-bold text-gray-900">{clienteDuplicado.nombre_completo}</p>
-                <p className="text-xs text-gray-500">{clienteDuplicado.email}</p>
-                {clienteDuplicado.plan && <p className="text-xs text-indigo-600 font-bold mt-0.5">{clienteDuplicado.plan}</p>}
-                {clienteDuplicado.sucursales?.nombre && <p className="text-xs text-gray-400">{clienteDuplicado.sucursales.nombre}</p>}
-              </div>
-              <p className="text-[11px] text-amber-600">Si quieres editar este cliente, búscalo en el módulo de Clientes.</p>
-            </div>
-          )}
-
-          <Field label="Nombre" required error={errores.nombre}>
-            <input placeholder="Nombre(s)" className={errores.nombre ? inputErr : inputCls}
-              value={form.nombre} onChange={e => set('nombre', e.target.value)} />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Primer apellido" required error={errores.primer_apellido}>
-              <input placeholder="Apellido" className={errores.primer_apellido ? inputErr : inputCls}
-                value={form.primer_apellido} onChange={e => set('primer_apellido', e.target.value)} />
             </Field>
-            <Field label="Segundo apellido">
-              <input placeholder="Apellido" className={inputCls}
-                value={form.segundo_apellido} onChange={e => set('segundo_apellido', e.target.value)} />
-            </Field>
-          </div>
+          </Section>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Teléfono">
-              <input placeholder="55 1234 5678" className={inputCls}
-                value={form.telefono} onChange={e => set('telefono', e.target.value)} />
-            </Field>
-            <Field label="Sexo">
-              <select className={selectCls} value={form.sexo} onChange={e => set('sexo', e.target.value)}>
-                <option value="">Seleccionar</option>
-                {SEXOS.map(s => <option key={s} value={s}>{s}</option>)}
+          <Section icon={<MapPin size={15} />} titulo="Sucursal" descripcion="Su sucursal principal: se usa para sugerirle clases y en los reportes.">
+            <Field label="Sucursal" required error={err('sucursal_id')}>
+              <select className={`${cls(err('sucursal_id'))} appearance-none cursor-pointer`} value={form.sucursal_id}
+                onBlur={() => tocar('sucursal_id')} onChange={e => set('sucursal_id', e.target.value)}>
+                <option value="">Elige una sucursal</option>
+                {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
             </Field>
-          </div>
+          </Section>
 
-          <Field label="Fecha de nacimiento">
-            <input type="date" className={inputCls}
-              value={form.fecha_nacimiento} onChange={e => set('fecha_nacimiento', e.target.value)} />
-          </Field>
-
-          <Field label="Sucursal" required error={errores.sucursal_id}>
-            <select className={errores.sucursal_id ? inputErr.replace(inputBase, inputBase) : selectCls}
-              value={form.sucursal_id} onChange={e => set('sucursal_id', e.target.value)}>
-              <option value="">Seleccionar sucursal</option>
-              {sucursales.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-            </select>
-          </Field>
-
-          {/* Toggle adquirir paquete — solo nuevo */}
-          {tipoRegistro === 'nuevo' && (
-            <button type="button"
-              onClick={() => setAdquirirPaquete(v => !v)}
-              className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 transition ${
-                adquirirPaquete
-                  ? 'bg-gray-900 border-gray-900 text-white'
-                  : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
-              }`}>
-              <div className="text-left">
-                <p className="text-sm font-bold">💳 Adquirir paquete ahora</p>
-                <p className={`text-xs mt-0.5 ${adquirirPaquete ? 'text-gray-400' : 'text-gray-400'}`}>
-                  {adquirirPaquete ? 'Se abrirá el cobro al crear el cliente' : 'El cliente pagará después'}
-                </p>
-              </div>
-              <div className={`relative w-10 h-5.5 rounded-full transition-colors flex-shrink-0 ${adquirirPaquete ? 'bg-white/20' : 'bg-gray-200'}`}
-                style={{ height: 22 }}>
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full shadow transition-all ${
-                  adquirirPaquete ? 'left-5 bg-white' : 'left-0.5 bg-white'}`} />
-              </div>
-            </button>
-          )}
-
-          {/* Membresía — solo migración */}
-          {tipoRegistro === 'migracion' && (
-            <>
-              <Section icon={<CreditCard size={13}/>} title="Membresía a migrar" />
-
+          {tipo === 'nuevo' ? (
+            <Section icon={<CreditCard size={15} />} titulo="Plan" descripcion="Puedes cobrarle un paquete ahora mismo, o dejar que lo compre después desde la app.">
+              <button type="button" onClick={() => setCobrarAhora(v => !v)}
+                className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border-2 transition ${
+                  cobrarAhora ? 'bg-gray-900 border-gray-900 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'}`}>
+                <div className="text-left">
+                  <p className="text-sm font-bold">Cobrar un paquete al crearlo</p>
+                  <p className={`text-xs mt-0.5 ${cobrarAhora ? 'text-gray-300' : 'text-gray-400'}`}>
+                    {cobrarAhora ? 'Al crear el cliente se abre el cobro en sucursal' : 'Lo comprará después'}
+                  </p>
+                </div>
+                <span className={`relative w-10 h-[22px] rounded-full shrink-0 ${cobrarAhora ? 'bg-white/25' : 'bg-gray-200'}`}>
+                  <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-all ${cobrarAhora ? 'left-[21px]' : 'left-[3px]'}`} />
+                </span>
+              </button>
+            </Section>
+          ) : (
+            <Section icon={<Package size={15} />} titulo="Membresía que ya tenía" descripcion="Opcional. Si tenía un plan vigente en el sistema anterior, regístralo aquí (no genera cobro).">
               <Field label="Paquete">
-                <select className={selectCls} value={form.paquete_id}
-                  onChange={e => set('paquete_id', e.target.value)} disabled={!form.sucursal_id}>
-                  <option value="">{!form.sucursal_id ? 'Primero selecciona sucursal' : 'Seleccionar paquete'}</option>
+                <select className={`${cls()} appearance-none cursor-pointer`} value={form.paquete_id} disabled={!form.sucursal_id}
+                  onChange={e => set('paquete_id', e.target.value)}>
+                  <option value="">{form.sucursal_id ? 'Sin membresía' : 'Primero elige la sucursal'}</option>
                   {paquetes.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                 </select>
               </Field>
-
+              {form.paquete_id && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Inicio real">
+                      <input type="date" className={cls()} value={form.fecha_inicio_membresia}
+                        onChange={e => set('fecha_inicio_membresia', e.target.value)} />
+                    </Field>
+                    <Field label="Vence" required error={err('fecha_fin_membresia')}>
+                      <input type="date" className={cls(err('fecha_fin_membresia'))} value={form.fecha_fin_membresia}
+                        onChange={e => set('fecha_fin_membresia', e.target.value)} />
+                    </Field>
+                  </div>
+                  {diasRestantes !== null && (
+                    <p className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold ${
+                      diasRestantes > 30 ? 'bg-emerald-50 text-emerald-700' : diasRestantes > 7 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-600'}`}>
+                      <Calendar size={12} /> {diasRestantes > 0 ? `${diasRestantes} días restantes` : 'Ya venció'} · {paq?.nombre}
+                    </p>
+                  )}
+                </>
+              )}
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Fecha inicio real">
-                  <input type="date" className={inputCls}
-                    value={form.fecha_inicio_membresia}
-                    onChange={e => set('fecha_inicio_membresia', e.target.value)} />
-                </Field>
-                <Field label="Fecha vencimiento">
-                  <input type="date" className={inputCls}
-                    value={form.fecha_fin_membresia}
-                    onChange={e => set('fecha_fin_membresia', e.target.value)} />
+                <Field label="Cliente desde" hint="Cuándo se inscribió por primera vez.">
+                  <input type="date" max={hoy()} className={cls()} value={form.fecha_alta_original}
+                    onChange={e => set('fecha_alta_original', e.target.value)} />
                 </Field>
               </div>
-
-              {diasRestantes !== null && form.paquete_id && (
-                <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold ${
-                  diasRestantes > 30 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                  diasRestantes > 7  ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                  'bg-red-50 text-red-600 border border-red-100'
-                }`}>
-                  <Calendar size={12} />
-                  {diasRestantes} días restantes · {paqueteSeleccionado?.nombre}
-                </div>
-              )}
-
-              <Field label="Forma de pago">
-                <select className={selectCls} value={form.forma_pago} onChange={e => set('forma_pago', e.target.value)}>
-                  <option value="">Seleccionar</option>
-                  {FORMAS_PAGO.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </Field>
-
-              <Section icon={<Calendar size={13}/>} title="Datos de migración" />
-
-              <Field label="Fecha de alta original">
-                <input type="date" className={inputCls}
-                  value={form.fecha_alta_original}
-                  onChange={e => set('fecha_alta_original', e.target.value)} />
-              </Field>
               <Field label="Notas">
-                <textarea rows={2} placeholder="Ej: Cliente migrado del sistema anterior, tenía 15 días restantes..."
-                  className={`${inputCls} resize-none`}
-                  value={form.notas_migracion}
-                  onChange={e => set('notas_migracion', e.target.value)} />
+                <textarea rows={2} className={`${cls()} resize-none`} placeholder="Ej. Pagó anualidad en efectivo en agosto."
+                  value={form.notas_migracion} onChange={e => set('notas_migracion', e.target.value)} />
               </Field>
-            </>
+            </Section>
           )}
 
-          {/* Acceso app */}
-          <Section icon={<Lock size={13}/>} title="Acceso a la app" />
-          <div className={`rounded-xl px-4 py-3 space-y-1.5 border ${
-            emailEstado === 'nuevo' ? 'bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-100'
-          }`}>
-            {emailEstado === 'nuevo' ? (
-              <>
-                <p className="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
-                  <CheckCircle2 size={12}/> Acceso listo para crear
-                </p>
-                <p className="text-xs text-emerald-600">
-                  Se creará la cuenta con: <span className="font-bold">{form.email}</span>
-                </p>
-                <p className="text-[11px] text-emerald-500">✓ El cliente entrará con OTP — sin contraseña</p>
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-gray-500">Al crear el cliente recibirá un correo de bienvenida.</p>
-                <p className="text-xs text-gray-600">
-                  <span className="font-bold">Acceso:</span> {form.email || 'correo del cliente'}
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* Error general */}
-          {errores.general && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-start gap-2">
-              <AlertCircle size={14} className="text-red-500 flex-shrink-0 mt-0.5"/>
-              <p className="text-xs text-red-600">{errores.general}</p>
-            </div>
+          {errorGeneral && (
+            <div className="text-xs font-bold text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">{errorGeneral}</div>
           )}
-
         </div>
 
-        {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-gray-100 bg-white">
-          <button onClick={() => { onClose(); resetForm() }}
-            className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
-            Cancelar
-          </button>
-          <button onClick={handleCrear}
-            disabled={loading || !form.nombre || !form.email || emailEstado === 'duplicado' || emailEstado === 'invalido' || emailEstado === 'checking'}
-            className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition flex items-center justify-center gap-2"
-            style={{ backgroundColor: '#171B24' }}>
-            {loading ? (
-              <><Loader2 size={15} className="animate-spin"/> Creando...</>
-            ) : emailEstado === 'checking' ? (
-              <><Loader2 size={15} className="animate-spin"/> Verificando correo...</>
-            ) : tipoRegistro === 'migracion' ? '📦 Migrar cliente'
-              : adquirirPaquete ? '💳 Crear y cobrar →'
-              : '✨ Crear cliente'
-            }
-          </button>
+        {/* Pie */}
+        <div className="bg-white border-t border-gray-100 px-6 py-4 space-y-3">
+          {intento && faltan.length > 0 && (
+            <p className="text-[11px] text-red-600 flex items-start gap-1.5">
+              <AlertCircle size={12} className="mt-0.5 shrink-0" />
+              Falta completar: {faltan.map(k => NOMBRES_CAMPO[k] || k).join(', ')}.
+            </p>
+          )}
+          <div className="flex gap-3">
+            <button onClick={cerrar} className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50">Cancelar</button>
+            <button onClick={crear} disabled={guardando || estadoCorreo === 'revisando'}
+              className="flex-[2] py-3 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-800 disabled:opacity-50 flex items-center justify-center gap-2">
+              {guardando ? <><Loader2 size={15} className="animate-spin" /> Creando…</>
+                : tipo === 'migracion' ? 'Migrar cliente'
+                : cobrarAhora ? 'Crear y cobrar paquete' : 'Crear cliente'}
+            </button>
+          </div>
         </div>
       </div>
     </>
