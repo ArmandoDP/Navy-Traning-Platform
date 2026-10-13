@@ -58,13 +58,13 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
   }
 
   useEffect(() => {
-    if (isOpen && clienteId) { fetchData(); setTab('resumen') }
+    if (isOpen && clienteId) { fetchData(); setTab('membresia') }
   }, [isOpen, clienteId])
 
   const noShows = reservas.filter(r => r.estatus === 'No Show').length
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'resumen',        label: 'Resumen'                              },
+    // { key: 'resumen',        label: 'Resumen'                              },
     { key: 'membresia',      label: 'Membresía'                            },
     { key: 'reservas',       label: `Reservas (${reservas.length})`        },
     { key: 'pagos',          label: 'Pagos'                                },
@@ -129,7 +129,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
 
             {/* Contenido */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
-              {tab === 'resumen'        && <TabResumen        cliente={cliente} reservas={reservas} onRefresh={fetchData} onEditar={onEditar} noShows={noShows} />}
+              {/* {tab === 'resumen'        && <TabResumen        cliente={cliente} reservas={reservas} onRefresh={fetchData} onEditar={onEditar} noShows={noShows} />} */}
               {tab === 'membresia'      && <TabMembresia      cliente={cliente} reservas={reservas} onRefresh={fetchData} />}
               {tab === 'reservas'       && <TabReservas       reservas={reservas} />}
               {tab === 'pagos'          && <TabPagos          pagos={pagos} />}
@@ -140,7 +140,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
             </div>
 
             {/* Footer */}
-            <div className="flex items-center gap-2 px-6 py-4 border-t border-gray-100 bg-white">
+            {/* <div className="flex items-center gap-2 px-6 py-4 border-t border-gray-100 bg-white">
               <button onClick={() => setToast('Email disponible con la integración de Twilio/SendGrid.')}
                 className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition">
                 <Mail size={13}/> Email
@@ -157,7 +157,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
                 className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition">
                 <CreditCard size={13}/> Aplicar crédito
               </button>
-            </div>
+            </div> */}
           </>
         )}
       </div>
