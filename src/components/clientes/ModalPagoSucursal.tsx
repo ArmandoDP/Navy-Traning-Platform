@@ -200,6 +200,8 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
         monto: Number(monto), metodo_pago: metodo, referencia: referencia || null, tiene_membresia_previa: tieneMemb,
       }),
     }).catch(() => {})
+    // El backend recalcula su plan, vencimiento y estado
+    api(`/clientes-estado/sincronizar/${cliente.id}`, 'POST').catch(() => {})
     setResultado({ metodo, monto: Number(monto) })
     setPaso('exito'); onSuccess()
   }

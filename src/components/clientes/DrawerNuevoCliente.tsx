@@ -247,7 +247,11 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
         origen:        'Migración',
         notas:         form.notas_migracion || null,
       }])
-      await supabase.from('clientes').update({ fecha_venc_plan: form.fecha_fin_membresia }).eq('id', cli.id)
+      // El backend recalcula su plan, vencimiento y estado
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clientes-estado/sincronizar/${cli.id}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      }).catch(() => {})
     }
 
     await logActividad({

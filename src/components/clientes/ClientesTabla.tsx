@@ -37,13 +37,17 @@ interface Props {
 type Tab = 'todo' | 'vence7' | 'riesgo'
 const POR_PAGINA = 15
 
-// Función para obtener siempre la fecha de vencimiento correcta de la membresía activa
+// Vencimiento: lo calcula el backend desde las membresías y lo guarda en fecha_venc_plan.
+// Solo si no lo tiene, se busca una membresía Activa (sin importar mayúsculas).
 const getFechaVencimientoReal = (c: any): Date | null => {
-  const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
-  const membresiaActiva = membresiasList.find((m: any) => m.estatus === 'activa') || membresiasList[0]
-  const fRaw = membresiaActiva?.fecha_fin || c.fecha_venc_plan || c.fecha_vencimiento_membresia || c.fecha_vencimiento_memb
+  let fRaw = c.fecha_venc_plan
+  if (!fRaw) {
+    const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
+    const activas = membresiasList.filter((m: any) => String(m.estatus || '').toLowerCase() === 'activa')
+    fRaw = activas.map((m: any) => m.fecha_fin).filter(Boolean).sort().pop()
+  }
   if (!fRaw) return null
-  const d = new Date(fRaw)
+  const d = new Date(`${String(fRaw).slice(0, 10)}T23:59:59`)
   return isNaN(d.getTime()) ? null : d
 }
 
