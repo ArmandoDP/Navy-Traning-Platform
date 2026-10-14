@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useSucursal } from '@/context/SucursalContext'
-import { Upload, Plus, RefreshCw } from 'lucide-react'
+import { Upload, Plus, RefreshCw, Link2 } from 'lucide-react'
+import ModalLinkPago from '@/components/pagos/ModalLinkPago'
 import ClientesMetricas from '@/components/clientes/ClientesMetricas'
 import ClientesTabla from '@/components/clientes/ClientesTabla'
 import DrawerNuevoCliente from '@/components/clientes/DrawerNuevoCliente'
@@ -35,6 +36,7 @@ export default function ClientesPage() {
   const [editarCliente, setEditarCliente] = useState<any | null>(null)
   const [editarOpen, setEditarOpen] = useState(false)
   const [exportando, setExportando] = useState(false)
+  const [linkPagoOpen, setLinkPagoOpen] = useState(false)
 
   // Cargar registros por lotes desde Supabase (tipado corregido con string | null)
   const fetchAllTableComplete = async (tableName: string, sucursalFiltro?: string | null) => {
@@ -506,6 +508,11 @@ export default function ClientesPage() {
           >
             <Upload size={15}/> {exportando ? 'Exportando...' : `Exportar (${clientesFiltrados.length})`}
           </button>
+          <button onClick={() => setLinkPagoOpen(true)}
+            title="Para personas que todavía no son clientes. A un cliente que ya existe, cóbrale desde su ficha → Enviar cobro a su app."
+            className="flex items-center gap-2 border border-gray-200 bg-white text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition">
+            <Link2 size={15}/> Link de pago
+          </button>
           <button onClick={() => setNuevoOpen(true)}
             className="flex items-center gap-2 btn-dark font-bold text-sm px-4 py-2.5 rounded-xl transition">
             <Plus size={15}/> Nuevo cliente
@@ -529,6 +536,12 @@ export default function ClientesPage() {
         onVerCliente={handleVerCliente}
         onEditarCliente={handleEditarCliente}
         onFiltradosChange={setClientesFiltrados}
+      />
+
+      <ModalLinkPago
+        isOpen={linkPagoOpen}
+        onClose={() => setLinkPagoOpen(false)}
+        sucursalInicial={sucursalId || undefined}
       />
 
       <DrawerNuevoCliente
