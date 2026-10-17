@@ -12,7 +12,7 @@ import {
   LayoutGrid,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
-import { es }                  from 'date-fns/locale'
+import { es }                  from 'date-fns/locale/es'
 
 type Cfg = { label: string; color: string; bg: string; icon: any }
 

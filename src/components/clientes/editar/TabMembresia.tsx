@@ -6,11 +6,16 @@ import { useAuth } from '@/context/AuthContext'
 
 interface Props {
   cliente:   any
-  reservas:  any[]
+  reservas?:  any[]
+  membresias?: any[]
+  esDireccion?: boolean
+  notas?:      string
+  setNotas?:   any
+  onCambio?:   () => void
   onRefresh: () => void
 }
 
-export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
+export default function TabMembresia({ cliente, membresias, esDireccion: propEsDireccion, notas, setNotas, reservas, onCambio, onRefresh }: Props) {
   const [pausarOpen, setPausarOpen] = useState(false)
   const { staff } = useAuth()
 

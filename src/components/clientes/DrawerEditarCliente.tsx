@@ -233,7 +233,7 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
           {tab === 'membresia' && (
             <TabMembresia cliente={cliente} membresias={membresias} esDireccion={esDireccion}
               notas={notas} setNotas={setNotas}
-              onCambio={() => { cargarMembresias(); cargarSoporte(); onSuccess() }} />
+              onCambio={() => { cargarMembresias(); cargarSoporte(); onSuccess() }} onRefresh={cargarMembresias}/>
           )}
           {tab === 'plataforma' && (tipo === 'wellhub' || tipo === 'totalpass') && (
             <TabPlataforma cliente={cliente} tipo={tipo} soporte={soporte} cargando={cargandoSop} />
