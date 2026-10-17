@@ -63,23 +63,17 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     fecha_ingreso:    '',
     estatus:          'Activo',
     tipo:             '',
-    // Coach only
     nivel:            '',
     categorias:       [] as string[],
     sucursales_ids:   [] as string[],
-    // Compensación
     tarifa_hora:      '',
     sueldo_fijo:      '',
-    // Reglas de bono → se manejan aparte en reglasTemp
     aplica_bono_puntualidad: false,
     pago_en_efectivo:        false,
-    // Bancario
     banco:            '',
     cuenta_bancaria:  '',
-    // Bio
     bio:              '',
     rol: '', 
-    // Contactos de emergencia
     contacto_emergencia_nombre:   '',
     contacto_emergencia_relacion: '',
     contacto_emergencia_telefono: '',
@@ -88,6 +82,26 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
   const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
 
   const isCoach = form.tipo === 'Coach'
+
+  // ── 👈 CAMBIO 1: Reglas de validación para correo y teléfono ─────────────────────────
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const phoneRegex = /^[0-9]{10,}$/
+
+  // Valida que tengan formato correcto solo si el usuario ya empezó a escribir
+  const isEmailValid = !form.email.trim() || emailRegex.test(form.email.trim())
+  const isPhoneValid = !form.telefono.trim() || phoneRegex.test(form.telefono.replace(/[\s-]/g, ''))
+
+  // Determina si el formulario completo es 100% válido para habilitar el guardado
+  const isFormValid = Boolean(
+    form.nombre.trim() &&
+    form.primer_apellido.trim() &&
+    form.email.trim() &&
+    emailRegex.test(form.email.trim()) &&
+    form.telefono.trim() &&
+    phoneRegex.test(form.telefono.replace(/[\s-]/g, '')) &&
+    form.tipo
+  )
+  // ──────────────────────────────────────────────────────────────────────────────────
 
   const toggleCategoria = (c: string) => {
     set('categorias', form.categorias.includes(c)
@@ -109,7 +123,8 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
   }, [isOpen])
 
   const handleGuardar = async () => {
-    if (!form.nombre || !form.tipo) return
+    // ── 👈 CAMBIO 2: Bloqueo de seguridad preventivo antes de procesar ─────────────────
+    if (!isFormValid) return
     setLoading(true)
 
     const rol = form.rol || 'staff_navy'
@@ -118,12 +133,12 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     const { data: staffData, error: staffError } = await supabase
       .from('staff')
       .insert({
-        nombre:                  form.nombre,
-        primer_apellido:         form.primer_apellido,
-        segundo_apellido:        form.segundo_apellido,
+        nombre:                  form.nombre.trim(),
+        primer_apellido:         form.primer_apellido.trim(),
+        segundo_apellido:        form.segundo_apellido.trim() || null,
         rfc_identificacion:      form.rfc,
-        email:                   form.email,
-        telefono:                form.telefono,
+        email:                   form.email.trim(),
+        telefono:                form.telefono.trim(),
         fecha_ingreso:           form.fecha_ingreso || null,
         estatus:                 form.estatus,
         tipo:                    form.tipo,
@@ -158,7 +173,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
         const res = await fetch('/api/staff/crear-auth', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ email: form.email, staff_id: staffId }),
+          body:    JSON.stringify({ email: form.email.trim(), staff_id: staffId }),
         })
         authOk = res.ok
         if (!res.ok) console.error('Error creando acceso:', await res.text())
@@ -182,7 +197,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
       )
     }
 
-    // 5. Reglas de bono temporales (sin el _tempId interno)
+    // 5. Reglas de bono temporales
     if (reglasTemp.length > 0) {
       await supabase.from('staff_reglas_bono').insert(
         reglasTemp.map(({ _tempId, ...r }) => ({ ...r, staff_id: staffId }))
@@ -206,7 +221,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
       docsSubidos.push(doc.tipo)
     }
 
-    // 7. Auditoría (sin datos bancarios)
+    // 7. Auditoría
     const nombreNuevo = `${form.nombre} ${form.primer_apellido || ''}`.trim()
     await logActividad({
       tipo:        'staff_creado',
@@ -259,7 +274,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     onClose()
   }
 
-  // Guardar regla temporal (sin staffId aún)
   const handleGuardarReglaTemp = (regla: any) => {
     if (reglaEditando?._tempId !== undefined) {
       setReglasTemp(prev => prev.map(r => r._tempId === reglaEditando._tempId ? { ...regla, _tempId: r._tempId } : r))
@@ -283,7 +297,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
             mensaje="El empleado se ha dado de alta exitosamente."
             onClose={() => setToast(false)}
         />
-        )}
+      )}
       {/* Overlay */}
       <div onClick={handleClose} className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" />
 
@@ -314,26 +328,48 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Primer Apellido">
+            <Field label="Primer Apellido" required>
               <input placeholder="Apellido" className={inputCls}
                 value={form.primer_apellido} onChange={e => set('primer_apellido', e.target.value)} />
             </Field>
             <Field label="Segundo Apellido">
-              <input placeholder="Apellido" className={inputCls}
+              <input placeholder="Apellido (opcional)" className={inputCls}
                 value={form.segundo_apellido} onChange={e => set('segundo_apellido', e.target.value)} />
             </Field>
           </div>
 
+          {/* ── 👈 CAMBIO 3: Inputs de Correo y Teléfono con avisos inline que aparecen/desaparecen ── */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Correo">
-              <input type="email" placeholder="correo@email.com" className={inputCls}
-                value={form.email} onChange={e => set('email', e.target.value)} />
+            <Field label="Correo" required>
+              <input 
+                type="email" 
+                placeholder="correo@email.com" 
+                className={`${inputCls} ${!isEmailValid ? 'border-red-400 bg-red-50 focus:border-red-500' : ''}`}
+                value={form.email} 
+                onChange={e => set('email', e.target.value)} 
+              />
+              {!isEmailValid && (
+                <p className="text-[11px] font-semibold text-red-500 mt-1 animate-pulse">
+                  ⚠ Ingrese un correo válido (ej. usuario@dominio.com)
+                </p>
+              )}
             </Field>
-            <Field label="Teléfono">
-              <input placeholder="Teléfono" className={inputCls}
-                value={form.telefono} onChange={e => set('telefono', e.target.value)} />
+
+            <Field label="Teléfono" required>
+              <input 
+                placeholder="10 dígitos" 
+                className={`${inputCls} ${!isPhoneValid ? 'border-red-400 bg-red-50 focus:border-red-500' : ''}`}
+                value={form.telefono} 
+                onChange={e => set('telefono', e.target.value)} 
+              />
+              {!isPhoneValid && (
+                <p className="text-[11px] font-semibold text-red-500 mt-1 animate-pulse">
+                  ⚠ Ingrese un teléfono de 10 dígitos
+                </p>
+              )}
             </Field>
           </div>
+          {/* ───────────────────────────────────────────────────────────────────────────────── */}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Fecha de ingreso">
@@ -353,7 +389,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
               value={form.rfc} onChange={e => set('rfc', e.target.value)} />
           </Field>
 
-          {/* ── Tipo de miembro ── */}
           {/* ── Tipo de miembro ── */}
           <SectionTitle>Tipo de miembro</SectionTitle>
           <div className="flex flex-wrap gap-2">
@@ -391,7 +426,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
             ))}
           </div>
 
-          {/* ── Sucursales asignadas — para todos ── */}
+          {/* ── Sucursales asignadas ── */}
           <SectionTitle>Sucursales asignadas</SectionTitle>
           <div className="flex flex-wrap gap-2">
             {sucursales.map(s => (
@@ -410,23 +445,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
           {/* ── Secciones exclusivas de Coach ── */}
           {isCoach && (
             <>
-              {/* Sucursales asignadas */}
-              <SectionTitle>Sucursales asignadas</SectionTitle>
-              <div className="flex flex-wrap gap-2">
-                {sucursales.map(s => (
-                  <button key={s.id} onClick={() => toggleSucursal(s.id)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-                      form.sucursales_ids.includes(s.id)
-                        ? 'bg-gray-900 text-white border-gray-900'
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400'
-                    }`}>
-                    {form.sucursales_ids.includes(s.id) && <span className="mr-1">✓</span>}
-                    {s.nombre}
-                  </button>
-                ))}
-              </div>
-
-              {/* Nivel del coach */}
               <SectionTitle>Nivel del coach</SectionTitle>
               <div className="flex flex-wrap gap-2">
                 {NIVELES.map(n => (
@@ -442,7 +460,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
                 ))}
               </div>
 
-              {/* Categorías que imparte */}
               <SectionTitle>Categorías que imparte</SectionTitle>
               <div className="flex flex-wrap gap-2">
                 {CATEGORIAS.map(cat => (
@@ -458,7 +475,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
                 ))}
               </div>
 
-              {/* Reglas de bono */}
               <SectionTitle>Reglas de bono</SectionTitle>
               {reglasTemp.length > 0 && (
                 <div className="space-y-2">
@@ -511,7 +527,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
             </Field>
           </div>
 
-          {/* Reglas adicionales */}
           <div className="space-y-2.5">
             <label className="flex items-center gap-3 cursor-pointer group">
               <div onClick={() => set('aplica_bono_puntualidad', !form.aplica_bono_puntualidad)}
@@ -598,7 +613,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
 
           {/* ── Bio ── */}
           <SectionTitle>Bio (Opcional)</SectionTitle>
-          <textarea rows={3} placeholder="Breve descripción del trayectoria"
+          <textarea rows={3} placeholder="Breve descripción de la trayectoria"
             className={`${inputCls} resize-none`}
             value={form.bio} onChange={e => set('bio', e.target.value)} />
 
@@ -610,15 +625,17 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
             className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
             Cancelar
           </button>
-          <button onClick={handleGuardar} disabled={loading || !form.nombre || !form.tipo}
-            className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition"
+
+          {/* ── 👈 CAMBIO 4: El botón se mantiene deshabilitado e inoperable hasta que isFormValid sea true ── */}
+          <button onClick={handleGuardar} disabled={loading || !isFormValid}
+            className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
             style={{ backgroundColor: '#171B24' }}>
             {loading ? 'Creando...' : 'Crear empleado'}
           </button>
         </div>
       </div>
 
-      {/* Modal de regla de bono (modo temporal) */}
+      {/* Modal de regla de bono */}
       {modalBonoOpen && (
         <ModalReglaBonoPrev
           isOpen={modalBonoOpen}
@@ -631,7 +648,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
   )
 }
 
-// ── Versión del modal de bono para uso TEMPORAL (sin guardar en DB) ──────────
 function ModalReglaBonoPrev({
   isOpen, regla, onClose, onGuardar,
 }: {
@@ -745,7 +761,7 @@ function ModalReglaBonoPrev({
 
           <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
             {regla?._tempId
-              ? <button onClick={() => { /* handled outside */ onClose() }} className="text-xs text-red-500 hover:text-red-700 font-medium">Eliminar regla</button>
+              ? <button onClick={() => { onClose() }} className="text-xs text-red-500 hover:text-red-700 font-medium">Eliminar regla</button>
               : <div />
             }
             <div className="flex gap-3">

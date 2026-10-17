@@ -1,15 +1,16 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { X, Search, Check, AlertCircle } from 'lucide-react'
-import { logActividad } from '@/lib/log-actividad';
-import { useAuth } from '@/context/AuthContext';
+import { X, Search, Check, AlertCircle, Snowflake } from 'lucide-react'
+import { logActividad } from '@/lib/log-actividad'
+import { useAuth } from '@/context/AuthContext'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Cliente {
   id: string; nombre_completo: string; email: string
   telefono?: string; plan?: string; nombre_plan?: string
   clases_restantes?: number; estatus?: string
+  estatus_membresia?: string
 }
 interface Clase {
   id: string; nombre_clase: string; horario: string
@@ -90,17 +91,30 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     })
   }, [isOpen])
 
-  // Buscar clientes con debounce
+  // Buscar clientes con debounce e incluir estatus de membresías
   useEffect(() => {
     if (!busCliente || busCliente.length < 2) { setClientes([]); return }
     const timer = setTimeout(async () => {
       const { data } = await supabase.from('clientes')
-        .select('id, nombre_completo, email, telefono, plan, nombre_plan, clases_restantes, estatus')
+        .select(`
+          id, nombre_completo, email, telefono, plan, nombre_plan, clases_restantes, estatus,
+          membresias(estatus, fecha_fin)
+        `)
         .eq('estatus', 'Activo')
         .or(`nombre_completo.ilike.%${busCliente}%,email.ilike.%${busCliente}%`)
         .order('nombre_completo')
         .limit(10)
-      if (data) setClientes(data)
+
+      if (data) {
+        const mapeados = data.map((c: any) => {
+          const membActivaPausada = c.membresias?.find((m: any) => m.estatus === 'Pausada' || m.estatus === 'Activa')
+          return {
+            ...c,
+            estatus_membresia: membActivaPausada?.estatus || 'Sin Plan'
+          }
+        })
+        setClientes(mapeados)
+      }
     }, 300)
     return () => clearTimeout(timer)
   }, [busCliente])
@@ -136,9 +150,16 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     setHorarioFiltro('Cualquiera'); setYaReservado(false)
   }
 
-  // ── Submit ───────────────────────────────────────────────────────────────────
+  // ── Submit con candado de Pausa ──────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!clienteSeleccionado || !claseSeleccionada) return
+
+    // 🔒 Validación estricta de Membresía Pausada
+    if (clienteSeleccionado.estatus_membresia === 'Pausada') {
+      alert('⚠️ No es posible crear reservas: La membresía de este cliente se encuentra PAUSADA. Reanuda su plan desde la ficha del cliente antes de agendar.')
+      return
+    }
+
     setLoading(true)
 
     // Verificar cupo
@@ -155,43 +176,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
 
     if (error) { alert('Error: ' + error.message); setLoading(false); return }
 
-    // // Actualizar espacios_ocupados en Supabase
-    // await supabase.from('clases')
-    //   .update({ espacios_ocupados: reservasActivas + 1 })
-    //   .eq('id', claseSeleccionada.id)
-
-    // // Actualizar Wellhub
-    // if (claseSeleccionada.wellhub_slot_id && claseSeleccionada.wellhub_class_id) {
-    //   try {
-    //     await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/wellhub/actualizar-cupos`, {
-    //       method:  'POST',
-    //       headers: { 'Content-Type': 'application/json' },
-    //       body: JSON.stringify({
-    //         slot_id:      claseSeleccionada.wellhub_slot_id,
-    //         clase_id:     claseSeleccionada.wellhub_class_id,
-    //         total_booked: reservasActivas + 1,
-    //         sucursal_id:  claseSeleccionada.sucursal_id,
-    //       }),
-    //     })
-    //   } catch (e) { console.warn('Error actualizando Wellhub:', e) }
-    // }
-
-    // // Actualizar TotalPass
-    // if (claseSeleccionada.totalpass_occurrence_uuid) {
-    //   try {
-    //     await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/totalpass-booking/actualizar-cupos`, {
-    //       method:  'POST',
-    //       headers: { 'Content-Type': 'application/json' },
-    //       body: JSON.stringify({
-    //         occurrence_uuid: claseSeleccionada.totalpass_occurrence_uuid,
-    //         sucursal_id:     claseSeleccionada.sucursal_id,
-    //         slots:           Math.max(0, claseSeleccionada.capacidad_max - (reservasActivas + 1)),
-    //       }),
-    //     })
-    //   } catch (e) { console.warn('Error actualizando TotalPass:', e) }
-    // }
-
-    // Sincronizar cupos en Supabase, Wellhub y TotalPass
+    // Sincronizar cupos
     try {
       await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sync/cupos`, {
         method:  'POST',
@@ -210,7 +195,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
       }, { onConflict: 'clase_id,numero' })
     }
 
-    // Notificación + correo + QR
+    // Notificación + correo
     if (reserva) {
       try {
         await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/reservas/confirmar-notificacion`, {
@@ -307,39 +292,60 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
             <div className="space-y-1 max-h-72 overflow-y-auto">
               {clientes.map(c => {
                 const selected = clienteSeleccionado?.id === c.id
+                const esPausado = c.estatus_membresia === 'Pausada'
+
                 return (
                   <button key={c.id} onClick={() => setClienteSeleccionado(selected ? null : c)}
                     className={`w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3 transition ${
-                      selected ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50 border border-transparent'
+                      selected ? (esPausado ? 'bg-amber-50 border border-amber-300' : 'bg-green-50 border border-green-200') : 'hover:bg-gray-50 border border-transparent'
                     }`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0 ${
-                      selected ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600'
+                      selected ? (esPausado ? 'bg-amber-200 text-amber-900' : 'bg-green-200 text-green-800') : 'bg-gray-200 text-gray-600'
                     }`}>
                       {c.nombre_completo.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{c.nombre_completo}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{c.nombre_completo}</p>
+                        {esPausado && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            <Snowflake size={10} /> PAUSADA
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400 truncate">{c.email}</p>
                     </div>
-                    {selected && <Check size={16} className="text-green-600 flex-shrink-0"/>}
+                    {selected && <Check size={16} className={esPausado ? 'text-amber-600' : 'text-green-600'} />}
                   </button>
                 )
               })}
             </div>
 
             {clienteSeleccionado && (
-              <div className="mt-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
-                <Check size={14} className="text-green-600 flex-shrink-0"/>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-900">{clienteSeleccionado.nombre_completo}</p>
-                  {(clienteSeleccionado.nombre_plan || clienteSeleccionado.plan) && (
-                    <p className="text-xs text-green-700">
-                      {clienteSeleccionado.nombre_plan || clienteSeleccionado.plan}
-                      {clienteSeleccionado.clases_restantes != null && ` · ${clienteSeleccionado.clases_restantes} clases restantes`}
+              clienteSeleccionado.estatus_membresia === 'Pausada' ? (
+                <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <Snowflake size={16} className="text-amber-600 flex-shrink-0"/>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-amber-900">{clienteSeleccionado.nombre_completo}</p>
+                    <p className="text-xs text-amber-700 font-medium mt-0.5">
+                      ⚠️ La membresía de este cliente está PAUSADA. Reanúdala para agendar reservas.
                     </p>
-                  )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="mt-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
+                  <Check size={14} className="text-green-600 flex-shrink-0"/>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900">{clienteSeleccionado.nombre_completo}</p>
+                    {(clienteSeleccionado.nombre_plan || clienteSeleccionado.plan) && (
+                      <p className="text-xs text-green-700">
+                        {clienteSeleccionado.nombre_plan || clienteSeleccionado.plan}
+                        {clienteSeleccionado.clases_restantes != null && ` · ${clienteSeleccionado.clases_restantes} clases restantes`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )
             )}
           </div>
         )}
@@ -407,7 +413,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
               </div>
             </div>
 
-            {/* Lista de clases con bloqueo por sobrecupo */}
+            {/* Lista de clases */}
             <div>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
                 {clasesFiltradas.length} clases disponibles
@@ -541,16 +547,22 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
           <div className="flex-1"/>
           {step < 3 ? (
             <button
-              onClick={() => setStep(s => (s + 1) as 1|2|3)}
+              onClick={() => {
+                if (step === 1 && clienteSeleccionado?.estatus_membresia === 'Pausada') {
+                  alert('⚠️ No puedes continuar: La membresía de este cliente se encuentra PAUSADA.')
+                  return
+                }
+                setStep(s => (s + 1) as 1|2|3)
+              }}
               disabled={
-                (step === 1 && !clienteSeleccionado) ||
+                (step === 1 && (!clienteSeleccionado || clienteSeleccionado.estatus_membresia === 'Pausada')) ||
                 (step === 2 && (!claseSeleccionada || yaReservado || (claseSeleccionada.total_reservas || 0) >= claseSeleccionada.capacidad_max))
               }
               className="px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition cursor-pointer">
               Continuar
             </button>
           ) : (
-            <button onClick={handleSubmit} disabled={loading}
+            <button onClick={handleSubmit} disabled={loading || clienteSeleccionado?.estatus_membresia === 'Pausada'}
               className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40 transition cursor-pointer">
               <Check size={15}/>
               {loading ? 'Procesando...' : llena ? 'Agregar a lista de espera' : 'Crear reserva'}
@@ -586,6 +598,11 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
                 Elegir otra clase
               </button>
               <button onClick={async () => {
+                if (clienteSeleccionado?.estatus_membresia === 'Pausada') {
+                  alert('⚠️ No se puede agregar a lista de espera: La membresía está PAUSADA.')
+                  setModalLlena(false)
+                  return
+                }
                 setModalLlena(false)
                 setLoading(true)
                 await supabase.from('reservas').insert([{

@@ -37,8 +37,7 @@ interface Props {
 type Tab = 'todo' | 'vence7' | 'riesgo'
 const POR_PAGINA = 15
 
-// Vencimiento: lo calcula el backend desde las membresías y lo guarda en fecha_venc_plan.
-// Solo si no lo tiene, se busca una membresía Activa (sin importar mayúsculas).
+// ✅ NORMALIZACIÓN DE FECHA: Medianoche exacta (00:00:00) para evitar días fantasma
 const getFechaVencimientoReal = (c: any): Date | null => {
   let fRaw = c.fecha_venc_plan
   if (!fRaw) {
@@ -47,7 +46,7 @@ const getFechaVencimientoReal = (c: any): Date | null => {
     fRaw = activas.map((m: any) => m.fecha_fin).filter(Boolean).sort().pop()
   }
   if (!fRaw) return null
-  const d = new Date(`${String(fRaw).slice(0, 10)}T23:59:59`)
+  const d = new Date(`${String(fRaw).slice(0, 10)}T00:00:00`)
   return isNaN(d.getTime()) ? null : d
 }
 
@@ -110,9 +109,11 @@ export default function ClientesTabla({
     canal: '' 
   })
 
+  // Normalización de la fecha de hoy a medianoche
   const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
 
-  // Filtrado por Pestañas (Tab "Vence en 7 días" corregido)
+  // Filtrado por Pestañas
   const porTab = clientes.filter(c => {
     if (tab === 'todo') return true
     
@@ -120,8 +121,7 @@ export default function ClientesTabla({
       const fechaVenc = getFechaVencimientoReal(c)
       if (!fechaVenc) return false
       
-      // Diferencia en días enteros respecto a hoy
-      const dias = Math.ceil((fechaVenc.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+      const dias = Math.round((fechaVenc.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
       return dias >= 0 && dias <= 7
     }
 
@@ -227,10 +227,11 @@ export default function ClientesTabla({
     return { label: `${n} ${n === 1 ? 'clase' : 'clases'}`, color: 'text-gray-500' }
   }
 
+  // ✅ VENCIMIENTO CORREGIDO: redondeo limpio a medianoche
   const vencimientoLabel = (c: Cliente) => {
     const fecha = getFechaVencimientoReal(c)
     if (!fecha) return null
-    const dias = Math.ceil((fecha.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+    const dias = Math.round((fecha.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
     if (dias < 0) return <span className="text-[10px] text-red-400 font-bold">⛔ Expirado</span>
     if (dias === 0) return <span className="text-[10px] text-red-500 font-bold">⚠️ Vence hoy</span>
     if (dias <= 3) return <span className="text-[10px] text-red-400 font-bold">⚠️ Vence en {dias}d</span>
