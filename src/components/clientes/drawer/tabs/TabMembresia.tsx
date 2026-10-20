@@ -137,9 +137,9 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
 
   // ❄️ CÁLCULO DE DÍAS CONGELADOS VS ACTIVOS
   const restan = actual && !actual.activacion_pendiente
-    ? (actual.estatus === 'Pausada'
-        ? dias(actual.fecha_fin_original || actual.fecha_fin) // Mantiene los días congelados
-        : dias(actual.fecha_fin))
+    ? (actual.estatus === 'Pausada' && actual.fecha_inicio_pausa && actual.fecha_fin_original
+      ? Math.max(0, Math.round((new Date(`${actual.fecha_fin_original.slice(0, 10)}T00:00:00`).getTime() - new Date(`${actual.fecha_inicio_pausa.slice(0, 10)}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24)))
+        : dias(actual.fecha_fin))      
     : null
 
   const usadas   = actual ? reservas.filter(r => r.membresia_id === actual.id && r.estatus !== 'Cancelada').length : 0
