@@ -447,7 +447,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       <Tarjeta icon={<Layers size={15} />} titulo="Acciones" ayuda="Lo que puedes hacer con la membresía de este cliente.">
         <div className="grid grid-cols-2 gap-2.5">
           <Accion tono="oscuro" icon={<RefreshCw size={14} />} titulo={actual ? 'Renovar o cambiar plan' : 'Cobrar un plan'}
-            desc="Con su tarjeta, enviándole el cobro a su app o en efectivo" onClick={() => setModalPago(true)} />
+            desc="Con su tarjeta guardada o enviándole el cobro a su app" onClick={() => setModalPago(true)} />
           <Accion tono="indigo" icon={<Calendar size={14} />} titulo="Editar fechas"
             desc={actual ? `Mover el inicio o fin de ${actual.paquetes?.nombre}` : 'Necesita un plan activo'}
             onClick={() => actual && setMembFechas(actual.id)}

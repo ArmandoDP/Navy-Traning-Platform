@@ -1,9 +1,9 @@
 'use client'
 // src/components/clientes/ModalPagoSucursal.tsx — cobrar un paquete en recepción
-// Prioridad: tarjeta guardada → enviar cobro a su app → efectivo → terminal (respaldo)
+// Prioridad: tarjeta guardada → enviar cobro a su app → terminal (respaldo, solo dirección)
 import { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
-import { X, RefreshCw, CheckCircle2, CreditCard, Banknote, ChevronRight, Smartphone, Wallet,
+import { X, RefreshCw, CheckCircle2, CreditCard, ChevronRight, Smartphone, Wallet,
          Copy, Lock, AlertTriangle, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { logActividad } from '@/lib/log-actividad'
@@ -11,7 +11,7 @@ import { useAuth } from '@/context/AuthContext'
 
 interface Props { isOpen: boolean; cliente: any; onClose: () => void; onSuccess: () => void }
 
-type Metodo = 'tarjeta' | 'app' | 'Efectivo' | 'Terminal'
+type Metodo = 'tarjeta' | 'app' | 'Terminal'
 type Paso   = 'form' | 'resumen' | 'esperando' | 'exito'
 
 // Mientras Navy deja de usar la terminal, solo dirección la ve
@@ -76,7 +76,6 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
       deshabilitado: opciones && !opciones.tarjeta ? 'Primero que pague una vez desde su app' : undefined },
     { key: 'app', icon: Smartphone, label: 'Enviar cobro a su app',
       desc: opciones?.tiene_app ? 'Le llega una notificación y un correo' : 'Le llega por correo y con un QR' },
-    { key: 'Efectivo', icon: Banknote, label: 'Efectivo', desc: 'Se registra a mano' },
     ...(!TERMINAL_SOLO_DIRECCION || esDireccion
       ? [{ key: 'Terminal' as Metodo, icon: CreditCard, label: 'Terminal', desc: 'Solo como respaldo' }] : []),
   ]
@@ -164,7 +163,7 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
     setSolicitud(null); setPaso('form')
   }
 
-  // ── Efectivo / terminal (registro manual) ──
+  // ── Terminal (registro manual, solo dirección) ──
   const registrarManual = async () => {
     const { error: errPago } = await supabase.from('pagos').insert({
       cliente_id: cliente.id, monto: Number(monto), metodo_pago: metodo, fecha_pago: new Date().toISOString(),

@@ -8,6 +8,7 @@ import {
 import { supabase }   from '@/lib/supabase'
 import ToastExito     from '@/components/ToastExito'
 import TabAsistencia from './TabAsistencia'
+import TabListaEspera from './TabListaEspera'
 import { useAuth }       from '@/context/AuthContext'
 import { logActividad }  from '@/lib/log-actividad'
 import ModalEditarClase from '../ModalEditarClase'
@@ -19,7 +20,7 @@ interface Props {
   onSuccess: () => void
 }
 
-type Tab = 'detalle' | 'asistencia' 
+type Tab = 'detalle' | 'asistencia' | 'espera'
 
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 bg-gray-50 transition"
 const selectCls = `${inputCls} appearance-none cursor-pointer`
@@ -520,6 +521,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           {([
             { key: 'detalle',    label: '📋 Detalle' },
             { key: 'asistencia', label: `👥 Asistencia (${totalReservas})` },
+            { key: 'espera',     label: '⏳ Lista de espera' },
           ] as { key: Tab; label: string }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex-1 py-3 text-xs font-bold transition border-b-2 ${
@@ -770,6 +772,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               onCheckIn={handleCheckIn}
               onCancelar={handleCancelarReserva}
             />
+          )}
+
+          {/* Tab Lista de espera */}
+          {tab === 'espera' && claseId && (
+            <TabListaEspera claseId={claseId} onCambio={fetchData} />
           )}
 
           {/* Tab Editar */}
