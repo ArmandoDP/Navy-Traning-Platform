@@ -241,7 +241,8 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
           {tab === 'seguimiento' && <TabProspecto cliente={cliente} soporte={soporte} cargando={cargandoSop} />}
           {tab === 'acceso' && (
             <TabAcceso cliente={cliente} tipo={tipo} soporte={soporte} cargando={cargandoSop}
-              recargar={cargarSoporte} esDireccion={esDireccion} irA={t => setTab(t as Tab)} />
+              recargar={cargarSoporte} esDireccion={esDireccion} irA={t => setTab(t as Tab)}
+              onEliminado={m => { alert(m); onSuccess(); onClose() }} />
           )}
         </div>
 

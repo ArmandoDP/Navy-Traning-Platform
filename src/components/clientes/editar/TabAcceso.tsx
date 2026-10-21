@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { KeyRound, CalendarCheck, Bell, Ban, CreditCard, Users, AlertTriangle, Fingerprint, Copy, RefreshCw, Smartphone } from 'lucide-react'
 import { Section, Aviso, Boton, Dato, Vacio, Cargando } from './ui'
+import ZonaDireccion from './ZonaDireccion'
 import { TipoCliente } from './tipoCliente'
 import { apiSoporte, fechaLarga, fechaHora, hace, dinero } from './utils'
 
@@ -14,9 +15,10 @@ interface Props {
   recargar:    () => void
   esDireccion: boolean
   irA:         (tab: string) => void
+  onEliminado?: (mensaje: string) => void   // se unió o se eliminó: cerrar el drawer y recargar
 }
 
-export default function TabAcceso({ cliente, tipo, soporte, cargando, recargar, esDireccion, irA }: Props) {
+export default function TabAcceso({ cliente, tipo, soporte, cargando, recargar, esDireccion, irA, onEliminado }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<{ tono: 'ok' | 'error'; texto: string } | null>(null)
 
@@ -194,7 +196,7 @@ export default function TabAcceso({ cliente, tipo, soporte, cargando, recargar, 
       {duplicados.length > 0 && (
         <Section icon={<Users size={15} />} titulo="Posibles duplicados" descripcion="Otros clientes con el mismo correo o teléfono.">
           <Aviso tono="aviso">
-            Si es la misma persona, sus reservas y pagos pueden estar repartidos entre dos registros. Avisa a soporte para unirlos.
+            Si es la misma persona, sus reservas y pagos pueden estar repartidos entre dos registros. {esDireccion ? 'Únelos abajo, en Zona de dirección.' : 'Pide a dirección que los una.'}
           </Aviso>
           <div className="divide-y divide-gray-100">
             {duplicados.map((d: any) => (
@@ -236,6 +238,11 @@ export default function TabAcceso({ cliente, tipo, soporte, cargando, recargar, 
           </div>
         ))}
       </Section>
+
+      {/* 9. Unir o eliminar (solo dirección) */}
+      {esDireccion && (
+        <ZonaDireccion cliente={cliente} duplicados={duplicados || []} onListo={m => onEliminado?.(m)} />
+      )}
     </div>
   )
 }

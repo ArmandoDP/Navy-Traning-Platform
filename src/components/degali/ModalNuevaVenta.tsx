@@ -13,7 +13,7 @@ interface Props {
   onVentaCreada: () => void
 }
 
-type Metodo = 'tarjeta' | 'efectivo' | 'terminal'
+type Metodo = 'tarjeta' | 'terminal'
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
 async function api(path: string, method: 'GET' | 'POST' = 'GET', body?: any) {
@@ -29,7 +29,7 @@ async function api(path: string, method: 'GET' | 'POST' = 'GET', body?: any) {
 }
 
 export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, onVentaCreada }: Props) {
-  const [metodoPago,      setMetodoPago]      = useState<Metodo>('efectivo')
+  const [metodoPago,      setMetodoPago]      = useState<Metodo>('terminal')
   const [numeroOperacion, setNumeroOperacion] = useState('')
   const [busquedaCliente, setBusquedaCliente] = useState('')
   const [clienteSel,      setClienteSel]      = useState<any>(null)
@@ -62,7 +62,7 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
 
   const quitarCliente = () => {
     setClienteSel(null); setBusquedaCliente(''); setTarjeta(null)
-    if (metodoPago === 'tarjeta') setMetodoPago('efectivo')
+    if (metodoPago === 'tarjeta') setMetodoPago('terminal')
   }
 
   const descontarInventario = async () => {
@@ -114,7 +114,7 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
         await supabase.from('ventas').update({ estatus: 'Completada' }).eq('id', venta.id)
       } catch (e: any) {
         await supabase.from('ventas').update({ estatus: 'Cancelada' }).eq('id', venta.id)
-        setError(`${e.message}. Cobra en efectivo o pide que actualice su tarjeta en la app.`)
+        setError(`${e.message}. Cobra con terminal o pide que actualice su tarjeta en la app (Perfil → Métodos de pago).`)
         setProcesando(false)
         return
       }
@@ -152,7 +152,6 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
 
   const metodos: { key: Metodo; label: string; disponible: boolean }[] = [
     { key: 'tarjeta',  label: '💳 Su tarjeta', disponible: !!tarjeta },
-    { key: 'efectivo', label: '💵 Efectivo',   disponible: true },
     { key: 'terminal', label: '🏧 Terminal',   disponible: true },
   ]
 
@@ -227,7 +226,7 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
           {/* Método de pago */}
           <div className="space-y-2">
             <p className="text-xs font-black text-gray-500 uppercase tracking-wide">Método de pago</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {metodos.map(m => (
                 <button key={m.key} disabled={!m.disponible} onClick={() => setMetodoPago(m.key)}
                   className={`py-3 rounded-xl text-sm font-bold border-2 transition ${
