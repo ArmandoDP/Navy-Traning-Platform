@@ -28,6 +28,7 @@ interface Props {
   onRefresh: () => void
   onRenovar: (ids: string[]) => void
   onMarcarPerdido: (ids: string[]) => void
+  onEliminarDefinitivo: (ids: string[]) => void // 👈 Prop agregada
   onCambiarPaquete: (ids: string[]) => void
   onEditarCliente: (cliente: Cliente) => void
   onVerCliente: (cliente: Cliente) => void
@@ -37,7 +38,6 @@ interface Props {
 type Tab = 'todo' | 'vence7' | 'riesgo'
 const POR_PAGINA = 15
 
-// ✅ NORMALIZACIÓN DE FECHA: Medianoche exacta (00:00:00) para evitar días fantasma
 const getFechaVencimientoReal = (c: any): Date | null => {
   let fRaw = c.fecha_venc_plan
   if (!fRaw) {
@@ -90,6 +90,7 @@ export default function ClientesTabla({
   onRefresh, 
   onRenovar, 
   onMarcarPerdido, 
+  onEliminarDefinitivo, // 👈 Recibida aquí
   onCambiarPaquete, 
   onEditarCliente, 
   onVerCliente,
@@ -109,30 +110,23 @@ export default function ClientesTabla({
     canal: '' 
   })
 
-  // Normalización de la fecha de hoy a medianoche
   const hoy = new Date()
   hoy.setHours(0, 0, 0, 0)
 
-  // Filtrado por Pestañas
   const porTab = clientes.filter(c => {
     if (tab === 'todo') return true
-    
     if (tab === 'vence7') {
       const fechaVenc = getFechaVencimientoReal(c)
       if (!fechaVenc) return false
-      
       const dias = Math.round((fechaVenc.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
       return dias >= 0 && dias <= 7
     }
-
     if (tab === 'riesgo') return (c.asistencia_pct || 0) < 50
     return true
   })
 
-  // Búsqueda Global y Filtros
   const filtrados = porTab.filter(c => {
     const q = (filtros.nombre || '').toLowerCase().trim()
-
     const nombreCompleto = `${c.nombre_completo || ''} ${(c as any).nombre || ''} ${(c as any).primer_apellido || ''} ${(c as any).segundo_apellido || ''}`.toLowerCase()
     const email = (c.email || '').toLowerCase()
     const telefono = ((c as any).telefono || '').toLowerCase()
@@ -140,12 +134,7 @@ export default function ClientesTabla({
     const plan = (c.plan || '').toLowerCase()
     const fechaAlta = (c.fecha_alta_original || c.created_at || '').slice(0, 10)
 
-    const haceMatchBusqueda = !q || 
-      nombreCompleto.includes(q) || 
-      email.includes(q) || 
-      telefono.includes(q) ||
-      sucursal.includes(q)
-
+    const haceMatchBusqueda = !q || nombreCompleto.includes(q) || email.includes(q) || telefono.includes(q) || sucursal.includes(q)
     const evalSucursal = q ? true : (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase()))
 
     let coincideRangoFecha = true
@@ -153,9 +142,7 @@ export default function ClientesTabla({
     if (filtros.fechaFin && fechaAlta > filtros.fechaFin) coincideRangoFecha = false
 
     return (
-      haceMatchBusqueda &&
-      evalSucursal &&
-      coincideRangoFecha &&
+      haceMatchBusqueda && evalSucursal && coincideRangoFecha &&
       (!filtros.plan || plan.includes(filtros.plan.toLowerCase())) &&
       (!filtros.canal || getCanal(c) === filtros.canal) &&
       (!filtros.estado || c.estatus === filtros.estado)
@@ -163,9 +150,7 @@ export default function ClientesTabla({
   })
 
   useEffect(() => {
-    if (onFiltradosChange) {
-      onFiltradosChange(filtrados)
-    }
+    if (onFiltradosChange) onFiltradosChange(filtrados)
   }, [tab, filtros, clientes])
 
   const ordenados = [...filtrados].sort((a, b) => {
@@ -227,7 +212,6 @@ export default function ClientesTabla({
     return { label: `${n} ${n === 1 ? 'clase' : 'clases'}`, color: 'text-gray-500' }
   }
 
-  // ✅ VENCIMIENTO CORREGIDO: redondeo limpio a medianoche
   const vencimientoLabel = (c: Cliente) => {
     const fecha = getFechaVencimientoReal(c)
     if (!fecha) return null
@@ -247,8 +231,6 @@ export default function ClientesTabla({
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-
-      {/* Tabs */}
       <div className="grid grid-cols-3 border-b border-gray-100">
         {TABS.map(t => (
           <button key={t.key} onClick={() => { setTab(t.key as Tab); setPagina(1); setSeleccion(new Set()) }}
@@ -260,7 +242,6 @@ export default function ClientesTabla({
         ))}
       </div>
 
-      {/* Contador + Bulk + Filtros */}
       <div className="px-5 py-3 border-b border-gray-100 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-500 font-medium">
@@ -273,6 +254,7 @@ export default function ClientesTabla({
               onCambiarPaquete={() => onCambiarPaquete([...seleccion])}
               onRenovar={() => onRenovar([...seleccion])}
               onMarcarPerdido={() => { onMarcarPerdido([...seleccion]); setSeleccion(new Set()) }}
+              onEliminarDefinitivo={() => { onEliminarDefinitivo([...seleccion]); setSeleccion(new Set()) }} // 👈 Pasado aquí
             />
           )}
         </div>
@@ -318,14 +300,10 @@ export default function ClientesTabla({
               const clasesData = clasesMesLabel(c.clases_mes)
               return (
                 <tr key={c.id} className={`transition hover:bg-gray-50/70 ${seleccion.has(c.id) ? 'bg-indigo-50/40' : ''}`}>
-
-                  {/* Checkbox */}
                   <td className="px-4 py-3">
                     <input type="checkbox" checked={seleccion.has(c.id)} onChange={() => toggleOne(c.id)}
                       className="rounded border-gray-300 text-indigo-600 cursor-pointer" />
                   </td>
-
-                  {/* Cliente */}
                   <td className="px-4 py-3 min-w-[200px]">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center text-xs font-black text-white flex-shrink-0">
@@ -345,62 +323,24 @@ export default function ClientesTabla({
                       </div>
                     </div>
                   </td>
-
-                  {/* Sucursal */}
                   <td className="px-4 py-3">
-                    {c.sucursales?.nombre
-                      ? <BadgeSucursal nombre={c.sucursales.nombre} />
-                      : <span className="text-xs text-gray-300">—</span>}
+                    {c.sucursales?.nombre ? <BadgeSucursal nombre={c.sucursales.nombre} /> : <span className="text-xs text-gray-300">—</span>}
                   </td>
-
-                  {/* Plan */}
                   <td className="px-4 py-3 min-w-[160px]">
-                    {c.plan ? (
-                      <p className="text-xs font-bold text-gray-800 truncate">{c.plan}</p>
-                    ) : (
-                      <p className="text-xs text-gray-300 italic">Sin paquete aún</p>
-                    )}
+                    {c.plan ? <p className="text-xs font-bold text-gray-800 truncate">{c.plan}</p> : <p className="text-xs text-gray-300 italic">Sin paquete aún</p>}
                     <div className="mt-0.5">{vencimientoLabel(c)}</div>
                   </td>
-
-                  {/* Canal */}
-                  <td className="px-4 py-3">
-                    <BadgeCanal canal={getCanal(c)} />
-                  </td>
-
-                  {/* Alta */}
+                  <td className="px-4 py-3"><BadgeCanal canal={getCanal(c)} /></td>
                   <td className="px-4 py-3 min-w-[90px]">
                     <p className="text-xs text-gray-700">
                       {c.created_at || c.fecha_alta_original ? new Date(c.fecha_alta_original || c.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'2-digit' }) : '—'}
                     </p>
                   </td>
-
-                  {/* Estado */}
-                  <td className="px-4 py-3">
-                    <BadgeEstatus estatus={c.perdido ? 'Perdido' : c.estatus} />
-                  </td>
-
-                  {/* Asistencia */}
-                  <td className="px-4 py-3">
-                    <AsistenciaBar pct={c.asistencia_pct || 0} />
-                  </td>
-
-                  {/* Clases este mes */}
-                  <td className="px-4 py-3">
-                    <span className={`text-xs ${clasesData.color}`}>{clasesData.label}</span>
-                  </td>
-
-                  {/* Última visita */}
-                  <td className="px-4 py-3 min-w-[130px]">
-                    <span className={`text-xs ${visitData.color}`}>{visitData.label}</span>
-                  </td>
-
-                  {/* Antigüedad */}
-                  <td className="px-4 py-3">
-                    <span className={`text-xs ${antData.color}`}>{antData.label}</span>
-                  </td>
-
-                  {/* Acciones */}
+                  <td className="px-4 py-3"><BadgeEstatus estatus={c.perdido ? 'Perdido' : c.estatus} /></td>
+                  <td className="px-4 py-3"><AsistenciaBar pct={c.asistencia_pct || 0} /></td>
+                  <td className="px-4 py-3"><span className={`text-xs ${clasesData.color}`}>{clasesData.label}</span></td>
+                  <td className="px-4 py-3 min-w-[130px]"><span className={`text-xs ${visitData.color}`}>{visitData.label}</span></td>
+                  <td className="px-4 py-3"><span className={`text-xs ${antData.color}`}>{antData.label}</span></td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => onEditarCliente(c)}
@@ -420,28 +360,23 @@ export default function ClientesTabla({
         </table>
       </div>
 
-      {/* Paginación */}
       <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
         <div className="flex items-center gap-1">
           <button onClick={() => setPagina(p => Math.max(1, p-1))} disabled={pagina === 1}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 disabled:opacity-30 transition">
             <ChevronLeft size={15}/>
           </button>
-
           {Array.from({ length: totalPags }, (_, i) => i + 1)
             .filter(n => n === 1 || n === totalPags || Math.abs(n - pagina) <= 1)
             .map((n, idx, arr) => (
               <div key={n} className="flex items-center">
-                {idx > 0 && arr[idx - 1] !== n - 1 && (
-                  <span className="text-gray-400 text-xs px-1">...</span>
-                )}
+                {idx > 0 && arr[idx - 1] !== n - 1 && <span className="text-gray-400 text-xs px-1">...</span>}
                 <button onClick={() => setPagina(n)}
                   className={`w-7 h-7 rounded-lg text-xs font-bold transition ${pagina === n ? 'bg-gray-900 text-white' : 'hover:bg-gray-100 text-gray-500'}`}>
                   {n}
                 </button>
               </div>
             ))}
-
           <button onClick={() => setPagina(p => Math.min(totalPags, p+1))} disabled={pagina === totalPags}
             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 disabled:opacity-30 transition">
             <ChevronR size={15}/>

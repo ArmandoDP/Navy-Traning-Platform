@@ -10,6 +10,7 @@ import ClientesTabla from '@/components/clientes/ClientesTabla'
 import DrawerNuevoCliente from '@/components/clientes/DrawerNuevoCliente'
 import DrawerEditarCliente from '@/components/clientes/DrawerEditarCliente'
 import DrawerCliente from '@/components/clientes/drawer/DrawerCliente'
+import ModalConfirmarEliminar from '@/components/clientes/ModalConfirmarEliminar'
 
 // Formateador estricto para evitar desfases por zona horaria UTC
 const formatearFechaLocal = (fRaw: any): string => {
@@ -37,6 +38,11 @@ export default function ClientesPage() {
   const [editarOpen, setEditarOpen] = useState(false)
   const [exportando, setExportando] = useState(false)
   const [linkPagoOpen, setLinkPagoOpen] = useState(false)
+
+  // Estados para el control del modal de eliminación definitiva
+  const [modalEliminarOpen, setModalEliminarOpen] = useState(false)
+  const [idsAEliminar, setIdsAEliminar] = useState<string[]>([])
+  const [eliminando, setEliminando] = useState(false)
 
   // Cargar registros por lotes desde Supabase (tipado corregido con string | null)
   const fetchAllTableComplete = async (tableName: string, sucursalFiltro?: string | null) => {
@@ -199,7 +205,6 @@ export default function ClientesPage() {
 
       const ahora = new Date()
 
-      // Evaluar si corresponde a la sección por vencer
       const esSeccionPorVencer = listaAExportar.every(c => {
         const membresiasList = Array.isArray(c.membresias) ? c.membresias : (c.membresias ? [c.membresias] : [])
         const miMembresiaActiva = membresiasList.find((m: any) => String(m.estatus).toLowerCase() === 'activa')
@@ -456,6 +461,35 @@ export default function ClientesPage() {
     fetchClientes()
   }
 
+  // --- FUNCIONES PARA ABRIR EL MODAL Y CONFIRMAR ELIMINACIÓN ---
+  const handleAbrirModalEliminar = (ids: string[]) => {
+    if (!ids || ids.length === 0) return
+    setIdsAEliminar(ids)
+    setModalEliminarOpen(true)
+  }
+
+  const handleConfirmarEliminacion = async () => {
+    if (idsAEliminar.length === 0) return
+    try {
+      setEliminando(true)
+      const { error } = await supabase
+        .from('clientes')
+        .delete()
+        .in('id', idsAEliminar)
+
+      if (error) throw error
+
+      setModalEliminarOpen(false)
+      setIdsAEliminar([])
+      fetchClientes()
+    } catch (err: any) {
+      console.error('Error al eliminar cliente(s):', err)
+      alert(`Hubo un error al intentar eliminar: ${err.message || 'Error desconocido'}`)
+    } finally {
+      setEliminando(false)
+    }
+  }
+
   const handleCambiarPaquete = (ids: string[]) => {
     console.log('Cambiar paquete para:', ids)
   }
@@ -532,10 +566,20 @@ export default function ClientesPage() {
         onRefresh={fetchClientes}
         onRenovar={handleRenovar}
         onMarcarPerdido={handleMarcarPerdido}
+        onEliminarDefinitivo={handleAbrirModalEliminar}
         onCambiarPaquete={handleCambiarPaquete}
         onVerCliente={handleVerCliente}
         onEditarCliente={handleEditarCliente}
         onFiltradosChange={setClientesFiltrados}
+      />
+
+      {/* Modal de confirmación estilizado */}
+      <ModalConfirmarEliminar
+        isOpen={modalEliminarOpen}
+        cantidad={idsAEliminar.length}
+        loading={eliminando}
+        onClose={() => setModalEliminarOpen(false)}
+        onConfirm={handleConfirmarEliminacion}
       />
 
       <ModalLinkPago

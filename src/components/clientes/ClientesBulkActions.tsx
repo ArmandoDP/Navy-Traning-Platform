@@ -1,14 +1,15 @@
 'use client'
-import { Package, RefreshCw, UserX } from 'lucide-react'
+import { Package, RefreshCw, UserX, Trash2 } from 'lucide-react'
 
 interface Props {
   cantidad:          number
   onCambiarPaquete:  () => void
   onRenovar:         () => void
   onMarcarPerdido:   () => void
+  onEliminarDefinitivo: () => void // 👈 Prop agregada
 }
 
-export default function ClientesBulkActions({ cantidad, onCambiarPaquete, onRenovar, onMarcarPerdido }: Props) {
+export default function ClientesBulkActions({ cantidad, onCambiarPaquete, onRenovar, onMarcarPerdido, onEliminarDefinitivo }: Props) {
   if (cantidad === 0) return null
 
   const btn = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-700 hover:bg-gray-100 bg-white transition'
@@ -24,6 +25,10 @@ export default function ClientesBulkActions({ cantidad, onCambiarPaquete, onReno
       </button>
       <button onClick={onMarcarPerdido} className={`${btn} hover:bg-red-50 hover:text-red-600 hover:border-red-200`}>
         <UserX size={12}/> Marcar como perdido
+      </button>
+      {/* 👈 Botón de Eliminación Definitiva */}
+      <button onClick={onEliminarDefinitivo} className={`${btn} bg-red-50 text-red-600 border-red-200 hover:bg-red-100`}>
+        <Trash2 size={12}/> Eliminar definitivamente
       </button>
     </div>
   )
