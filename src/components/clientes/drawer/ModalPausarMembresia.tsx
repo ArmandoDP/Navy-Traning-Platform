@@ -70,7 +70,7 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
       await supabase
         .from('clientes')
         .update({
-          estatus: 'Activo',
+          estatus: 'Pausado',
           fecha_vencimiento_membresia: nuevaFechaFinStr,
           fecha_venc_plan: nuevaFechaFinStr,
         })
