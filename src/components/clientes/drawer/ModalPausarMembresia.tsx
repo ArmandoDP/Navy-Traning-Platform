@@ -54,19 +54,19 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
         creado_por: staff?.id || null,
       })
 
-      // 2. Actualizar el estado de la membresía en Supabase (Asignación directa de días de esta pausa)
+      // 2. Actualizar el estado de la membresía en Supabase a 'Pausada'
       await supabase
         .from('membresias')
         .update({
           estatus: 'Pausada',
           fecha_inicio_pausa: new Date().toISOString(),
-          dias_pausa_programados: dias, // ✅ Muestra exactamente los días autorizados sin acumular pruebas pasadas
+          dias_pausa_programados: dias,
           fecha_fin_original: membresia.fecha_fin_original || fechaFinBaseStr,
           fecha_fin: nuevaFechaFinStr,
         })
         .eq('id', membresia.id)
 
-      // 3. Sincronizar la ficha del cliente en Supabase
+      // 3. Sincronizar la ficha del cliente en Supabase con estatus 'Pausado'
       await supabase
         .from('clientes')
         .update({
@@ -76,7 +76,7 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
         })
         .eq('id', clienteId)
 
-      // 4. Notificar al backend según el canal de pago (Stripe, Wellhub, TotalPass)
+      // 4. Notificar al backend según el canal de pago (Stripe, Wellhub, TotalPass) para recorrer cobros
       try {
         await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/membresias/pausar-canal`, {
           method: 'POST',
@@ -108,7 +108,6 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
       <div onClick={onClose} className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-          {/* Header */}
           <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
@@ -121,7 +120,6 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
             </button>
           </div>
 
-          {/* Form */}
           <div className="p-6 space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-gray-700">Número de días a pausar *</label>
@@ -158,7 +156,6 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
               />
             </div>
 
-            {/* Previsualización */}
             <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3.5 space-y-1.5">
               <div className="flex items-center gap-1.5 text-xs text-blue-900 font-bold">
                 <Calendar size={13} /> Previsualización del cambio
@@ -172,7 +169,6 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
             </div>
           </div>
 
-          {/* Footer */}
           <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
             <button
               onClick={onClose}

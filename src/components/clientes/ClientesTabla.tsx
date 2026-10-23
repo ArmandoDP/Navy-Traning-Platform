@@ -28,7 +28,7 @@ interface Props {
   onRefresh: () => void
   onRenovar: (ids: string[]) => void
   onMarcarPerdido: (ids: string[]) => void
-  onEliminarDefinitivo: (ids: string[]) => void // 👈 Prop agregada
+  onEliminarDefinitivo: (ids: string[]) => void
   onCambiarPaquete: (ids: string[]) => void
   onEditarCliente: (cliente: Cliente) => void
   onVerCliente: (cliente: Cliente) => void
@@ -90,7 +90,7 @@ export default function ClientesTabla({
   onRefresh, 
   onRenovar, 
   onMarcarPerdido, 
-  onEliminarDefinitivo, // 👈 Recibida aquí
+  onEliminarDefinitivo, 
   onCambiarPaquete, 
   onEditarCliente, 
   onVerCliente,
@@ -254,14 +254,13 @@ export default function ClientesTabla({
               onCambiarPaquete={() => onCambiarPaquete([...seleccion])}
               onRenovar={() => onRenovar([...seleccion])}
               onMarcarPerdido={() => { onMarcarPerdido([...seleccion]); setSeleccion(new Set()) }}
-              onEliminarDefinitivo={() => { onEliminarDefinitivo([...seleccion]); setSeleccion(new Set()) }} // 👈 Pasado aquí
+              onEliminarDefinitivo={() => { onEliminarDefinitivo([...seleccion]); setSeleccion(new Set()) }}
             />
           )}
         </div>
         <ClientesFilters filtros={filtros} onChange={setFiltro} onLimpiar={limpiar} />
       </div>
 
-      {/* Tabla */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs text-gray-500">
           <thead className="bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wide text-gray-400">

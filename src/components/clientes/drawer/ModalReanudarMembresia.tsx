@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { X, Snowflake, Calendar } from 'lucide-react'
+import { X, PlayCircle, Calendar } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -12,73 +12,94 @@ interface Props {
   onSuccess: () => void
 }
 
-const MOTIVOS = ['Solicitud del cliente', 'Lesión / Incapacidad médica', 'Viaje', 'Otro']
+type TipoReanudacion = 'original' | 'proporcional'
 
-export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onClose, onSuccess }: Props) {
-  const [dias, setDias] = useState<number>(10)
-  const [motivo, setMotivo] = useState<string>(MOTIVOS[0])
-  const [notas, setNotas] = useState<string>('')
+export default function ModalReanudarMembresia({ isOpen, membresia, clienteId, onClose, onSuccess }: Props) {
+  const [tipo, setTipo] = useState<TipoReanudacion>('original')
   const [loading, setLoading] = useState(false)
   const { staff } = useAuth()
 
   if (!isOpen || !membresia) return null
 
-  // Normalización limpia de la fecha de vencimiento base a medianoche (00:00:00)
-  const fechaFinBaseStr = membresia.fecha_fin ? membresia.fecha_fin.slice(0, 10) : new Date().toISOString().slice(0, 10)
-  const [year, month, day] = fechaFinBaseStr.split('-').map(Number)
+  // 1. OBTENER FECHAS
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+
+  // Fecha fin original (sin extensiones)
+  const fechaFinOriginalStr = membresia.fecha_fin_original 
+    ? membresia.fecha_fin_original.slice(0, 10) 
+    : (membresia.fecha_fin ? membresia.fecha_fin.slice(0, 10) : hoy.toISOString().slice(0, 10))
+
+  // Fecha en que arrancó la pausa
+  const fechaInicioPausaStr = membresia.fecha_inicio_pausa 
+    ? membresia.fecha_inicio_pausa.slice(0, 10) 
+    : hoy.toISOString().slice(0, 10)
+
+  // 2. CÁLCULO DE DÍAS TRANSCURRIDOS REALES
+  const [yP, mP, dP] = fechaInicioPausaStr.split('-').map(Number)
+  const fechaInicioPausa = new Date(yP, mP - 1, dP)
+  fechaInicioPausa.setHours(0, 0, 0, 0)
+
+  const diffTime = Math.max(0, hoy.getTime() - fechaInicioPausa.getTime())
+  const diasTranscurridosPausa = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+  // 3. CÁLCULO DE NUEVA FECHA DE VENCIMIENTO SEGÚN LA OPCIÓN
+  const [yO, mO, dO] = fechaFinOriginalStr.split('-').map(Number)
   
-  // Sumar los días de pausa sobre la fecha limpia
-  const fechaCalculada = new Date(year, month - 1, day)
-  fechaCalculada.setDate(fechaCalculada.getDate() + Number(dias || 0))
+  // Opción 1: Vigencia Original (restaura la fecha sin sumar nada)
+  const fechaOriginalObj = new Date(yO, mO - 1, dO)
+  const fechaOriginalCalculadaStr = fechaOriginalObj.toISOString().split('T')[0]
 
-  const nuevaFechaFinStr = fechaCalculada.toISOString().split('T')[0]
+  // Opción 2: Proporcional (Fecha Original + Días Reales que estuvo pausado)
+  const fechaProporcionalObj = new Date(yO, mO - 1, dO)
+  fechaProporcionalObj.setDate(fechaProporcionalObj.getDate() + diasTranscurridosPausa)
+  const fechaProporcionalCalculadaStr = fechaProporcionalObj.toISOString().split('T')[0]
 
-  const handlePausar = async () => {
-    if (dias <= 0) {
-      alert('Ingresa un número de días válido.')
-      return
-    }
+  // Fecha final que se guardará según la elección activa
+  const fechaFinFinalStr = tipo === 'original' ? fechaOriginalCalculadaStr : fechaProporcionalCalculadaStr
+
+  const handleReanudar = async () => {
     setLoading(true)
-
     try {
-      // 1. Registro de auditoría de la pausa
+      const fechaActualIso = new Date().toISOString()
+
+      // 1. Auditoría de la reanudación
       await supabase.from('membresia_pausas').insert({
         cliente_id: clienteId,
         membresia_id: membresia.id,
-        dias_pausados: dias,
-        fecha_inicio_pausa: new Date().toISOString(),
-        fecha_fin_original: fechaFinBaseStr,
-        nueva_fecha_fin: nuevaFechaFinStr,
-        motivo: `${motivo}${notas ? ` - ${notas}` : ''}`,
-        evento: 'PAUSA',
+        dias_pausados: tipo === 'proporcional' ? diasTranscurridosPausa : 0,
+        fecha_inicio_pausa: fechaInicioPausaStr,
+        fecha_fin_original: fechaFinOriginalStr,
+        nueva_fecha_fin: fechaFinFinalStr,
+        motivo: `Reanudación (${tipo === 'original' ? 'Restaurar vigencia original' : `Ajuste proporcional de ${diasTranscurridosPausa} días`})`,
+        evento: 'REANUDAR',
         creado_por: staff?.id || null,
       })
 
-      // 2. Actualizar el estado de la membresía en Supabase (Asignación directa de días de esta pausa)
+      // 2. Reactivar Membresía en Supabase
       await supabase
         .from('membresias')
         .update({
-          estatus: 'Pausada',
-          fecha_inicio_pausa: new Date().toISOString(),
-          dias_pausa_programados: dias,
-          fecha_fin_original: membresia.fecha_fin_original || fechaFinBaseStr,
-          fecha_fin: nuevaFechaFinStr,
+          estatus: 'Activa',
+          fecha_inicio_pausa: null,
+          dias_pausa_programados: 0,
+          fecha_fin: fechaFinFinalStr,
         })
         .eq('id', membresia.id)
 
-      // 3. Sincronizar la ficha del cliente en Supabase (CORREGIDO A 'Pausado')
+      // 3. Reactivar Ficha del Cliente en Supabase
       await supabase
         .from('clientes')
         .update({
-          estatus: 'Pausado',
-          fecha_vencimiento_membresia: nuevaFechaFinStr,
-          fecha_venc_plan: nuevaFechaFinStr,
+          estatus: 'Activo',
+          fecha_vencimiento_membresia: fechaFinFinalStr,
+          fecha_venc_plan: fechaFinFinalStr,
         })
         .eq('id', clienteId)
 
-      // 4. Notificar al backend según el canal de pago (Stripe, Wellhub, TotalPass)
+      // 4. Notificar Backend (Stripe / Canales)
       try {
-        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/membresias/pausar-canal`, {
+        await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/membresias/reanudar-canal`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -86,19 +107,20 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
             cliente_id: clienteId,
             canal: membresia.origen || 'Navy',
             stripe_subscription_id: membresia.stripe_subscription_id,
-            dias_pausa: dias,
-            nueva_fecha_fin: nuevaFechaFinStr,
+            tipo_reanudacion: tipo,
+            dias_reales_pausa: diasTranscurridosPausa,
+            nueva_fecha_fin: fechaFinFinalStr,
           }),
         })
       } catch (e) {
-        console.warn('Error notificando la pausa al backend multicanal:', e)
+        console.warn('Error notificando reanudación al backend:', e)
       }
 
       setLoading(false)
       onSuccess()
       onClose()
     } catch (error: any) {
-      alert('Error al pausar la membresía: ' + error.message)
+      alert('Error al reanudar la membresía: ' + error.message)
       setLoading(false)
     }
   }
@@ -111,64 +133,70 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                <Snowflake size={18} />
+              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                <PlayCircle size={18} />
               </div>
-              <h2 className="text-base font-black text-gray-900">Pausar Membresía</h2>
+              <h2 className="text-base font-black text-gray-900">Reanudar Membresía</h2>
             </div>
             <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 transition">
               <X size={16} />
             </button>
           </div>
 
-          {/* Form */}
+          {/* Form / Opción Selección */}
           <div className="p-6 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-700">Número de días a pausar *</label>
-              <input
-                type="number"
-                min="1"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400 bg-gray-50 font-bold"
-                value={dias}
-                onChange={e => setDias(Math.max(1, parseInt(e.target.value) || 0))}
-              />
-            </div>
+            <p className="text-xs text-gray-500 font-medium">
+              Selecciona cómo deseas ajustar el vencimiento al reactivar al cliente:
+            </p>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-700">Motivo de la pausa</label>
-              <select
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400 bg-gray-50 cursor-pointer"
-                value={motivo}
-                onChange={e => setMotivo(e.target.value)}
+            <div className="space-y-3">
+              {/* OPCIÓN 1: Restaurar vigencia original */}
+              <label
+                onClick={() => setTipo('original')}
+                className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
+                  tipo === 'original'
+                    ? 'border-gray-900 bg-gray-50/80 shadow-sm'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
               >
-                {MOTIVOS.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
+                <input
+                  type="radio"
+                  name="tipo_reanudacion"
+                  checked={tipo === 'original'}
+                  onChange={() => setTipo('original')}
+                  className="mt-1 text-gray-900 focus:ring-gray-900 cursor-pointer"
+                />
+                <div>
+                  <p className="text-xs font-bold text-gray-900">Restaurar vigencia original</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Establece el vencimiento exacto del paquete (<span className="font-semibold text-gray-700">{fechaOriginalCalculadaStr}</span>).
+                  </p>
+                </div>
+              </label>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-700">Notas / Detalles opcionales</label>
-              <textarea
-                rows={2}
-                placeholder="Añade notas o aclaraciones de la pausa..."
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400 bg-gray-50 resize-none"
-                value={notas}
-                onChange={e => setNotas(e.target.value)}
-              />
-            </div>
-
-            {/* Previsualización */}
-            <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3.5 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-blue-900 font-bold">
-                <Calendar size={13} /> Previsualización del cambio
-              </div>
-              <p className="text-xs text-gray-600">
-                Vencimiento actual: <span className="font-semibold text-gray-800">{fechaFinBaseStr}</span>
-              </p>
-              <p className="text-xs text-blue-700 font-bold">
-                Nuevo vencimiento recalculado: <span className="underline">{nuevaFechaFinStr}</span> (+{dias} días)
-              </p>
+              {/* OPCIÓN 2: Ajuste proporcional por pausa */}
+              <label
+                onClick={() => setTipo('proporcional')}
+                className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
+                  tipo === 'proporcional'
+                    ? 'border-gray-900 bg-gray-50/80 shadow-sm'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="tipo_reanudacion"
+                  checked={tipo === 'proporcional'}
+                  onChange={() => setTipo('proporcional')}
+                  className="mt-1 text-gray-900 focus:ring-gray-900 cursor-pointer"
+                />
+                <div>
+                  <p className="text-xs font-bold text-gray-900">Ajuste proporcional por pausa</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Suma únicamente los <span className="font-bold text-indigo-600">{diasTranscurridosPausa} días</span> transcurridos en pausa. Nueva fecha: <span className="font-bold text-indigo-600">{fechaProporcionalCalculadaStr}</span>.
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -176,16 +204,16 @@ export default function ModalPausarMembresia({ isOpen, membresia, clienteId, onC
           <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition"
+              className="flex-1 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50 transition"
             >
               Cancelar
             </button>
             <button
-              onClick={handlePausar}
-              disabled={loading || dias <= 0}
-              className="flex-1 py-2.5 bg-gray-900 rounded-xl text-sm font-bold text-white hover:bg-gray-800 disabled:opacity-40 transition"
+              onClick={handleReanudar}
+              disabled={loading}
+              className="flex-1 py-2.5 bg-gray-900 rounded-xl text-xs font-bold text-white hover:bg-gray-800 disabled:opacity-40 transition"
             >
-              {loading ? 'Guardando...' : 'Confirmar Pausa'}
+              {loading ? 'Reanudando...' : 'Reanudar Plan'}
             </button>
           </div>
         </div>
