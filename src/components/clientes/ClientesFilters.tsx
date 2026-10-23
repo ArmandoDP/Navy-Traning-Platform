@@ -1,5 +1,7 @@
 'use client'
-import { RotateCcw, Search } from 'lucide-react'
+import { useState } from 'react'
+import { RotateCcw, Search, HelpCircle } from 'lucide-react'
+import { ESTADOS, LeyendaEstados } from './EstadoCliente'
 
 interface Props {
   filtros: { 
@@ -38,7 +40,7 @@ function FiltroInput({ placeholder, value, onChange, icon }: { placeholder: stri
 }
 
 function FiltroSelect({ placeholder, value, options, onChange }: {
-  placeholder: string; value: string; options: string[]; onChange: (v: string) => void
+  placeholder: string; value: string; options: (string | { value: string; label: string })[]; onChange: (v: string) => void
 }) {
   return (
     <div className="relative">
@@ -48,7 +50,9 @@ function FiltroSelect({ placeholder, value, options, onChange }: {
         onChange={e => onChange(e.target.value)}
       >
         <option value="">{placeholder}</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
+        {options.map(o => typeof o === 'string'
+          ? <option key={o} value={o}>{o}</option>
+          : <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[10px]">▾</span>
     </div>
@@ -57,6 +61,7 @@ function FiltroSelect({ placeholder, value, options, onChange }: {
 
 export default function ClientesFilters({ filtros, onChange, onLimpiar }: Props) {
   const hay = Object.values(filtros).some(v => v !== '')
+  const [verLeyenda, setVerLeyenda] = useState(false)
 
   return (
     <div className="space-y-2">
@@ -112,12 +117,16 @@ export default function ClientesFilters({ filtros, onChange, onLimpiar }: Props)
           />
         </div>
 
-        <FiltroSelect 
-          placeholder="Estado" 
+        <FiltroSelect
+          placeholder="Estado"
           value={filtros.estado}
-          options={['Activo','Expirado','Pago fallido','Perdido','Inactivo','Prospecto','Vencido']}
-          onChange={v => onChange('estado', v)} 
+          options={ESTADOS.map(e => ({ value: e.key, label: `${e.emoji} ${e.label}` }))}
+          onChange={v => onChange('estado', v)}
         />
+        <button onClick={() => setVerLeyenda(v => !v)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition px-2 py-1.5 rounded-lg hover:bg-gray-100">
+          <HelpCircle size={12}/> ¿Qué significa cada estado?
+        </button>
         
         {hay && (
           <button 
@@ -129,6 +138,7 @@ export default function ClientesFilters({ filtros, onChange, onLimpiar }: Props)
         )}
       </div>
 
+      {verLeyenda && <LeyendaEstados />}
     </div>
   )
 }

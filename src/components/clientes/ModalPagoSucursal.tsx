@@ -180,7 +180,7 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
     if (errMemb) throw new Error('Error al crear la membresía')
 
     await supabase.from('clientes').update({
-      plan: paqueteSel?.nombre, paquete_id: paqueteId, fecha_venc_plan: fechaFin, fecha_vencimiento_memb: fechaFin,
+      plan: paqueteSel?.nombre, paquete_id: paqueteId, fecha_venc_plan: fechaFin, fecha_vencimiento_membresia: fechaFin,
     }).eq('id', cliente.id)
 
     await logActividad({

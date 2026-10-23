@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, ChevronRight as ChevronR, Wifi, Smartphone, Users, TrendingUp, Clock, Calendar, Star } from 'lucide-react'
-import { BadgeEstatus, BadgeSucursal, AsistenciaBar } from './ClientesBadges'
+import { BadgeSucursal, AsistenciaBar } from './ClientesBadges'
 import ClientesFilters from './ClientesFilters'
+import { BadgeEstado, estadoDe, ESTADOS } from './EstadoCliente'
 import ClientesBulkActions from './ClientesBulkActions'
 
 interface Cliente {
@@ -21,6 +22,7 @@ interface Cliente {
   membresias?: any[]
   clases_mes?: number
   ultima_visita?: string
+  tarjeta_guardada?: boolean; tarjeta_marca?: string; tarjeta_ultimos4?: string
 }
 
 interface Props {
@@ -77,11 +79,12 @@ function getSortVal(c: Cliente, col: string) {
   if (col === 'sucursal') return c.sucursales?.nombre || ''
   if (col === 'plan') return c.plan || ''
   if (col === 'fecha') return c.created_at || ''
-  if (col === 'estado') return c.estatus || ''
+  if (col === 'estado') return ESTADOS.findIndex(e => e.key === estadoDe(c))
   if (col === 'asistencia') return c.asistencia_pct || 0
   if (col === 'clases_mes') return c.clases_mes || 0
   if (col === 'ultima_visita') return c.ultima_visita || ''
   if (col === 'canal') return getCanal(c)
+  if (col === 'tarjeta') return c.tarjeta_guardada ? 1 : 0
   return ''
 }
 
@@ -111,6 +114,9 @@ export default function ClientesTabla({
   })
 
   const hoy = new Date()
+  // Días de calendario entre una fecha y hoy, en hora de CDMX (negativo = en el futuro)
+  const diaCDMX = (f: string | Date) => new Date(new Date(f).getTime() - 6 * 3600 * 1000).toISOString().slice(0, 10)
+  const diasDesde = (f: string) => Math.round((Date.parse(diaCDMX(hoy)) - Date.parse(diaCDMX(f))) / 86400000)
   hoy.setHours(0, 0, 0, 0)
 
   const porTab = clientes.filter(c => {
@@ -145,7 +151,7 @@ export default function ClientesTabla({
       haceMatchBusqueda && evalSucursal && coincideRangoFecha &&
       (!filtros.plan || plan.includes(filtros.plan.toLowerCase())) &&
       (!filtros.canal || getCanal(c) === filtros.canal) &&
-      (!filtros.estado || c.estatus === filtros.estado)
+      (!filtros.estado || estadoDe(c) === filtros.estado)
     )
   })
 
@@ -182,7 +188,7 @@ export default function ClientesTabla({
 
   const antiguedad = (fecha: string) => {
     if (!fecha) return { label: '—', color: 'text-gray-300' }
-    const dias = Math.floor((hoy.getTime() - new Date(fecha).getTime()) / (1000 * 3600 * 24))
+    const dias = diasDesde(fecha)
     if (dias < 1) return { label: 'Hoy', color: 'text-emerald-600 font-bold' }
     if (dias < 7) return { label: `${dias} días`, color: 'text-emerald-500' }
     if (dias < 30) return { label: `${Math.floor(dias/7)} semanas`, color: 'text-blue-500' }
@@ -193,7 +199,8 @@ export default function ClientesTabla({
 
   const ultimaVisita = (fecha?: string) => {
     if (!fecha) return { label: 'Sin visitas aún', color: 'text-gray-300 italic' }
-    const dias = Math.floor((hoy.getTime() - new Date(fecha).getTime()) / (1000 * 3600 * 24))
+    const dias = diasDesde(fecha)
+    if (dias < 0) return { label: `📅 Tiene clase el ${new Date(fecha).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', timeZone: 'America/Mexico_City' })}`, color: 'text-indigo-500' }
     if (dias === 0) return { label: '🟢 Hoy', color: 'text-emerald-600 font-bold' }
     if (dias === 1) return { label: '🟡 Ayer', color: 'text-emerald-500 font-semibold' }
     if (dias < 7) return { label: `Hace ${dias} días`, color: 'text-blue-500' }
@@ -265,45 +272,49 @@ export default function ClientesTabla({
         <table className="w-full text-left text-xs text-gray-500">
           <thead className="bg-gray-50 border-b border-gray-100 text-[11px] font-bold uppercase tracking-wide text-gray-400">
             <tr>
-              <th className="px-4 py-3">
+              <th className="px-2.5 py-2.5 xl:px-4 xl:py-3">
                 <input type="checkbox" checked={seleccion.size === paginados.length && paginados.length > 0}
                   onChange={toggleAll} className="rounded border-gray-300 text-indigo-600 cursor-pointer" />
               </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('nombre')}>Cliente {sortIcon('nombre')}</th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('sucursal')}>Sucursal {sortIcon('sucursal')}</th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('plan')}>Plan {sortIcon('plan')}</th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('canal')}>Canal {sortIcon('canal')}</th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('fecha')}>
+              <th className="px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('nombre')}>Cliente {sortIcon('nombre')}</th>
+              <th className="px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('sucursal')}>Sucursal {sortIcon('sucursal')}</th>
+              <th className="px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('plan')}>Plan {sortIcon('plan')}</th>
+              <th className="hidden xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('canal')}>Canal {sortIcon('canal')}</th>
+              <th className="hidden 2xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('fecha')}>
                 <div className="flex items-center gap-1"><Calendar size={11}/> Alta {sortIcon('fecha')}</div>
               </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('estado')}>Estado {sortIcon('estado')}</th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('asistencia')}>
+              <th className="px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('estado')}>Estado {sortIcon('estado')}</th>
+              <th className="px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700 whitespace-nowrap" onClick={() => toggleOrden('tarjeta')}
+                title="Quién ya guardó su tarjeta para pagar y renovar desde la app">
+                💳 Tarjeta <span className="normal-case font-semibold text-gray-300">· {filtrados.length ? Math.round(filtrados.filter(c => c.tarjeta_guardada).length * 100 / filtrados.length) : 0}%</span> {sortIcon('tarjeta')}
+              </th>
+              <th className="hidden xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('asistencia')}>
                 <div className="flex items-center gap-1"><TrendingUp size={11}/> Asistencia {sortIcon('asistencia')}</div>
               </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('clases_mes')}>
+              <th className="hidden lg:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('clases_mes')}>
                 <div className="flex items-center gap-1"><Star size={11}/> Clases mes {sortIcon('clases_mes')}</div>
               </th>
-              <th className="px-4 py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('ultima_visita')}>
+              <th className="hidden md:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3 cursor-pointer hover:text-gray-700" onClick={() => toggleOrden('ultima_visita')}>
                 <div className="flex items-center gap-1"><Clock size={11}/> Última visita {sortIcon('ultima_visita')}</div>
               </th>
-              <th className="px-4 py-3">Antigüedad</th>
-              <th className="px-4 py-3 w-8"/>
+              <th className="hidden 2xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3">Antigüedad</th>
+              <th className="px-2.5 py-2.5 xl:px-4 xl:py-3 w-8"/>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {paginados.length === 0 ? (
-              <tr><td colSpan={12} className="px-4 py-12 text-center text-gray-400 italic text-sm">No hay clientes</td></tr>
+              <tr><td colSpan={13} className="px-4 py-12 text-center text-gray-400 italic text-sm">No hay clientes</td></tr>
             ) : paginados.map(c => {
               const antData = antiguedad(c.fecha_alta_original || c.created_at)
               const visitData = ultimaVisita(c.ultima_visita)
               const clasesData = clasesMesLabel(c.clases_mes)
               return (
                 <tr key={c.id} className={`transition hover:bg-gray-50/70 ${seleccion.has(c.id) ? 'bg-indigo-50/40' : ''}`}>
-                  <td className="px-4 py-3">
+                  <td className="px-2.5 py-2.5 xl:px-4 xl:py-3">
                     <input type="checkbox" checked={seleccion.has(c.id)} onChange={() => toggleOne(c.id)}
                       className="rounded border-gray-300 text-indigo-600 cursor-pointer" />
                   </td>
-                  <td className="px-4 py-3 min-w-[200px]">
+                  <td className="px-2.5 py-2.5 xl:px-4 xl:py-3 min-w-[180px] max-w-[260px]">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center text-xs font-black text-white flex-shrink-0">
                         {c.nombre_completo?.charAt(0) || '?'}
@@ -322,28 +333,39 @@ export default function ClientesTabla({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    {c.sucursales?.nombre ? <BadgeSucursal nombre={c.sucursales.nombre} /> : <span className="text-xs text-gray-300">—</span>}
+                  <td className="px-2.5 py-2.5 xl:px-4 xl:py-3 whitespace-nowrap">
+                    {c.sucursales?.nombre ? <span className="inline-block whitespace-nowrap"><BadgeSucursal nombre={c.sucursales.nombre} /></span> : <span className="text-xs text-gray-300">—</span>}
                   </td>
-                  <td className="px-4 py-3 min-w-[160px]">
+                  <td className="px-2.5 py-2.5 xl:px-4 xl:py-3 min-w-[130px] max-w-[200px]">
                     {c.plan ? <p className="text-xs font-bold text-gray-800 truncate">{c.plan}</p> : <p className="text-xs text-gray-300 italic">Sin paquete aún</p>}
                     <div className="mt-0.5">{vencimientoLabel(c)}</div>
                   </td>
-                  <td className="px-4 py-3"><BadgeCanal canal={getCanal(c)} /></td>
-                  <td className="px-4 py-3 min-w-[90px]">
+                  <td className="hidden xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3"><BadgeCanal canal={getCanal(c)} /></td>
+                  <td className="hidden 2xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3 min-w-[90px]">
                     <p className="text-xs text-gray-700">
                       {c.created_at || c.fecha_alta_original ? new Date(c.fecha_alta_original || c.created_at).toLocaleDateString('es-MX', { day:'2-digit', month:'short', year:'2-digit' }) : '—'}
                     </p>
                   </td>
-                  <td className="px-4 py-3"><BadgeEstatus estatus={c.perdido ? 'Perdido' : c.estatus} /></td>
-                  <td className="px-4 py-3"><AsistenciaBar pct={c.asistencia_pct || 0} /></td>
-                  <td className="px-4 py-3"><span className={`text-xs ${clasesData.color}`}>{clasesData.label}</span></td>
-                  <td className="px-4 py-3 min-w-[130px]"><span className={`text-xs ${visitData.color}`}>{visitData.label}</span></td>
-                  <td className="px-4 py-3"><span className={`text-xs ${antData.color}`}>{antData.label}</span></td>
-                  <td className="px-4 py-3">
+                  <td className="px-2.5 py-2.5 xl:px-4 xl:py-3"><BadgeEstado cliente={c} /></td>
+                  <td className="px-2.5 py-2.5 xl:px-4 xl:py-3 whitespace-nowrap">
+                    {c.tarjeta_guardada ? (
+                      <span title={`${c.tarjeta_marca || 'Tarjeta'} terminación ${c.tarjeta_ultimos4 || ''}`}
+                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-gray-900 text-white text-[10px] font-bold">
+                        <span className="tracking-widest text-[8px] opacity-70">••••</span>{c.tarjeta_ultimos4 || '????'}
+                      </span>
+                    ) : (
+                      <span title="Todavía no guarda su tarjeta en la app" className="text-[10px] text-gray-300 italic">Sin tarjeta</span>
+                    )}
+                    {c.tarjeta_guardada && c.tarjeta_marca && <p className="text-[9px] text-gray-400 mt-0.5 truncate max-w-[110px]">{c.tarjeta_marca}</p>}
+                  </td>
+                  <td className="hidden xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3"><AsistenciaBar pct={c.asistencia_pct || 0} /></td>
+                  <td className="hidden lg:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3"><span className={`text-xs ${clasesData.color}`}>{clasesData.label}</span></td>
+                  <td className="hidden md:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3 min-w-[120px]"><span className={`text-xs ${visitData.color}`}>{visitData.label}</span></td>
+                  <td className="hidden 2xl:table-cell px-2.5 py-2.5 xl:px-4 xl:py-3"><span className={`text-xs ${antData.color}`}>{antData.label}</span></td>
+                  <td className="px-2.5 py-2.5 xl:px-4 xl:py-3">
                     <div className="flex items-center gap-1">
                       <button onClick={() => onEditarCliente(c)}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition text-xs font-bold">
+                        className="hidden lg:inline-block p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition text-xs font-bold">
                         Editar
                       </button>
                       <button onClick={() => onVerCliente(c)}
