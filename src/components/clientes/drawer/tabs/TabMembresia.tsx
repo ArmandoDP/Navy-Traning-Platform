@@ -89,11 +89,16 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const [toast,         setToast]         = useState<string | null>(null)
   const [modalPago,     setModalPago]     = useState(false)
   const [modalPaquete,  setModalPaquete]  = useState(false)
+  const [modalMigracion, setModalMigracion] = useState(false)
   const [pausarOpen,    setPausarOpen]    = useState(false)
   const [reanudarOpen,  setReanudarOpen]  = useState(false)
   const [paquetes,      setPaquetes]      = useState<any[]>([])
   const [paqueteSel,    setPaqueteSel]    = useState('')
+  const [paqueteMigra,  setPaqueteMigra]  = useState('')
+  const [fechaInicioMigracion, setFechaInicioMigracion] = useState(hoyCDMX())
+  const [fechaFinMigracion,    setFechaFinMigracion]    = useState(hoyCDMX())
   const [asignando,     setAsignando]     = useState(false)
+  const [migrando,      setMigrando]      = useState(false)
   const [loadingPaq,    setLoadingPaq]    = useState(false)
   const [cancelarRenov, setCancelarRenov] = useState(false)
   const [membresias,    setMembresias]    = useState<any[]>([])
@@ -169,6 +174,49 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       recargarTodo()
     } catch (e: any) { setToast(e.message) }
     setCambiandoRenov(false)
+  }
+
+  // ── Abrir modal de migración ──
+  const abrirMigracion = async () => {
+    setLoadingPaq(true); setModalMigracion(true)
+    let q = supabase.from('paquetes').select('id, nombre, vigencia_dias, paquete_precios!inner(sucursal_id, activo)')
+      .eq('estatus', 'Activo').eq('paquete_precios.activo', true).order('nombre')
+    if (cliente.sucursal_id) q = q.eq('paquete_precios.sucursal_id', cliente.sucursal_id)
+    const { data } = await q
+    setPaquetes(data || []); setLoadingPaq(false)
+  }
+
+  const ejecutarMigracion = async () => {
+    const paquete = paquetes.find(p => p.id === paqueteMigra)
+    if (!paquete || !fechaInicioMigracion || !fechaFinMigracion) return
+    setMigrando(true)
+
+    await supabase.from('membresias').insert([{
+      cliente_id:    cliente.id,
+      paquete_id:    paqueteMigra,
+      fecha_inicio:  fechaInicioMigracion,
+      fecha_fin:     fechaFinMigracion,
+      estatus:       fechaFinMigracion >= hoyCDMX() ? 'Activa' : 'Vencida',
+      precio_pagado: 0,
+      origen:        'Migración',
+    }])
+
+    await logActividad({
+      tipo:        'membresia_migrada',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} migró la membresía "${paquete.nombre}" a "${cliente.nombre_completo}"`,
+      tabla:       'membresias', 
+      accion:      'INSERT',
+      metadata:    { cliente_id: cliente.id, paquete: paquete.nombre, inicio: fechaInicioMigracion, fin: fechaFinMigracion },
+      sucursal_id: cliente.sucursal_id || null, 
+      staff_id:    staff?.id,
+    })
+
+    await sincronizar()
+    setModalMigracion(false)
+    setPaqueteMigra('')
+    setMigrando(false)
+    recargarTodo()
+    setToast('Membresía migrada correctamente ✓')
   }
 
   // ── Regalar un paquete (cortesía) ──
@@ -455,6 +503,9 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
           <Accion tono="verde" icon={<Gift size={14} />} titulo="Regalar un paquete" desc="Cortesía sin costo, con correo al cliente"
             onClick={abrirCortesia} bloqueado={!esDireccion ? 'Solo dirección' : undefined} />
           
+          <Accion tono="indigo" icon={<Layers size={14} />} titulo="Migrar membresía" desc="Registrar plan anterior sin cobro ni cargos"
+            onClick={abrirMigracion} bloqueado={!esDireccion ? 'Solo dirección' : undefined} />
+          
           {actual?.estatus === 'Pausada' ? (
             <Accion tono="verde" icon={<Play size={14} />} titulo="Reanudar membresía" desc="Descongelar plan y ajustar fecha de vencimiento"
               onClick={() => setReanudarOpen(true)} bloqueado={!esDireccion ? 'Solo dirección' : undefined} />
@@ -591,6 +642,74 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
               <button onClick={asignarCortesia} disabled={!paqueteSel || asignando}
                 className="flex-1 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-gray-700 disabled:opacity-40">
                 {asignando ? 'Regalando…' : 'Regalar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal de Migración de Membresía ── */}
+      {modalMigracion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div onClick={() => setModalMigracion(false)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><Layers size={18} /></div>
+              <div>
+                <h3 className="text-lg font-black text-gray-900">Migrar membresía</h3>
+                <p className="text-xs text-gray-400">Registra un plan anterior o activo sin cobro ni cargos en tarjeta.</p>
+              </div>
+            </div>
+
+            {loadingPaq ? <div className="py-8 text-center text-gray-400 text-sm">Cargando paquetes...</div> : (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 mb-1 block">Paquete</label>
+                  <select value={paqueteMigra} onChange={e => {
+                      const pSel = paquetes.find(p => p.id === e.target.value)
+                      setPaqueteMigra(e.target.value)
+                      if (pSel && fechaInicioMigracion) {
+                        const d = new Date(`${fechaInicioMigracion}T12:00:00`)
+                        d.setDate(d.getDate() + pSel.vigencia_dias)
+                        setFechaFinMigracion(d.toISOString().split('T')[0])
+                      }
+                    }}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-gray-400 bg-gray-50">
+                    <option value="">Elige el paquete</option>
+                    {paquetes.map(p => <option key={p.id} value={p.id}>{p.nombre} — {p.vigencia_dias} días</option>)}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-500 mb-1 block">Fecha inicio</label>
+                    <input type="date" value={fechaInicioMigracion} onChange={e => {
+                        const nuevaFecha = e.target.value
+                        setFechaInicioMigracion(nuevaFecha)
+                        const pSel = paquetes.find(p => p.id === paqueteMigra)
+                        if (pSel && nuevaFecha) {
+                          const d = new Date(`${nuevaFecha}T12:00:00`)
+                          d.setDate(d.getDate() + pSel.vigencia_dias)
+                          setFechaFinMigracion(d.toISOString().split('T')[0])
+                        }
+                      }}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none bg-gray-50" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-500 mb-1 block">Fecha fin</label>
+                    <input type="date" value={fechaFinMigracion} onChange={e => setFechaFinMigracion(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none bg-gray-50" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setModalMigracion(false)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50">Cancelar</button>
+              <button onClick={ejecutarMigracion} disabled={!paqueteMigra || migrando}
+                className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 disabled:opacity-40">
+                {migrando ? 'Migrando…' : 'Guardar migración'}
               </button>
             </div>
           </div>

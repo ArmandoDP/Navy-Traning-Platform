@@ -1,5 +1,13 @@
 // ─── Badge Estatus ────────────────────────────────────────────────────────────
 export function BadgeEstatus({ estatus }: { estatus: string }) {
+  const estatusLimpio = String(estatus || '').trim().toLowerCase()
+  if (estatusLimpio === 'pausado' || estatusLimpio === 'pausada') {
+    return (
+      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap bg-sky-100 text-sky-700">
+        ❄️ Pausado
+      </span>
+    )
+  }
   const styles: Record<string, string> = {
     'Activo':         'bg-green-100 text-green-700',
     'Expirado':       'bg-red-100 text-red-600',

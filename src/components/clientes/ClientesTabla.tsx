@@ -132,16 +132,17 @@ export default function ClientesTabla({
   })
 
   const filtrados = porTab.filter(c => {
-    const q = (filtros.nombre || '').toLowerCase().trim()
-    const nombreCompleto = `${c.nombre_completo || ''} ${(c as any).nombre || ''} ${(c as any).primer_apellido || ''} ${(c as any).segundo_apellido || ''}`.toLowerCase()
-    const email = (c.email || '').toLowerCase()
-    const telefono = ((c as any).telefono || '').toLowerCase()
-    const sucursal = (c.sucursales?.nombre || '').toLowerCase()
-    const plan = (c.plan || '').toLowerCase()
+    // 🧹 Limpiamos espacios múltiples y recortamos extremos tanto en la consulta como en el registro del cliente
+    const q = (filtros.nombre || '').toLowerCase().trim().replace(/\s+/g, ' ')
+    const nombreCompleto = `${c.nombre_completo || ''} ${(c as any).nombre || ''} ${(c as any).primer_apellido || ''} ${(c as any).segundo_apellido || ''}`.toLowerCase().replace(/\s+/g, ' ')
+    const email = (c.email || '').toLowerCase().trim()
+    const telefono = ((c as any).telefono || '').toLowerCase().trim()
+    const sucursal = (c.sucursales?.nombre || '').toLowerCase().trim()
+    const plan = (c.plan || '').toLowerCase().trim()
     const fechaAlta = (c.fecha_alta_original || c.created_at || '').slice(0, 10)
 
     const haceMatchBusqueda = !q || nombreCompleto.includes(q) || email.includes(q) || telefono.includes(q) || sucursal.includes(q)
-    const evalSucursal = q ? true : (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase()))
+    const evalSucursal = q ? true : (!filtros.sucursal || sucursal.includes(filtros.sucursal.toLowerCase().trim()))
 
     let coincideRangoFecha = true
     if (filtros.fechaInicio && fechaAlta < filtros.fechaInicio) coincideRangoFecha = false
@@ -149,7 +150,7 @@ export default function ClientesTabla({
 
     return (
       haceMatchBusqueda && evalSucursal && coincideRangoFecha &&
-      (!filtros.plan || plan.includes(filtros.plan.toLowerCase())) &&
+      (!filtros.plan || plan.includes(filtros.plan.toLowerCase().trim())) &&
       (!filtros.canal || getCanal(c) === filtros.canal) &&
       (!filtros.estado || estadoDe(c) === filtros.estado)
     )

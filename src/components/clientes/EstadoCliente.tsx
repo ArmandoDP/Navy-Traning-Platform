@@ -1,7 +1,7 @@
 // src/components/clientes/estadoCliente.tsx
 // Qué significa cada estado de cliente, con nombre claro, color y explicación. Un solo lugar para todo el CRM.
 
-export type EstadoKey = 'activo' | 'por_activar' | 'por_vencer' | 'vencido' | 'inactivo' | 'prospecto' | 'plataforma' | 'baja'
+export type EstadoKey = 'activo' | 'por_activar' | 'por_vencer' | 'vencido' | 'inactivo' | 'prospecto' | 'plataforma' | 'baja' | 'pausado'
 
 export const ESTADOS: { key: EstadoKey; label: string; emoji: string; clases: string; que_es: string; que_hacer: string }[] = [
   { key: 'activo',      label: 'Con plan',                 emoji: '🟢', clases: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -14,6 +14,8 @@ export const ESTADOS: { key: EstadoKey; label: string; emoji: string; clases: st
     que_es: 'Tuvo un plan y se le acabó hace menos de 2 meses.', que_hacer: 'Recuperarlo: es el más fácil de renovar.' },
   { key: 'inactivo',    label: 'Ya no viene',              emoji: '⚪', clases: 'bg-gray-50 text-gray-500 border-gray-200',
     que_es: 'Su último plan terminó hace más de 2 meses.', que_hacer: 'Campañas de regreso, sin prisa.' },
+  { key: 'pausado',     label:'Membresia Pausada',           emoji:'❄️', clases: 'bg-sky-50 text-sky-700 border-sky-200',
+    que_es: 'El cliente solicitó una pausa temporal en su membresía.', que_hacer: 'Esperar a que termine su pausa o reanudar membresia' },
   { key: 'prospecto',   label: 'Nunca ha comprado',        emoji: '🟣', clases: 'bg-violet-50 text-violet-700 border-violet-200',
     que_es: 'Se registró, tomó clase muestra o una clase suelta, pero nunca ha comprado un plan.', que_hacer: 'Convertirlo a su primer plan.' },
   { key: 'plataforma',  label: 'Wellhub / TotalPass',      emoji: '⚫', clases: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -29,6 +31,9 @@ const hoyCDMX = () => new Date(Date.now() - 6 * 3600 * 1000).toISOString().slice
 export function estadoDe(c: any): EstadoKey {
   if (c?.perdido) return 'baja'
   const e = String(c?.estatus || '').toLowerCase()
+
+  if (e === 'pausado' || e === 'pausada') return 'pausado'
+
   if (e === 'activo') {
     const membs: any[] = c?.membresias || []
     const pendiente = !c?.fecha_venc_plan ||

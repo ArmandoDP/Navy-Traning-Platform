@@ -63,7 +63,8 @@ export default function ClientesPage() {
 
       if (tableName === 'clientes') {
         q = q.order('created_at', { ascending: false })
-        if (sucursalFiltro && sucursalFiltro !== 'global') {
+        const filtroLimpio = sucursalFiltro ? String(sucursalFiltro).trim().toLowerCase(): ''
+        if (sucursalFiltro && sucursalFiltro !== 'global' && filtroLimpio !== 'null' && filtroLimpio !== 'undefined') {
           q = q.eq('sucursal_id', sucursalFiltro)
         }
       }
