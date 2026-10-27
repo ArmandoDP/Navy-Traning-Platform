@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { X, Search, User, Wallet, Loader2 } from 'lucide-react'
 import { logActividad } from '@/lib/log-actividad'
@@ -39,6 +39,17 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
   const [procesando,      setProcesando]      = useState(false)
   const [error,           setError]           = useState('')
   const { staff } = useAuth()
+
+  // Promociones de The Galley: precio de cada producto (cambia si el cliente es nuevo o staff)
+  const [promos, setPromos] = useState<Record<string, any>>({})
+  useEffect(() => {
+    api('/promociones/precios', 'POST', { cliente_id: clienteSel?.id || null, sucursal_id: sucursalId,
+      items: carrito.map(i => ({ tipo: 'producto', id: i.id, precio: i.precio_sucursal })) })
+      .then(r => setPromos(r.precios || {})).catch(() => setPromos({}))
+  }, [clienteSel?.id])
+  const precioDe = (i: any) => Number(promos[i.id]?.precio_final ?? i.precio_sucursal)
+  const totalFinal = carrito.reduce((t, i) => t + precioDe(i) * i.cantidad, 0)
+  const ahorro = total - totalFinal
 
   const buscarCliente = async (q: string) => {
     setBusquedaCliente(q)
@@ -92,7 +103,7 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
     const { data: venta } = await supabase.from('ventas').insert({
       sucursal_id:      sucursalId,
       cliente_id:       clienteSel?.id || null,
-      total,
+      total:            totalFinal,
       metodo_pago:      metodoPago,
       numero_operacion: numeroOperacion || null,
       estatus:          metodoPago === 'tarjeta' ? 'Pendiente' : 'Completada',
@@ -101,14 +112,19 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
 
     await supabase.from('venta_items').insert(carrito.map(i => ({
       venta_id: venta.id, producto_id: i.id, cantidad: i.cantidad,
-      precio_unitario: i.precio_sucursal, subtotal: i.precio_sucursal * i.cantidad,
+      precio_unitario: precioDe(i), subtotal: precioDe(i) * i.cantidad,
     })))
+    if (Object.keys(promos).length) {
+      api('/promociones/uso-venta', 'POST', { venta_id: venta.id, cliente_id: clienteSel?.id || null,
+        items: carrito.filter(i => promos[i.id]).map(i => ({ producto_id: i.id, promocion_id: promos[i.id].promocion_id,
+          precio_original: i.precio_sucursal * i.cantidad, precio_final: precioDe(i) * i.cantidad })) }).catch(() => {})
+    }
 
     // 2. Cobro a su tarjeta guardada (manda comprobante y notificación al cliente)
     if (metodoPago === 'tarjeta') {
       try {
         await api('/stripe/cobrar-tarjeta', 'POST', {
-          cliente_id: clienteSel.id, monto: total, sucursal_id: sucursalId, venta_id: venta.id,
+          cliente_id: clienteSel.id, monto: totalFinal, sucursal_id: sucursalId, venta_id: venta.id,
           concepto: `The Galley · ${carrito.map(i => `${i.nombre} ×${i.cantidad}`).join(', ')}`.slice(0, 200),
         })
         await supabase.from('ventas').update({ estatus: 'Completada' }).eq('id', venta.id)
@@ -129,18 +145,18 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ventaId: venta.id, email: clienteSel.email, nombre: clienteSel.nombre_completo,
-          carrito, total, metodoPago, numeroOperacion, sucursalId,
+          carrito: carrito.map(i => ({ ...i, precio_sucursal: precioDe(i) })), total: totalFinal, metodoPago, numeroOperacion, sucursalId,
         }),
       }).catch(() => {})
     }
 
     await logActividad({
       tipo:        'venta_galley',
-      descripcion: `${staff?.nombre} ${staff?.primer_apellido} registró venta de $${total} (${metodoPago === 'tarjeta' ? 'tarjeta guardada' : metodoPago})${clienteSel ? ` para "${clienteSel.nombre_completo}"` : ''}`,
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} registró venta de $${totalFinal} (${metodoPago === 'tarjeta' ? 'tarjeta guardada' : metodoPago})${clienteSel ? ` para "${clienteSel.nombre_completo}"` : ''}`,
       tabla:       'ventas',
       accion:      'INSERT',
       metadata:    {
-        venta_id: venta.id, total, metodo: metodoPago, cliente_id: clienteSel?.id || null,
+        venta_id: venta.id, total: totalFinal, ahorro, metodo: metodoPago, cliente_id: clienteSel?.id || null,
         productos: carrito.map(i => ({ nombre: i.nombre, cantidad: i.cantidad })),
       },
       sucursal_id: sucursalId,
@@ -170,15 +186,19 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
           <div className="bg-gray-50 rounded-xl p-4 space-y-2">
             <p className="text-xs font-black text-gray-400 uppercase tracking-wide mb-3">Resumen</p>
             {carrito.map(i => (
-              <div key={i.id} className="flex justify-between text-sm">
-                <span className="text-gray-600">{i.nombre} ×{i.cantidad}</span>
-                <span className="font-bold text-gray-900">${(i.precio_sucursal * i.cantidad).toLocaleString('es-MX')}</span>
+              <div key={i.id} className="flex justify-between text-sm gap-2">
+                <span className="text-gray-600">{i.nombre} ×{i.cantidad}{promos[i.id] && <span className="ml-1 text-[10px] font-bold text-emerald-600">🏷️ promo</span>}</span>
+                <span className="font-bold text-gray-900 whitespace-nowrap">
+                  {promos[i.id] && <s className="text-gray-400 font-normal mr-1.5">${(i.precio_sucursal * i.cantidad).toLocaleString('es-MX')}</s>}
+                  ${(precioDe(i) * i.cantidad).toLocaleString('es-MX')}
+                </span>
               </div>
             ))}
             <div className="border-t border-gray-200 pt-2 flex justify-between">
               <span className="font-black text-gray-900">Total</span>
-              <span className="text-xl font-black text-gray-900">${total.toLocaleString('es-MX')}</span>
+              <span className="text-xl font-black text-gray-900">${totalFinal.toLocaleString('es-MX')}</span>
             </div>
+            {ahorro > 0 && <p className="text-xs text-emerald-700 text-right font-bold">Ahorra ${ahorro.toLocaleString('es-MX')} con promoción</p>}
           </div>
 
           {/* Cliente */}
@@ -256,8 +276,8 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
             disabled={procesando || (metodoPago === 'terminal' && !numeroOperacion) || (metodoPago === 'tarjeta' && !tarjeta)}
             className="w-full py-3.5 rounded-xl text-sm font-black text-white disabled:opacity-40 transition" style={{ backgroundColor: '#171B24' }}>
             {procesando ? 'Procesando...'
-              : metodoPago === 'tarjeta' ? `Cobrar $${total.toLocaleString('es-MX')} a su tarjeta`
-              : `Confirmar pago $${total.toLocaleString('es-MX')}`}
+              : metodoPago === 'tarjeta' ? `Cobrar $${totalFinal.toLocaleString('es-MX')} a su tarjeta`
+              : `Confirmar pago $${totalFinal.toLocaleString('es-MX')}`}
           </button>
         </div>
       </div>

@@ -9,7 +9,7 @@ import { LayoutDashboard, Package, Bell, BarChart2, Settings, LogOut, ChevronLef
   ChevronRight, BookOpen, Calendar, UserCircle,
   Users, CreditCard, Star, Activity, ChevronDown,
   DollarSign, MapPin, Puzzle, ShoppingBag, Lock,
-  Sparkles
+  Sparkles, Tag
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Modulo, RUTAS_MODULOS } from '@/lib/permisos'
@@ -29,6 +29,7 @@ const NAV: NavItem[] = [
   { href: '/dashboard/clientes',     label: 'Clientes',      icon: Users           },
   { href: '/dashboard/staff',        label: 'Staff',         icon: Users           },
   { href: '/dashboard/paquetes',     label: 'Paquetes',      icon: Package         },
+  { href: '/dashboard/promociones',  label: 'Promociones',   icon: Tag             },
   { href: '/dashboard/finanzas',     label: 'Finanzas',      icon: DollarSign      },
   { href: '/dashboard/alertas',      label: 'Alertas',       icon: Bell            },
   { href: '/dashboard/reportes',     label: 'Reportes',      icon: BarChart2       },
@@ -146,7 +147,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {NAV.map((item) => {
+          {NAV.filter(item => item.href !== '/dashboard/promociones' || staff?.rol === 'direccion').map((item) => {
             const active  = isActive(item.href!)
             const modulo  = RUTA_A_MODULO[item.href!]
             const blocked = !loading && modulo ? !tieneAcceso(modulo) : false

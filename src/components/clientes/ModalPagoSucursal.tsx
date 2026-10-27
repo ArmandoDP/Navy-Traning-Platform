@@ -62,7 +62,10 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
 
   const paqueteSel = paquetes.find(p => p.id === paqueteId)
   const enLinea    = metodo === 'tarjeta' || metodo === 'app'
-  const precio     = Number(precioDe(paqueteSel) || 0)
+  const [promos, setPromos] = useState<Record<string, any>>({})
+  const promoSel   = paqueteId ? promos[paqueteId] : null
+  const precioBase = Number(precioDe(paqueteSel) || 0)
+  const precio     = promoSel ? Number(promoSel.precio_final) : precioBase
 
   const hoy         = new Date(Date.now() - 6 * 3600 * 1000).toISOString().split('T')[0]
   const fechaVenc   = cliente.fecha_venc_plan || cliente.fecha_vencimiento_memb
@@ -99,6 +102,10 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
       const { data } = await q
       setPaquetes(data || [])
       setLoadingPaquetes(false)
+      // Promociones vigentes para este cliente (se cobran solas con el descuento)
+      api('/promociones/precios', 'POST', { cliente_id: cliente.id, sucursal_id: cliente.sucursal_id,
+        items: (data || []).map((p: any) => ({ tipo: 'paquete', id: p.id, precio: precioDe(p) })) })
+        .then(r => setPromos(r.precios || {})).catch(() => setPromos({}))
 
       try {
         const op = await api(`/cobros/opciones/${cliente.id}`)
@@ -134,7 +141,7 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
 
   const elegirPaquete = (id: string) => {
     setPaqueteId(id)
-    setMonto(String(precioDe(paquetes.find(x => x.id === id)) || ''))
+    setMonto(String(promos[id]?.precio_final ?? precioDe(paquetes.find(x => x.id === id)) ?? ''))
   }
 
   const irAResumen = () => {
@@ -312,7 +319,9 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
             <div className="bg-gray-900 rounded-2xl p-5 text-white">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Plan</p>
               <p className="text-xl font-black">{paqueteSel?.nombre}</p>
-              <p className="text-3xl font-black mt-2">{dinero(enLinea ? precio : monto)} <span className="text-sm font-normal text-gray-400">MXN</span></p>
+              {promoSel && <p className="text-sm text-gray-400 line-through mt-2">{dinero(precioBase)}</p>}
+              <p className={`text-3xl font-black ${promoSel ? 'text-emerald-400' : 'mt-2'}`}>{dinero(enLinea ? precio : monto)} <span className="text-sm font-normal text-gray-400">MXN</span></p>
+              {promoSel && <p className="text-xs text-gray-300 mt-1">{promoSel.texto}</p>}
             </div>
             <div className="border border-gray-100 rounded-xl p-4 space-y-2.5">
               <p className="text-xs font-black text-gray-500 uppercase tracking-wide">Cómo se cobra</p>
@@ -357,9 +366,14 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
                   value={paqueteId} onChange={e => elegirPaquete(e.target.value)}>
                   <option value="">Seleccionar paquete</option>
                   {paquetes.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} — {p.vigencia_dias}d {precioDe(p) ? `· ${dinero(precioDe(p))}` : ''}</option>
+                    <option key={p.id} value={p.id}>{p.nombre} — {p.vigencia_dias}d {promos[p.id] ? `· 🏷️ ${dinero(promos[p.id].precio_final)} (antes ${dinero(precioDe(p))})` : precioDe(p) ? `· ${dinero(precioDe(p))}` : ''}</option>
                   ))}
                 </select>
+              )}
+              {promoSel && (
+                <p className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 font-medium">
+                  🏷️ {promoSel.texto} <span className="text-emerald-600/70">(el descuento se aplica solo)</span>
+                </p>
               )}
               {beneficios.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-1">
