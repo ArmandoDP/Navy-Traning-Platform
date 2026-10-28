@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useSucursal } from '@/context/SucursalContext'
-import { Plus, ChevronLeft, ChevronRight, Filter, RefreshCw, Copy } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Filter, RefreshCw, Copy, Trash2 } from 'lucide-react'
 import ModalCrearClase    from '@/components/DrawerCrearClase'
 import ClasesListaView    from '@/components/clases/ClasesListaView'
 import ClasesDiaView      from '@/components/clases/ClasesDiaView'
@@ -10,6 +10,7 @@ import ClasesSemanView    from '@/components/clases/ClasesSemanView'
 import ClasesMesView      from '@/components/clases/ClasesMesView'
 import DrawerDetalleClase from '@/components/clases/DrawerDetalleClase'
 import DrawerCopiarSemana from '@/components/clases/DrawerCopiarSemana'
+import DrawerClasesEliminadas from '@/components/clases/DrawerClasesEliminadas'
 
 type Vista = 'dia' | 'semana' | 'mes' | 'lista'
 
@@ -47,6 +48,7 @@ export default function ClasesPage() {
   const [modalOpen,  setModalOpen]  = useState(false)
   const [claseActivaId, setClaseActivaId] = useState<string | null>(null)
   const [drawerCopiar, setDrawerCopiar] = useState(false)
+  const [verEliminadas, setVerEliminadas] = useState(false)
 
   const fetchClases = async () => {
     setLoading(true)
@@ -117,6 +119,12 @@ export default function ClasesPage() {
 
           <button className="p-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition text-gray-500">
             <Filter size={16}/>
+          </button>
+
+          {/* Clases eliminadas: quién, cuándo y su historial */}
+          <button onClick={() => setVerEliminadas(true)} title="Clases eliminadas"
+            className="flex items-center gap-2 border border-gray-200 bg-white text-gray-700 font-bold text-sm px-4 py-2.5 rounded-xl hover:bg-gray-50 transition">
+            <Trash2 size={15}/> Eliminadas
           </button>
 
           {/* Botón en el header — solo si hay sucursal seleccionada */}
@@ -218,6 +226,8 @@ export default function ClasesPage() {
         }}
         onSuccess={fetchClases}
       />
+
+      {verEliminadas && <DrawerClasesEliminadas onClose={() => setVerEliminadas(false)} />}
 
       {sucursalId && (
         <DrawerCopiarSemana

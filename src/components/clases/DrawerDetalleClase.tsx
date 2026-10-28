@@ -12,6 +12,8 @@ import TabListaEspera from './TabListaEspera'
 import { useAuth }       from '@/context/AuthContext'
 import { logActividad }  from '@/lib/log-actividad'
 import ModalEditarClase from '../ModalEditarClase'
+import ModalCancelarClase from './ModalCancelarClase'
+import TabActividad from './TabActividad'
 
 interface Props {
   isOpen:    boolean
@@ -20,7 +22,7 @@ interface Props {
   onSuccess: () => void
 }
 
-type Tab = 'detalle' | 'asistencia' | 'espera'
+type Tab = 'detalle' | 'asistencia' | 'espera' | 'actividad'
 
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 bg-gray-50 transition"
 const selectCls = `${inputCls} appearance-none cursor-pointer`
@@ -47,6 +49,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const [totalpassExito, setTotalpassExito] = useState(false)
   const { staff, esGlobal } = useAuth()
   const [modalEditar, setModalEditar] = useState(false)
+  const [modalCancelar, setModalCancelar] = useState(false)
+  const esAdmin = esGlobal   // igual que "Editar clase": solo dirección
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -327,30 +331,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     fetchData()
   }
 
-  const handleCancelarClase = async () => {
-    if (!claseId) return
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clases/cancelar`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ clase_id: claseId }),
-      })
-    } catch (e) {
-      console.error('Error cancelando clase:', e)
-    }
-
-    await logActividad({
-      tipo:        'clase_cancelada',
-      descripcion: `${staff?.nombre} ${staff?.primer_apellido} canceló "${clase?.nombre_clase}"`,
-      tabla:       'clases',
-      accion:      'UPDATE',
-      metadata:    { clase_id: claseId, nombre: clase?.nombre_clase, horario: clase?.horario },
-      sucursal_id: clase?.sucursal_id,
-      staff_id:    staff?.id,
-    })
-    fetchData()
-    onSuccess()
-  }
+  // Cancelar ya no es de un clic: abre la ventana con la lista de avisos y la frase de confirmación (solo dirección)
+  const handleCancelarClase = () => { if (claseId && esAdmin) setModalCancelar(true) }
 
   const handleActualizarHorarioWellhub = async () => {
     if (!clase || !claseId) return
@@ -522,6 +504,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
             { key: 'detalle',    label: '📋 Detalle' },
             { key: 'asistencia', label: `👥 Asistencia (${totalReservas})` },
             { key: 'espera',     label: '⏳ Lista de espera' },
+            { key: 'actividad',  label: '🕑 Actividad' },
           ] as { key: Tab; label: string }[]).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
               className={`flex-1 py-3 text-xs font-bold transition border-b-2 ${
@@ -747,16 +730,14 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                   {clase.estado}
                 </span>
                 <div className="flex items-center gap-2">
-                  {clase.estado === 'Activa' && (
-                    <button onClick={handleCancelarClase}
-                      className="text-xs font-bold text-red-400 hover:text-red-600 transition">
-                      Cancelar clase
+                  {esAdmin ? (
+                    <button onClick={() => setModalCancelar(true)}
+                      className="text-xs font-bold text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition">
+                      ⛔ Cancelar y eliminar clase
                     </button>
+                  ) : (
+                    <span className="text-[11px] text-gray-400">Solo dirección puede cancelar o eliminar clases</span>
                   )}
-                  <button onClick={() => setModalEliminar(true)}
-                    className="text-xs font-bold text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition">
-                    🗑️ Eliminar
-                  </button>
                 </div>
               </div>
             </div>
@@ -773,6 +754,9 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               onCancelar={handleCancelarReserva}
             />
           )}
+
+          {/* Tab Actividad */}
+          {tab === 'actividad' && claseId && <TabActividad claseId={claseId} />}
 
           {/* Tab Lista de espera */}
           {tab === 'espera' && claseId && (
@@ -880,6 +864,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           onSuccess={onSuccess}
         />
       </div>
+
+      {modalCancelar && claseId && esAdmin && (
+        <ModalCancelarClase claseId={claseId} onClose={() => setModalCancelar(false)}
+          onHecho={() => { setModalCancelar(false); onSuccess(); onClose() }} />
+      )}
 
       {modalEliminar && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">

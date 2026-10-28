@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Users, Clock, MapPin, UserCheck, UserX, CheckCircle2, XCircle } from 'lucide-react'
 import Link from 'next/link'
+import { useAuth } from '@/context/AuthContext'
+import ModalCancelarClase from '@/components/clases/ModalCancelarClase'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Clase {
@@ -52,6 +54,9 @@ export default function DetalleClase() {
   const [historialClientes, setHistorialClientes] = useState<Record<string, number>>({})
   const [loading,     setLoading]     = useState(true)
   const [checkingIn,  setCheckingIn]  = useState<string | null>(null) // id del cliente procesando
+  const [modalCancelar, setModalCancelar] = useState(false)
+  const { staff } = useAuth()
+  const esAdmin = staff?.rol === 'direccion'
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchData = async () => {
@@ -152,14 +157,8 @@ export default function DetalleClase() {
   }
 
   // ── Cancelar clase completa ────────────────────────────────────────────────
-  const handleCancelarClase = async () => {
-    const { error } = await supabase
-      .from('clases')
-      .update({ estado: 'Cancelada' })
-      .eq('id', id)
-
-    if (!error) fetchData()
-  }
+  // Ya no se cambia el estado directo: abre la ventana con verificación (solo dirección)
+  const handleCancelarClase = () => setModalCancelar(true)
 
   // ── Métricas ───────────────────────────────────────────────────────────────
   const totalReservas    = reservas.filter(r => r.estatus !== 'Cancelada').length
@@ -203,7 +202,7 @@ export default function DetalleClase() {
             {clase.descripcion && <p className="text-zinc-600 text-sm mt-2 max-w-xl">{clase.descripcion}</p>}
           </div>
 
-          {clase.estado === 'Activa' && (
+          {clase.estado === 'Activa' && esAdmin && (
             <button
               onClick={handleCancelarClase}
               className="px-4 py-2 border border-red-800 text-red-500 hover:bg-red-500/10 rounded-xl text-sm font-bold transition whitespace-nowrap"
@@ -213,6 +212,11 @@ export default function DetalleClase() {
           )}
         </div>
       </div>
+
+      {modalCancelar && (
+        <ModalCancelarClase claseId={String(id)} onClose={() => setModalCancelar(false)}
+          onHecho={() => router.push('/dashboard/clases')} />
+      )}
 
       {/* Métricas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
