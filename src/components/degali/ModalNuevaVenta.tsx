@@ -18,13 +18,19 @@ const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
 async function api(path: string, method: 'GET' | 'POST' = 'GET', body?: any) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(`${BACKEND}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BACKEND}${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+      body: body ? JSON.stringify(body) : undefined,
+    })
+  } catch {
+    // No hubo respuesta (internet o servidor caído): NO se sabe si el cobro pasó
+    throw Object.assign(new Error('No se pudo conectar con el servidor'), { incierto: true })
+  }
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.detail || 'No se pudo cobrar')
+  if (!res.ok) throw Object.assign(new Error(data.detail || 'No se pudo cobrar'), { status: res.status, incierto: res.status >= 500 })
   return data
 }
 
@@ -129,8 +135,14 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
         })
         await supabase.from('ventas').update({ estatus: 'Completada' }).eq('id', venta.id)
       } catch (e: any) {
-        await supabase.from('ventas').update({ estatus: 'Cancelada' }).eq('id', venta.id)
-        setError(`${e.message}. Cobra con terminal o pide que actualice su tarjeta en la app (Perfil → Métodos de pago).`)
+        if (e.incierto) {
+          // No se sabe si se cobró: la venta se queda "Pendiente" para revisarla, y NO se debe volver a cobrar a ciegas
+          setError(`${e.message}. No sabemos si el cobro pasó: antes de volver a intentar, revisa en Pagos del cliente (o en Stripe) si ya aparece. La venta quedó como "Pendiente".`)
+        } else {
+          // La tarjeta fue rechazada: aquí sí se sabe que no se cobró
+          await supabase.from('ventas').update({ estatus: 'Cancelada' }).eq('id', venta.id)
+          setError(`${e.message}. No se le cobró. Cobra con terminal o pide que actualice su tarjeta en la app (Perfil → Métodos de pago).`)
+        }
         setProcesando(false)
         return
       }

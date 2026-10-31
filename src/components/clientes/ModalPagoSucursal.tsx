@@ -63,6 +63,9 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
   const paqueteSel = paquetes.find(p => p.id === paqueteId)
   const enLinea    = metodo === 'tarjeta' || metodo === 'app'
   const [promos, setPromos] = useState<Record<string, any>>({})
+  const [verOcultos, setVerOcultos] = useState(false)
+  const paquetesVista = paquetes.filter(p => verOcultos || p.visible_en_app !== false || p.id === paqueteId)
+  const ocultos = paquetes.filter(p => p.visible_en_app === false).length
   const promoSel   = paqueteId ? promos[paqueteId] : null
   const precioBase = Number(precioDe(paqueteSel) || 0)
   const precio     = promoSel ? Number(promoSel.precio_final) : precioBase
@@ -96,7 +99,7 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
 
       // En sucursal se pueden vender también los paquetes ocultos en la app
       let q = supabase.from('paquetes')
-        .select('id, nombre, descripcion, vigencia_dias, clases_incluidas, acceso_total, acceso_sucursal_hermana, penalizacion_noshow, monto_penalizacion, es_recurrente, paquete_precios!inner(precio_app, sucursal_id, activo)')
+        .select('id, nombre, descripcion, vigencia_dias, clases_incluidas, acceso_total, acceso_sucursal_hermana, penalizacion_noshow, monto_penalizacion, es_recurrente, visible_en_app, paquete_precios!inner(precio_app, sucursal_id, activo)')
         .eq('estatus', 'Activo').eq('paquete_precios.activo', true).order('nombre')
       if (cliente.sucursal_id) q = q.eq('paquete_precios.sucursal_id', cliente.sucursal_id)
       const { data } = await q
@@ -360,13 +363,25 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-700">Paquete</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-700">Paquete</label>
+                {ocultos > 0 && (
+                  <button type="button" onClick={() => setVerOcultos(v => !v)} className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 hover:text-gray-800"
+                    title="Paquetes que ya no están a la venta (Founding, preventas): solo para clientes que ya los tienen">
+                    <span className={`relative w-7 h-4 rounded-full transition ${verOcultos ? 'bg-gray-900' : 'bg-gray-300'}`}>
+                      <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition ${verOcultos ? 'left-[13px]' : 'left-0.5'}`} />
+                    </span>
+                    🔒 Mostrar ocultos ({ocultos})
+                  </button>
+                )}
+              </div>
+              {verOcultos && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-2.5 py-1.5">Los paquetes 🔒 ya no están a la venta: úsalos solo con quien ya los tiene (Founding, preventas).</p>}
               {loadingPaquetes ? <div className="py-4 text-center text-gray-400 text-xs">Cargando paquetes...</div> : (
                 <select className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-900 bg-gray-50 outline-none focus:border-gray-400"
                   value={paqueteId} onChange={e => elegirPaquete(e.target.value)}>
                   <option value="">Seleccionar paquete</option>
-                  {paquetes.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} — {p.vigencia_dias}d {promos[p.id] ? `· 🏷️ ${dinero(promos[p.id].precio_final)} (antes ${dinero(precioDe(p))})` : precioDe(p) ? `· ${dinero(precioDe(p))}` : ''}</option>
+                  {paquetesVista.map(p => (
+                    <option key={p.id} value={p.id}>{p.visible_en_app === false ? '🔒 ' : ''}{p.nombre} — {p.vigencia_dias}d {promos[p.id] ? `· 🏷️ ${dinero(promos[p.id].precio_final)} (antes ${dinero(precioDe(p))})` : precioDe(p) ? `· ${dinero(precioDe(p))}` : ''}</option>
                   ))}
                 </select>
               )}
