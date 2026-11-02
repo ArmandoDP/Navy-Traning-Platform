@@ -1,7 +1,7 @@
 'use client'
 // src/components/clases/TabAsistencia.tsx — lista de asistencia de una clase
 import { useEffect, useMemo, useState } from 'react'
-import { UserCheck, UserX, CheckCircle2, HelpCircle, Smartphone, Users, Sparkles, Clock } from 'lucide-react'
+import { UserCheck, UserX, CheckCircle2, HelpCircle, Smartphone, Users, Sparkles, Clock, XCircle, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   checkingIn:        string | boolean | null
   onCheckIn:         (reserva: any) => void
   onCancelar:        (reservaId: string) => void
+  onCancelarReserva?: (reserva: any) => Promise<string | null>   // cancelar a petición del cliente (regresa la clase); devuelve error o null
+  puedeCancelarReserva?: boolean
 }
 
 type Historial = Record<string, { total: number; ultima?: string }>
@@ -41,7 +43,17 @@ const hace = (iso?: string) => {
   return d <= 0 ? 'hoy' : d === 1 ? 'ayer' : d < 30 ? `hace ${d} días` : `hace ${Math.floor(d / 30)} ${Math.floor(d / 30) === 1 ? 'mes' : 'meses'}`
 }
 
-export default function TabAsistencia({ reservas, asistencias, historialClientes, checkingIn, onCheckIn, onCancelar }: Props) {
+export default function TabAsistencia({ reservas, asistencias, historialClientes, checkingIn, onCheckIn, onCancelar, onCancelarReserva, puedeCancelarReserva }: Props) {
+  const [aCancelar, setACancelar]   = useState<any>(null)
+  const [cancelando, setCancelando] = useState(false)
+  const [errorCancelar, setErrorCancelar] = useState('')
+  const confirmarCancelacion = async () => {
+    if (!aCancelar || !onCancelarReserva) return
+    setCancelando(true); setErrorCancelar('')
+    const err = await onCancelarReserva(aCancelar)
+    setCancelando(false)
+    if (err) setErrorCancelar(err); else setACancelar(null)
+  }
   const [historial,    setHistorial]    = useState<Historial>({})
   const [verLeyenda,   setVerLeyenda]   = useState(false)
 
@@ -191,6 +203,16 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
                         className="flex items-center gap-1 px-3.5 py-2 rounded-xl text-[11px] font-black bg-emerald-500 text-white hover:bg-emerald-600 transition disabled:opacity-40 shadow-sm shadow-emerald-200">
                         <UserCheck size={12} /> {guardando ? 'Guardando…' : 'Check-in'}
                       </button>
+                      {puedeCancelarReserva && onCancelarReserva && (() => {
+                        const plataforma = /wellhub|totalpass/i.test(r.origen || '')
+                        return (
+                          <button onClick={() => { setErrorCancelar(''); setACancelar(r) }} disabled={plataforma}
+                            title={plataforma ? `Esta reserva es de ${r.origen}: se cancela desde la app de ${r.origen}` : 'Cancelar a petición del cliente: se le regresa su clase'}
+                            className="flex items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-black bg-white border border-gray-200 text-gray-600 hover:border-red-200 hover:text-red-600 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                            <XCircle size={12} /> Cancelar
+                          </button>
+                        )
+                      })()}
                       <button onClick={() => onCancelar(r.id)}
                         className="flex items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500 transition">
                         <UserX size={12} /> No-show
@@ -265,6 +287,26 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
       <Seccion titulo="Presentes"   n={presentes.length}  tono="bg-emerald-50 border-emerald-100 text-emerald-600" lista={presentes} />
       <Seccion titulo="Por llegar"  n={pendientes.length} tono="bg-amber-50 border-amber-100 text-amber-600"       lista={pendientes} />
       <Seccion titulo="Canceladas"  n={cancelados.length} tono="bg-gray-50 border-gray-100 text-gray-400"          lista={cancelados} />
+      {aCancelar && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !cancelando && setACancelar(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center"><XCircle size={20} className="text-red-500" /></div>
+            <div>
+              <p className="text-base font-black text-gray-900">¿Cancelar la reserva de {aCancelar.clientes?.nombre_completo || 'este cliente'}?</p>
+              <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">Sin penalización. Se le regresa su clase a su plan, se libera su lugar y le llega una notificación.</p>
+            </div>
+            {errorCancelar && <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2.5">{errorCancelar}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setACancelar(null)} disabled={cancelando} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-700">Volver</button>
+              <button onClick={confirmarCancelacion} disabled={cancelando}
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 disabled:opacity-50">
+                {cancelando && <Loader2 size={13} className="animate-spin" />} Cancelar reserva
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

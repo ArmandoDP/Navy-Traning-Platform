@@ -216,6 +216,25 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     onSuccess()
   }
 
+  // Cancelar la reserva de un cliente que lo pide en sucursal (sin límite de horario, se le regresa la clase)
+  const handleCancelarReservaCliente = async (r: any): Promise<string | null> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/clases/cancelar-reserva`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
+        body: JSON.stringify({ reserva_id: r.id, motivo: 'Lo pidió en sucursal' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return data.detail || 'No se pudo cancelar la reserva'
+      await fetchData()
+      onSuccess()
+      return null
+    } catch {
+      return 'No se pudo conectar con el servidor. Intenta de nuevo.'
+    }
+  }
+
   const handleEliminarClase = async () => {
     if (!claseId) return
     setEliminando(true)
@@ -754,6 +773,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               checkingIn={checkingIn}
               onCheckIn={handleCheckIn}
               onCancelar={handleCancelarReserva}
+              onCancelarReserva={handleCancelarReservaCliente}
+              puedeCancelarReserva={puedeCancelar}
             />
           )}
 
