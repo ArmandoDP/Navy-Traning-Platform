@@ -32,6 +32,7 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
   const [sucursal,   setSucursal]   = useState(sucursalId || '')
   const [form,       setForm]       = useState({ ...VACIO })
   const [choque,     setChoque]     = useState<any>(null)
+  const [repetida,   setRepetida]   = useState<any>(null)
   const [creando,    setCreando]    = useState(false)
   const [error,      setError]      = useState('')
   const [resultado,  setResultado]  = useState<{ wellhub: Resultado; totalpass: Resultado } | null>(null)
@@ -87,6 +88,19 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
     return () => clearTimeout(t)
   }, [form.fecha, form.hora, form.duracion_minutos, form.room_id])
 
+  // ¿Ya existe esta misma clase en la sucursal a esa hora? (no se puede duplicar)
+  useEffect(() => {
+    setRepetida(null)
+    if (!inicio || !sucursal || !form.nombre_clase.trim()) return
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('clases').select('id, nombre_clase, staff(nombre)')
+        .eq('sucursal_id', sucursal).eq('estado', 'Activa').eq('horario', inicio.toISOString())
+      const norm = (x: string) => (x || '').replace(/\s+/g, ' ').trim().toUpperCase()
+      setRepetida((data || []).find((c: any) => norm(c.nombre_clase) === norm(form.nombre_clase)) || null)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [form.nombre_clase, form.fecha, form.hora, sucursal])
+
   const elegirRoom = (r: Room) => {
     set('room_id', r.id)
     if (!form.capacidad_max || form.capacidad_max > r.capacidad) set('capacidad_max', r.capacidad)
@@ -96,7 +110,7 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
     !form.nombre_clase.trim() && 'nombre', !sucursal && 'sucursal', !form.room_id && 'room',
     !form.fecha && 'fecha', !form.hora && 'hora', form.capacidad_max < 1 && 'cupo',
   ].filter(Boolean) as string[]
-  const puedeCrear = faltan.length === 0 && !enPasado && !cupoExcede && !creando
+  const puedeCrear = faltan.length === 0 && !enPasado && !cupoExcede && !creando && !repetida
 
   const crear = async () => {
     if (!puedeCrear || !inicio) return
@@ -111,7 +125,12 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
       capacidad_max: form.capacidad_max, descripcion: form.descripcion.trim(), es_recurrente: false,
       estado: 'Activa', tipo_clase: 'General', horario, publicar_wellhub: true, publicar_totalpass: true,
     }]).select().single()
-    if (e || !clase) { setError(e?.message || 'No se pudo crear la clase'); setCreando(false); return }
+    if (e || !clase) {
+      setError((!e && !clase) || e?.code === 'PGRST116'   // la base se saltó la clase porque ya existía
+        ? 'Ya existe esa misma clase a esa hora en esta sucursal: no se creó otra.'
+        : e?.message || 'No se pudo crear la clase')
+      setCreando(false); return
+    }
 
     // Publicar en las dos plataformas (siempre)
     const wellhub: Resultado = await fetch('/api/wellhub/publicar-clase', {
@@ -267,6 +286,9 @@ export default function DrawerCrearClase({ isOpen, onClose, onSuccess, sucursalI
                 </Campo>
                 {inicio && fin && <p className="text-xs text-gray-500"><span className="capitalize">{fechaTexto}</span>, de <b>{horaTexto(inicio)}</b> a <b>{horaTexto(fin)}</b></p>}
                 {enPasado && <Aviso>Esa fecha y hora ya pasaron.</Aviso>}
+                {repetida && (
+                  <Aviso>Ya existe <b>{(repetida.nombre_clase || '').trim()}</b> a esa hora en esta sucursal{repetida.staff ? ` (con ${repetida.staff.nombre})` : ''}. No se puede crear otra igual.</Aviso>
+                )}
                 {choque && (
                   <Aviso>Ya hay <b>{(choque.nombre_clase || '').trim()}</b> en este room a las {horaTexto(new Date(choque.horario))}. Revisa que no la estés duplicando.</Aviso>
                 )}

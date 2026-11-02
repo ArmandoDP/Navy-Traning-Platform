@@ -56,7 +56,7 @@ export default function DetalleClase() {
   const [checkingIn,  setCheckingIn]  = useState<string | null>(null) // id del cliente procesando
   const [modalCancelar, setModalCancelar] = useState(false)
   const { staff } = useAuth()
-  const esAdmin = staff?.rol === 'direccion'
+  const esAdmin = ['direccion', 'gerente', 'staff_navy'].includes(staff?.rol || '')   // pueden cancelar: dirección, gerentes y recepción
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchData = async () => {

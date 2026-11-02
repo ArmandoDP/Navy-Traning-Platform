@@ -20,7 +20,8 @@ const aLocal = (iso: string) => {
 const aIso = (fecha: string, hora: string) => new Date(`${fecha}T${hora}:00-06:00`).toISOString()
 
 export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }: Props) {
-  const { esGlobal } = useAuth()
+  const { staff } = useAuth()
+  const puedeEditar = ['direccion', 'gerente'].includes(staff?.rol || '')   // dirección y gerentes
   const [clase,     setClase]     = useState<any>(null)
   const [coaches,   setCoaches]   = useState<any[]>([])
   const [reservas,  setReservas]  = useState(0)
@@ -28,6 +29,7 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
   const [guardando, setGuardando] = useState(false)
   const [error,     setError]     = useState('')
   const [resultado, setResultado] = useState<any>(null)
+  const [repetida,  setRepetida]  = useState<any>(null)   // otra clase igual en la misma sucursal y hora
 
   const [form, setForm] = useState({
     nombre: '', coach_id: '', capacidad_max: 0, fecha: '', hora: '', duracion_minutos: 60,
@@ -75,15 +77,29 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
     cargar()
   }, [isOpen, claseId])
 
+  // ¿Ya hay otra clase con el mismo nombre en esta sucursal a esa hora?
+  useEffect(() => {
+    setRepetida(null)
+    if (!clase || !form.nombre.trim() || !form.fecha || !form.hora) return
+    const t = setTimeout(async () => {
+      const { data } = await supabase.from('clases')
+        .select('id, nombre_clase, horario, coach_id, staff(nombre, primer_apellido)')
+        .eq('sucursal_id', clase.sucursal_id).eq('estado', 'Activa').eq('horario', aIso(form.fecha, form.hora)).neq('id', clase.id)
+      const norm = (t: string) => (t || '').replace(/\s+/g, ' ').trim().toUpperCase()
+      setRepetida((data || []).find((c: any) => norm(c.nombre_clase) === norm(form.nombre)) || null)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [clase?.id, form.nombre, form.fecha, form.hora])
+
   if (!isOpen) return null
 
-  if (!esGlobal) {
+  if (!puedeEditar) {
     return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div onClick={onClose} className="absolute inset-0 bg-black/50" />
         <div className="relative bg-white rounded-2xl p-8 max-w-sm w-full text-center">
           <Lock className="mx-auto text-gray-400 mb-3" />
-          <p className="font-bold text-gray-900">Solo dirección puede editar clases</p>
+          <p className="font-bold text-gray-900">Solo dirección y gerentes pueden editar clases</p>
           <button onClick={onClose} className="mt-6 w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm">Entendido</button>
         </div>
       </div>
@@ -110,6 +126,7 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
     if (!conReservas && Number(form.duracion_minutos) !== clase.duracion_minutos) body.duracion_minutos = Number(form.duracion_minutos)
 
     if (Object.keys(body).length === 1) { setError('No hay cambios que guardar'); return }
+    if (repetida) { setError('Ya existe otra clase igual a esa hora en esta sucursal. Cambia el nombre o la hora.'); return }
     if (body.capacidad_max !== undefined && body.capacidad_max < reservas) {
       setError(`La capacidad no puede ser menor a las ${reservas} reservas activas`); return
     }
@@ -125,7 +142,12 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
         body:    JSON.stringify(body),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Error al guardar')
+      if (!res.ok) {
+        const d = String(data.detail || '')
+        throw new Error(d.includes('CLASE_DUPLICADA')
+          ? 'Ya existe otra clase igual a esa hora en esta sucursal. Cambia el nombre o la hora.'
+          : d || 'Error al guardar')
+      }
       setResultado(data)
       onSuccess()
     } catch (e: any) {
@@ -225,6 +247,14 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
               )}
             </div>
 
+            {repetida && (
+              <div className="flex gap-2 text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl p-3">
+                <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                <span>Ya existe <b>{(repetida.nombre_clase || '').trim()}</b> a esa hora en esta sucursal
+                  {repetida.staff ? ` (con ${repetida.staff.nombre})` : ''}. No se pueden tener dos clases iguales: cambia el nombre o la hora.</span>
+              </div>
+            )}
+
             {avisara && (
               <div className="flex gap-2 text-xs text-indigo-700 bg-indigo-50 rounded-xl p-3">
                 <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
@@ -236,7 +266,7 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
 
             <div className="flex gap-3 pt-1">
               <button onClick={onClose} className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50">Cancelar</button>
-              <button onClick={handleGuardar} disabled={guardando}
+              <button onClick={handleGuardar} disabled={guardando || !!repetida}
                 className="flex-1 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">
                 {guardando ? 'Guardando...' : 'Guardar cambios'}
               </button>

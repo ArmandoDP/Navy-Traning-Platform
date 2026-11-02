@@ -50,7 +50,9 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const { staff, esGlobal } = useAuth()
   const [modalEditar, setModalEditar] = useState(false)
   const [modalCancelar, setModalCancelar] = useState(false)
-  const esAdmin = esGlobal   // igual que "Editar clase": solo dirección
+  const puedeEditar   = ['direccion', 'gerente'].includes(staff?.rol || '')                // editar: dirección y gerentes
+  const puedeCancelar = ['direccion', 'gerente', 'staff_navy'].includes(staff?.rol || '')  // cancelar: también recepción
+  const esAdmin = puedeCancelar
 
   const [form, setForm] = useState({
     nombre_clase:     '',
@@ -568,7 +570,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                 <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">{clase.descripcion}</p>
               )}
 
-              {esGlobal && (
+              {puedeEditar && (
                 <button onClick={() => setModalEditar(true)}
                   className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-50">
                   ✏️ Editar clase
@@ -736,7 +738,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
                       ⛔ Cancelar y eliminar clase
                     </button>
                   ) : (
-                    <span className="text-[11px] text-gray-400">Solo dirección puede cancelar o eliminar clases</span>
+                    <span className="text-[11px] text-gray-400">Tu rol no puede cancelar clases</span>
                   )}
                 </div>
               </div>
