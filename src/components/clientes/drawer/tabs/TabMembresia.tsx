@@ -273,8 +273,23 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
     ...(noShows > 0 ? [{
       icon: <Ban size={15} />, label: 'No Show sin pagar', nivel: 'bloquea' as Nivel,
       val: `${noShows} ${noShows === 1 ? 'pendiente' : 'pendientes'}`,
-      que: 'No puede reservar en la app hasta que la pague desde su celular. Dirección puede condonarla en Editar cliente → Acceso y soporte.',
-    }] : []),
+      que: 'No puede reservar en la app hasta que la pague desde su celular. Dirección puede condonarla directamente aquí.',
+      accion: esDireccion ? {
+        t:'Condonar penalización',
+        f: async () => {
+          try {
+            const { data: pen } = await supabase.from('penalizaciones_noshow').select('id').eq('cliente_id', cliente.id).eq('estatus', 'Pendiente')
+            if (pen && pen.length > 0) {
+              await backend(`/cliente/${cliente.id}/condonar/${pen[0].id}`, 'POST')
+              setToast('Penalización condonada: ya puede reservar.')
+              recargarTodo()
+    }
+  } catch (e: any){
+    setToast(e.message)
+  } 
+}
+}: undefined,
+ }]: []),
     {
       icon: <Repeat size={15} />, label: 'Renovación automática',
       nivel: (paq.es_recurrente && !actual.stripe_subscription_id && !actual.renovacion_cancelada) ? 'ojo' as Nivel : 'ok' as Nivel,
