@@ -1,19 +1,12 @@
 'use client'
+// Selector de sucursal del encabezado.
+// Dirección: Global + todas. Demás staff: solo sus sucursales (si tiene una sola, se muestra fija).
 import { useState, useRef, useEffect } from 'react'
-import { Globe, ChevronDown, MapPin, Check } from 'lucide-react'
+import { Globe, ChevronDown, MapPin, Check, Lock } from 'lucide-react'
 import { useSucursal } from '@/context/SucursalContext'
 
-const PALETTE: Record<string, string> = {
-  '#6366f1': '#6366f1',
-  '#f97316': '#f97316',
-  '#22c55e': '#22c55e',
-  '#3b82f6': '#3b82f6',
-  '#ec4899': '#ec4899',
-  '#8b5cf6': '#8b5cf6',
-}
-
 export default function SucursalSelector() {
-  const { sucursales, sucursalActiva, setSucursalActiva } = useSucursal()
+  const { sucursales, sucursalActiva, setSucursalActiva, puedeGlobal, sinSucursales, cargando } = useSucursal()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -26,11 +19,32 @@ export default function SucursalSelector() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const label = sucursalActiva
-    ? `${sucursalActiva.nombre}, ${sucursalActiva.ciudad}`
-    : 'Global'
+  if (cargando) {
+    return <div className="h-[38px] min-w-[140px] rounded-xl border border-gray-200 bg-gray-50 animate-pulse" />
+  }
 
+  if (sinSucursales) {
+    return (
+      <div className="flex items-center gap-2 border border-amber-200 bg-amber-50 rounded-xl px-3 py-2 text-sm text-amber-800 font-medium"
+        title="Pide a dirección que te vincule a tu sucursal">
+        <Lock size={14} /> Sin sucursal asignada
+      </div>
+    )
+  }
+
+  const label = sucursalActiva ? `${sucursalActiva.nombre}, ${sucursalActiva.ciudad}` : 'Global'
   const color = sucursalActiva?.color || '#6366f1'
+  const unaSola = !puedeGlobal && sucursales.length === 1
+
+  // Una sola sucursal: se muestra fija, sin menú
+  if (unaSola) {
+    return (
+      <div className="flex items-center gap-2 border border-gray-200 bg-white rounded-xl px-3 py-2 text-sm text-gray-700 font-medium min-w-[140px]">
+        <MapPin size={14} style={{ color }} />
+        <span className="truncate">{label}</span>
+      </div>
+    )
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -49,18 +63,20 @@ export default function SucursalSelector() {
       {open && (
         <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 min-w-[220px] overflow-hidden py-1">
 
-          {/* Global */}
-          <button
-            onClick={() => { setSucursalActiva(null); setOpen(false) }}
-            className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition ${!sucursalActiva ? 'font-bold text-indigo-600' : 'text-gray-700'}`}
-          >
-            <Globe size={14} className="text-gray-400 flex-shrink-0" />
-            <span className="flex-1 text-left">Global</span>
-            {!sucursalActiva && <Check size={14} className="text-indigo-600" />}
-          </button>
+          {/* Global: solo dirección */}
+          {puedeGlobal && (
+            <button
+              onClick={() => { setSucursalActiva(null); setOpen(false) }}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-gray-50 transition ${!sucursalActiva ? 'font-bold text-indigo-600' : 'text-gray-700'}`}
+            >
+              <Globe size={14} className="text-gray-400 flex-shrink-0" />
+              <span className="flex-1 text-left">Global</span>
+              {!sucursalActiva && <Check size={14} className="text-indigo-600" />}
+            </button>
+          )}
 
           {sucursales.length > 0 && (
-            <div className="border-t border-gray-100 mt-1 pt-1">
+            <div className={puedeGlobal ? 'border-t border-gray-100 mt-1 pt-1' : ''}>
               {sucursales.map(s => {
                 const c      = s.color || '#6366f1'
                 const active = sucursalActiva?.id === s.id

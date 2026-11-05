@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Tag, Search, X, Loader2, Send, Pencil, CheckSquare, Square, Percent, DollarSign, BadgeDollarSign } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useSucursal } from '@/context/SucursalContext'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 async function api(path: string, method: 'GET' | 'POST' | 'PUT' = 'GET', body?: any) {
@@ -47,6 +48,11 @@ export default function PromocionesPage() {
   const [error, setError] = useState('')
   const [editando, setEditando] = useState<any>(null)
   const [notificando, setNotificando] = useState<Promo | null>(null)
+  const { sucursalId, sucursalActiva } = useSucursal()
+
+  // Filtro de sucursal de arriba: en Global salen todas; en una sucursal, las suyas y las que aplican a todas
+  const visibles = useMemo(() => !sucursalId ? promos
+    : promos.filter((p: any) => !p.sucursales?.length || p.sucursales.includes(sucursalId)), [promos, sucursalId])
 
   const cargar = async () => {
     try {
@@ -69,21 +75,25 @@ export default function PromocionesPage() {
         <div>
           <h1 className="text-xl font-black text-gray-900 flex items-center gap-2"><Tag size={20} /> Promociones</h1>
           <p className="text-xs text-gray-500 mt-1">Se aplican solas en la app, en los cobros de recepción, en los links de pago y en The Galley. Si a alguien le tocan dos, se queda con la mejor.</p>
+          <p className="text-xs font-bold text-gray-700 mt-1.5">
+            📍 {sucursalId ? `${sucursalActiva?.nombre || 'Esta sucursal'}: ${visibles.length} de ${promos.length} promociones (incluye las de todas las sucursales)` : `Global: todas las promociones (${promos.length})`}
+          </p>
         </div>
-        <button onClick={() => setEditando({ ...VACIA })}
+        <button onClick={() => setEditando({ ...VACIA, sucursales: sucursalId ? [sucursalId] : [] })}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold hover:bg-gray-700">
           <Plus size={16} /> Nueva promoción
         </button>
       </div>
 
-      {promos.length === 0 && (
+      {visibles.length === 0 && (
         <div className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center text-sm text-gray-400">
-          Todavía no hay promociones. Crea la primera con "Nueva promoción".
+          {promos.length === 0 ? 'Todavía no hay promociones. Crea la primera con "Nueva promoción".'
+            : `No hay promociones para ${sucursalActiva?.nombre || 'esta sucursal'}. Cambia a Global para ver todas.`}
         </div>
       )}
 
       <div className="grid md:grid-cols-2 gap-3">
-        {promos.map(p => (
+        {visibles.map(p => (
           <div key={p.id} className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -101,6 +111,7 @@ export default function PromocionesPage() {
               <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">
                 {p.sucursales?.length ? p.sucursales.map(nombreSuc).join(', ') : 'Todas las sucursales'}
               </span>
+              <span className={`px-2 py-0.5 rounded-md font-bold ${textoVigencia(p).color}`}>🗓️ {textoVigencia(p).texto}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center bg-gray-50 rounded-xl p-2">
               <div><p className="font-black text-gray-900">{p.items.length}</p><p className="text-[10px] text-gray-500">artículos</p></div>
@@ -116,7 +127,7 @@ export default function PromocionesPage() {
               <button onClick={() => setNotificando(p)} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50">
                 <Send size={12} /> Avisar
               </button>
-              <button onClick={() => setEditando({ ...p, inicia: p.inicia?.slice(0, 16) || '', termina: p.termina?.slice(0, 16) || '', usos_maximos: p.usos_maximos || '', sucursales: p.sucursales || [] })}
+              <button onClick={() => setEditando({ ...p, inicia: aInputMx(p.inicia), termina: aInputMx(p.termina), usos_maximos: p.usos_maximos || '', sucursales: p.sucursales || [] })}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50">
                 <Pencil size={12} /> Editar
               </button>
@@ -132,6 +143,27 @@ export default function PromocionesPage() {
 }
 
 // ── Editor ────────────────────────────────────────────────────────────────────
+// ── Fechas: la base guarda en UTC; la pantalla trabaja en hora de México ──
+const aInputMx = (iso?: string | null) => {
+  if (!iso) return ''
+  const d = new Date(new Date(iso).getTime() - 6 * 3600 * 1000)
+  return d.toISOString().slice(0, 16)                     // "YYYY-MM-DDTHH:mm" en hora de México
+}
+const deInputMx = (v?: string) => (v ? new Date(`${v}:00-06:00`).toISOString() : null)
+const fechaCorta = (iso: string) => new Date(iso).toLocaleString('es-MX', {
+  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })
+function textoVigencia(p: any) {
+  const ahora = Date.now()
+  if (p.termina && new Date(p.termina).getTime() < ahora) return { texto: `Terminó el ${fechaCorta(p.termina)}`, color: 'bg-red-50 text-red-700' }
+  if (p.inicia && new Date(p.inicia).getTime() > ahora)
+    return { texto: `Empieza el ${fechaCorta(p.inicia)}${p.termina ? ` · termina el ${fechaCorta(p.termina)}` : ''}`, color: 'bg-blue-50 text-blue-700' }
+  if (p.termina) {
+    const dias = Math.ceil((new Date(p.termina).getTime() - ahora) / 86400000)
+    return { texto: `Termina el ${fechaCorta(p.termina)} (${dias <= 1 ? 'hoy' : `en ${dias} días`})`, color: dias <= 3 ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-700' }
+  }
+  return { texto: 'Sin fecha de fin', color: 'bg-gray-100 text-gray-500' }
+}
+
 function Editor({ inicial, catalogo, onClose, onGuardado }: any) {
   const [p, setP] = useState<any>(inicial)
   const [pestana, setPestana] = useState<'paquete' | 'producto'>('paquete')
@@ -162,8 +194,9 @@ function Editor({ inicial, catalogo, onClose, onGuardado }: any) {
     setGuardando(true); setError('')
     try {
       const body = { ...p, valor: Number(p.valor), meses: Number(p.meses) || null, usos_maximos: Number(p.usos_maximos) || null,
-        inicia: p.inicia ? new Date(p.inicia).toISOString() : null, termina: p.termina ? new Date(p.termina).toISOString() : null }
+        inicia: deInputMx(p.inicia), termina: deInputMx(p.termina) }
       if (!p.items.length) throw new Error('Elige al menos un paquete o producto')
+      if (p.inicia && p.termina && p.termina <= p.inicia) throw new Error('La fecha de fin tiene que ser después de la de inicio')
       p.id ? await api(`/${p.id}`, 'PUT', body) : await api('', 'POST', body)
       onGuardado()
     } catch (e: any) { setError(e.message) }
