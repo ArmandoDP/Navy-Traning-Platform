@@ -275,20 +275,25 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       val: `${noShows} ${noShows === 1 ? 'pendiente' : 'pendientes'}`,
       que: 'No puede reservar en la app hasta que la pague desde su celular. Dirección puede condonarla directamente aquí.',
       accion: esDireccion ? {
-        t:'Condonar penalización',
+        t: 'Condonar penalización',
         f: async () => {
           try {
-            const { data: pen } = await supabase.from('penalizaciones_noshow').select('id').eq('cliente_id', cliente.id).eq('estatus', 'Pendiente')
-            if (pen && pen.length > 0) {
-              await backend(`/cliente/${cliente.id}/condonar/${pen[0].id}`, 'POST')
+            const { data: pen } = await supabase.from('penalizaciones_noshow').select('id, estatus').eq('cliente_id', cliente.id)
+            const pendiente = pen?.find(p => String(p.estatus).toLowerCase() === 'pendiente')
+
+            if (pendiente) {
+              // Se le agrega el prefijo /soporte para que coincida con el endpoint registrado en FastAPI
+              await backend(`/soporte/cliente/${cliente.id}/condonar/${pendiente.id}`)
               setToast('Penalización condonada: ya puede reservar.')
               recargarTodo()
-    }
-  } catch (e: any){
-    setToast(e.message)
-  } 
-}
-}: undefined,
+            } else {
+              setToast('No se encontró ninguna penalización pendiente.')
+            }
+          } catch (e: any) {
+            setToast(e.message)
+          } 
+        }
+      } : undefined,
  }]: []),
     {
       icon: <Repeat size={15} />, label: 'Renovación automática',
