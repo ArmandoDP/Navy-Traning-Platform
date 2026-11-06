@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState }    from 'react'
 import { supabase }               from '@/lib/supabase'
+import { useSucursal }            from '@/context/SucursalContext'
 import { Bell, Zap, Megaphone }   from 'lucide-react'
 import AlertasLista               from '@/components/alertas/AlertasLista'
 import AlertasAutomaticas         from '@/components/alertas/AlertasAutomaticas'
@@ -15,17 +16,26 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 ]
 
 export default function AlertasPage() {
+  const { sucursalId, sucursalActiva } = useSucursal()
   const [tab,     setTab]     = useState<Tab>('alertas')
   const [alertas, setAlertas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchAlertas = async () => {
     setLoading(true)
-    const { data } = await supabase
+    let q = supabase
       .from('alertas')
       .select('*, clientes(nombre_completo), clases(nombre_clase), sucursales(nombre)')
       .eq('resuelta', false)
       .order('created_at', { ascending: false })
+
+    // Filtrar por sucursal si hay una seleccionada y no es global
+    const filtroLimpio = sucursalId ? String(sucursalId).trim().toLowerCase() : ''
+    if (sucursalId && sucursalId !== 'global' && filtroLimpio !== 'null' && filtroLimpio !== 'undefined') {
+      q = q.eq('sucursal_id', sucursalId)
+    }
+
+    const { data } = await q
     if (data) setAlertas(data)
     setLoading(false)
   }
@@ -36,7 +46,7 @@ export default function AlertasPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alertas' }, fetchAlertas)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [sucursalId]) // Se vuelve a ejecutar cuando cambia la sucursal arriba en el header
 
   const marcarLeida = async (id: string) => {
     await supabase.from('alertas').update({ leida: true }).eq('id', id)
@@ -61,7 +71,10 @@ export default function AlertasPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-900">Alertas</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Centro de notificaciones y anuncios</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Centro de notificaciones y anuncios
+            {sucursalActiva && ` · ${sucursalActiva.nombre}`}
+          </p>
         </div>
       </div>
 
