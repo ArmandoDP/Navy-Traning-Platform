@@ -23,20 +23,42 @@ export default function AlertasPage() {
 
   const fetchAlertas = async () => {
     setLoading(true)
-    let q = supabase
+    let allData: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let keepFetching = true
+    
+    while (keepFetching){
+     const { data, error} = await supabase
       .from('alertas')
       .select('*, clientes(nombre_completo), clases(nombre_clase), sucursales(nombre)')
       .eq('resuelta', false)
       .order('created_at', { ascending: false })
+      .range(page * pageSize, (page + 1) * pageSize -1)
 
-    // Filtrar por sucursal si hay una seleccionada y no es global
+    if (error) {
+        console.error('Error al cargar alertas:', error)
+        break
+      }
+    if (data && data.length > 0) {
+        allData = [...allData, ...data]
+        if (data.length < pageSize) keepFetching = false
+        else page++
+      } else {
+        keepFetching = false
+      }
+    }
     const filtroLimpio = sucursalId ? String(sucursalId).trim().toLowerCase() : ''
     if (sucursalId && sucursalId !== 'global' && filtroLimpio !== 'null' && filtroLimpio !== 'undefined') {
-      q = q.eq('sucursal_id', sucursalId)
+      const filtradas = allData.filter(a =>
+        a.sucursal_id === sucursalId || 
+        a.clientes?.sucursal_id === sucursalId || 
+        a.clases?.sucursal_id === sucursalId
+      )
+      setAlertas(filtradas)
+    } else {
+      setAlertas(allData)
     }
-
-    const { data } = await q
-    if (data) setAlertas(data)
     setLoading(false)
   }
 
