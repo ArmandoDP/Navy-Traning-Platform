@@ -3,9 +3,25 @@ import { NextRequest, NextResponse }                     from 'next/server'
 import { supabaseAdmin as supabase }                     from '@/lib/supabase-admin'
 import { validarAccesoWellhub, confirmarBookingWellhub } from '@/lib/wellhub'
 
-const GYM_SUCURSAL: Record<string, string> = {
+// Gym de Wellhub → sucursal, desde la base (sucursales.wellhub_gym_id).
+// Si un gym es de dos sucursales (Juriquilla Studio y Gym), se toma la de "Studio".
+const RESPALDO_GYM: Record<string, string> = {
   '848637': '1b2032dc-f5da-40c6-8c4e-e227be14673b', // Condesa Gym
   '848638': 'f8f798a8-d89b-4874-a53a-cdcb6325ad2a', // Condesa Studio
+}
+async function sucursalDeGym(gymId?: string | number | null): Promise<string | null> {
+  const gym = String(gymId || '').trim()
+  if (!gym) return null
+  try {
+    const { data } = await supabase.from('sucursales').select('id, nombre').eq('wellhub_gym_id', gym)
+    if (data?.length) {
+      const studio = data.find((s: any) => /studio/i.test(s.nombre || ''))
+      return (studio || data[0]).id
+    }
+  } catch (e: any) {
+    console.error('Wellhub gym → sucursal:', e.message)
+  }
+  return RESPALDO_GYM[gym] || null
 }
 
 // Fuente única de cupos: Supabase + Wellhub + TotalPass desde Railway
@@ -46,6 +62,7 @@ export async function POST(req: NextRequest) {
       }
 
       const clienteExistente = await buscarCliente(user.email)
+      const sucursalCheckin  = await sucursalDeGym(gymId)
 
       const { data: checkin } = await supabase.from('wellhub_checkins').insert({
         unique_token: user.unique_token,
@@ -75,7 +92,7 @@ export async function POST(req: NextRequest) {
 
       try {
         // Validar contra el gym donde ocurrió el check-in (antes iba al gym por defecto)
-        await validarAccesoWellhub(user.unique_token, GYM_SUCURSAL[gymId])
+        await validarAccesoWellhub(user.unique_token, sucursalCheckin || undefined)
 
         await supabase.from('wellhub_checkins')
           .update({ validado: true })
@@ -89,7 +106,7 @@ export async function POST(req: NextRequest) {
             estatus:         'Activo',
             plan:            'Wellhub',
             origen:          'Wellhub',
-            sucursal_id:     GYM_SUCURSAL[gymId] || null,
+            sucursal_id:     sucursalCheckin,
           })
         }
 
@@ -100,7 +117,7 @@ export async function POST(req: NextRequest) {
           titulo:      `Check-in Wellhub validado — ${`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Usuario'}`,
           descripcion: 'Llegó a Navy · visita validada, Wellhub la paga',
           cliente_id:  clienteExistente?.id || null,
-          sucursal_id: GYM_SUCURSAL[gymId] || null,
+          sucursal_id: sucursalCheckin,
           metadata:    { gym_id: gymId, canal: 'Wellhub' },
         })
         return NextResponse.json({ received: true, validado: true })
@@ -120,7 +137,7 @@ export async function POST(req: NextRequest) {
           titulo:      `Check-in Wellhub no validado — ${`${user.first_name || ''} ${user.last_name || ''}`.trim() || user.email || 'Usuario'}`,
           descripcion: `Wellhub no aceptó la visita (${errValidacion.message}). Si se repite, revisa que su Wellhub esté activo.`,
           cliente_id:  clienteExistente?.id || null,
-          sucursal_id: GYM_SUCURSAL[gymId] || null,
+          sucursal_id: sucursalCheckin,
           metadata:    { unique_token: user.unique_token, gym_id: gymId, canal: 'Wellhub' },
         })
 
@@ -159,6 +176,9 @@ export async function POST(req: NextRequest) {
         .eq('wellhub_slot_id', String(slot.id))
         .maybeSingle()
 
+      // La sucursal: la de la clase reservada; si no se encuentra, la del gym
+      const sucursalReserva = clase?.sucursal_id || await sucursalDeGym(slot.gym_id)
+
       // Buscar / crear cliente
       let clienteExistente = await buscarCliente(user?.email)
 
@@ -170,7 +190,7 @@ export async function POST(req: NextRequest) {
           estatus:         'Activo',
           plan:            'Wellhub',
           origen:          'Wellhub',
-          sucursal_id:     GYM_SUCURSAL[String(slot.gym_id)] || null,
+          sucursal_id:     sucursalReserva,
         }).select('id').single()
         if (errorCliente) console.error('Error creando cliente Wellhub:', errorCliente.message)
         else console.log(`Cliente Wellhub creado: ${user.email}`)

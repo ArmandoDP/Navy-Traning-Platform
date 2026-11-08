@@ -4,7 +4,7 @@ import { getWellhubConfig }          from '@/lib/wellhub'
 export async function POST(req: NextRequest) {
   const { slotId, totalCapacity, totalBooked, horario, sucursalId } = await req.json()
 
-  const { gymId } = getWellhubConfig(sucursalId)
+  const { gymId } = await getWellhubConfig(sucursalId)
 
   const body: any = {}
   if (totalCapacity !== undefined) body.total_capacity = totalCapacity
