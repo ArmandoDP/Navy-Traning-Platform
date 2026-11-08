@@ -274,20 +274,39 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
     onClose()
   }
 
-  const handleCambiarEstatus = async (estatus: string) => {
+  const handleCambiarEstatus = async (estatus: 'Activo' | 'Borrador' | 'Pausado' | 'Archivado') => {
     if (!paquete?.id) return
-    await fetch('/api/paquetes', {
+    setLoading(true)
+    const res = await fetch('/api/paquetes',{
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         id: paquete.id,
         payload: { estatus },
-        precios: [],
-        accesosSucursales: [],
-        roomsSelected: [],
-        splits: [],
+        precios,
+        accesosSucursales,
+        roomsSelected,
+        splits,
       }),
     })
+    if (!res.ok){
+      const err = await res.json()
+      alert('Error: ' + (err.error || 'No se pudo cambiar el estatus'))
+      setLoading(false)
+      return
+    }
+
+    await logActividad({
+      tipo: 'paquete_modificado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido || ''} cambió el estatus del paquete "${form.nombre}" a ${estatus}`,
+      tabla: 'paquetes',
+      accion: 'UPDATE',
+      metadata: { paquete_id: paquete.id, nombre: form.nombre, estatus },
+      sucursal_id: null,
+      staff_id: staff?.id,
+    })
+    setLoading(false)
+    setToast(true)
     onSuccess()
     handleClose()
   }
@@ -363,6 +382,15 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
         {paquete && (
             <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
             <span className="text-sm font-bold text-gray-800 flex-1">{paquete.nombre}</span>
+
+            {paquete.estatus !== 'Activo' ? (
+              <button onClick={() => handleCambiarEstatus('Activo')} disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition disabled:opacity-50">
+                🟢 Activar paquete
+              </button>
+            ) : (
+              <>
+              
             <button onClick={() => handleGuardar('Borrador')}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition">
                 ↺ Guardar borrador
@@ -371,6 +399,12 @@ export default function DrawerPaquete({ isOpen, paquete, onClose, onSuccess, ver
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition">
                 ⏸ Pausar
             </button>
+            <button onClick={() => handleCambiarEstatus('Archivado')}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition">
+                📦 Archivar
+            </button>
+            </>
+            )}
             <button onClick={handleEliminar}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-red-100 rounded-xl text-xs font-bold text-red-500 hover:bg-red-50 transition">
                 🗑 Eliminar
