@@ -3,29 +3,37 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useSucursal } from '@/context/SucursalContext'
-import { Upload, Plus, RefreshCw } from 'lucide-react'
+import { Upload, Plus, RefreshCw, Search } from 'lucide-react'
 import StaffMetricas      from '../../../components/staff/StaffMetricas'
 import StaffTabla         from '../../../components/staff/StaffTabla'
 import DrawerNuevoEmpleado from '../../../components/staff/DrawerNuevoEmpleado'
 import DrawerEditarEmpleado from '@/components/staff/DrawerEditarEmpleado'
 import DrawerStaff from '@/components/staff/drawer/DrawerStaff'
 
+/**
+ * Función helper para quitar acentos, espacios dobles y pasar a minúsculas
+ */
+function normalizarTexto(str: string = ''): string {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remueve acentos / tildes
+    .replace(/\s+/g, " ")             // Convierte múltiples espacios a un solo espacio
+    .trim()
+}
+
 export default function StaffPage() {
   const { sucursalId, sucursalActiva } = useSucursal()
 
-  const [staff,      setStaff]      = useState<any[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [nuevoOpen,  setNuevoOpen]  = useState(false)
+  const [staff,          setStaff]          = useState<any[]>([])
+  const [busqueda,       setBusqueda]       = useState('')
+  const [loading,        setLoading]        = useState(true)
+  const [nuevoOpen,      setNuevoOpen]      = useState(false)
   const [editarEmpleado, setEditarEmpleado] = useState<any | null>(null)
-  const [editarOpen, setEditarOpen] = useState(false)
-  const [drawerStaffId, setDrawerStaffId] = useState<string | null>(null)
-  const [drawerOpen,    setDrawerOpen]    = useState(false)
+  const [editarOpen,     setEditarOpen]     = useState(false)
+  const [drawerStaffId,  setDrawerStaffId]  = useState<string | null>(null)
+  const [drawerOpen,     setDrawerOpen]    = useState(false)
 
-
-const coaches        = staff.filter(s => s.tipo === 'Coach' && s.estatus === 'Activo').length
-const staffOperativo = staff.filter(s => s.tipo !== 'Coach' && s.estatus === 'Activo').length
-const bonos = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
-    
   const fetchStaff = async () => {
     setLoading(true)
     const { data, error } = await supabase
@@ -47,18 +55,40 @@ const bonos = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
   useEffect(() => { fetchStaff() }, [sucursalId])
 
   // ── Métricas ──────────────────────────────────────────────────────────────────
+  const coaches        = staff.filter(s => s.tipo === 'Coach' && s.estatus === 'Activo').length
+  const staffOperativo = staff.filter(s => s.tipo !== 'Coach' && s.estatus === 'Activo').length
+  const bonos          = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
   const totalActivo      = staff.filter(s => s.estatus === 'Activo').length
-  const horasTrabajadas  = 0   // pendiente check-in
-  const clasesImpartidas = 0   // pendiente check-in
+  const horasTrabajadas  = 0
+  const clasesImpartidas = 0
   const nominaPeriodo    = staff
     .filter(s => s.estatus === 'Activo')
     .reduce((acc, s) => acc + (s.sueldo_fijo || 0), 0)
 
+  // ── Filtrado por búsqueda con tolerancia a acentos y espacios ───────────────
+  const busquedaNormalizada = normalizarTexto(busqueda)
+  
+  const staffFiltrado = staff.filter(s => {
+    if (!busquedaNormalizada) return true
+
+    const nombreCompleto = normalizarTexto(
+      `${s.nombre || ''} ${s.primer_apellido || ''} ${s.segundo_apellido || ''}`
+    )
+    const email    = normalizarTexto(s.email || '')
+    const telefono = (s.telefono || '').replace(/\D/g, '')
+
+    return (
+      nombreCompleto.includes(busquedaNormalizada) ||
+      email.includes(busquedaNormalizada) ||
+      telefono.includes(busquedaNormalizada)
+    )
+  })
+
   // ── Exportar CSV ──────────────────────────────────────────────────────────────
   const handleExportar = () => {
     const headers = ['Nombre', 'Email', 'Tipo', 'Nivel', 'Estatus', 'Sueldo', 'Ingreso']
-    const rows = staff.map(s => [
-      `${s.nombre} ${s.primer_apellido || ''} ${s.segundo_apellido || ''}`.trim(),
+    const rows = staffFiltrado.map(s => [
+      `${s.nombre || ''} ${s.primer_apellido || ''} ${s.segundo_apellido || ''}`.replace(/\s+/g, ' ').trim(),
       s.email || '',
       s.tipo || '',
       s.nivel || '',
@@ -117,9 +147,21 @@ const bonos = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
         bonos={bonos}
       />
 
-      {/* Tabla */}
+      {/* Buscador inteligente */}
+      <div className="relative max-w-md">
+        <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Buscar por nombre, correo o teléfono..."
+          value={busqueda}
+          onChange={e => setBusqueda(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 transition placeholder:text-gray-400"
+        />
+      </div>
+
+      {/* Tabla con la lista filtrada */}
       <StaffTabla
-        staff={staff}
+        staff={staffFiltrado}
         onEditar={(s) => {
           setEditarEmpleado(s)
           setEditarOpen(true)
@@ -127,7 +169,7 @@ const bonos = staff.reduce((acc, s) => acc + (s.bono_periodo || 0), 0)
         onVer={(s) => { setDrawerStaffId(s.id); setDrawerOpen(true) }}
       />
 
-      {/* Drawer nuevo */}
+      {/* Drawers */}
       <DrawerNuevoEmpleado
         isOpen={nuevoOpen}
         onClose={() => setNuevoOpen(false)}
