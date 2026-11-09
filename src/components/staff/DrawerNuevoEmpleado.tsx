@@ -22,6 +22,8 @@ const CATEGORIAS = ['HYROX', 'Hybrid', 'Calistenia', 'Force', 'Open Gym', 'Movem
 const inputCls  = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100 bg-gray-50 transition placeholder:text-gray-400"
 const selectCls = `${inputCls} appearance-none cursor-pointer`
 
+const STORAGE_DRAFT_KEY = 'draft_nuevo_empleado_crm'
+
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
@@ -79,19 +81,38 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     contacto_emergencia_telefono: '',
   })
 
-  const set = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }))
+  // ── Restaurar borrador guardado en localStorage al abrir el modal ──
+  useEffect(() => {
+    if (isOpen) {
+      const saved = localStorage.getItem(STORAGE_DRAFT_KEY)
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setForm(prev => ({ ...prev, ...parsed }))
+        } catch (e) {
+          console.error("Error al cargar borrador:", e)
+        }
+      }
+    }
+  }, [isOpen])
+
+  // ── Guardar borrador automáticamente al cambiar los inputs ──
+  const set = (k: string, v: any) => {
+    setForm(p => {
+      const updated = { ...p, [k]: v }
+      localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
 
   const isCoach = form.tipo === 'Coach'
 
-  // ── 👈 CAMBIO 1: Reglas de validación para correo y teléfono ─────────────────────────
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   const phoneRegex = /^[0-9]{10,}$/
 
-  // Valida que tengan formato correcto solo si el usuario ya empezó a escribir
   const isEmailValid = !form.email.trim() || emailRegex.test(form.email.trim())
   const isPhoneValid = !form.telefono.trim() || phoneRegex.test(form.telefono.replace(/[\s-]/g, ''))
 
-  // Determina si el formulario completo es 100% válido para habilitar el guardado
   const isFormValid = Boolean(
     form.nombre.trim() &&
     form.primer_apellido.trim() &&
@@ -101,18 +122,19 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
     phoneRegex.test(form.telefono.replace(/[\s-]/g, '')) &&
     form.tipo
   )
-  // ──────────────────────────────────────────────────────────────────────────────────
 
   const toggleCategoria = (c: string) => {
-    set('categorias', form.categorias.includes(c)
+    const nuevasCats = form.categorias.includes(c)
       ? form.categorias.filter(x => x !== c)
-      : [...form.categorias, c])
+      : [...form.categorias, c]
+    set('categorias', nuevasCats)
   }
 
   const toggleSucursal = (id: string) => {
-    set('sucursales_ids', form.sucursales_ids.includes(id)
+    const nuevasSucs = form.sucursales_ids.includes(id)
       ? form.sucursales_ids.filter(x => x !== id)
-      : [...form.sucursales_ids, id])
+      : [...form.sucursales_ids, id]
+    set('sucursales_ids', nuevasSucs)
   }
 
   useEffect(() => {
@@ -123,7 +145,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
   }, [isOpen])
 
   const handleGuardar = async () => {
-    // ── 👈 CAMBIO 2: Bloqueo de seguridad preventivo antes de procesar ─────────────────
     if (!isFormValid) return
     setLoading(true)
 
@@ -252,12 +273,15 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
       alert(`${nombreNuevo} se creó, pero no se pudo crear su acceso al CRM. Revisa que el correo no esté ya registrado.`)
     }
 
+    // Limpiar borrador local al guardar con éxito
+    localStorage.removeItem(STORAGE_DRAFT_KEY)
     setToast(true)
     onSuccess()
     handleClose()
   }
 
   const handleClose = () => {
+    localStorage.removeItem(STORAGE_DRAFT_KEY)
     setForm({
       nombre: '', primer_apellido: '', segundo_apellido: '', rfc: '',
       email: '', telefono: '', fecha_ingreso: '', estatus: 'Activo', tipo: '',
@@ -338,7 +362,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
             </Field>
           </div>
 
-          {/* ── 👈 CAMBIO 3: Inputs de Correo y Teléfono con avisos inline que aparecen/desaparecen ── */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Correo" required>
               <input 
@@ -369,7 +392,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
               )}
             </Field>
           </div>
-          {/* ───────────────────────────────────────────────────────────────────────────────── */}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Fecha de ingreso">
@@ -626,7 +648,6 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
             Cancelar
           </button>
 
-          {/* ── 👈 CAMBIO 4: El botón se mantiene deshabilitado e inoperable hasta que isFormValid sea true ── */}
           <button onClick={handleGuardar} disabled={loading || !isFormValid}
             className="flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
             style={{ backgroundColor: '#171B24' }}>

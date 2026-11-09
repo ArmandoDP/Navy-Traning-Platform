@@ -26,6 +26,8 @@ const formVacio = () => ({
 })
 type Form = ReturnType<typeof formVacio>
 
+const STORAGE_DRAFT_KEY = 'draft_nuevo_cliente_crm'
+
 // El acceso a la app ya no usa contraseña; el servicio de alta la pide, así que se genera una que nadie usa
 const passwordInterna = () =>
   'NAVY-' + Array.from({ length: 12 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('')
@@ -122,7 +124,30 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   const [modalPago,     setModalPago]     = useState(false)
   const [titularId,     setTitularId]     = useState<string | null>(null)
 
-  const set = (k: keyof Form, v: string) => setForm(p => ({ ...p, [k]: v }))
+  // ── Cargar borrador guardado en localStorage al abrir el modal ──
+  useEffect(() => {
+    if (isOpen) {
+      const saved = localStorage.getItem(STORAGE_DRAFT_KEY)
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          setForm(prev => ({ ...prev, ...parsed }))
+        } catch (e) {
+          console.error("Error al cargar borrador de cliente:", e)
+        }
+      }
+    }
+  }, [isOpen])
+
+  // ── Guardar en localStorage cada vez que el formulario cambia ──
+  const set = (k: keyof Form, v: string) => {
+    setForm(p => {
+      const updated = { ...p, [k]: v }
+      localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }
+
   const tocar = (k: string) => setTocados(p => ({ ...p, [k]: true }))
 
   const errores = validar(form, tipo)
@@ -131,6 +156,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   const faltan = Object.keys(errores)
 
   const reset = () => {
+    localStorage.removeItem(STORAGE_DRAFT_KEY)
     setForm(formVacio()); setTipo('nuevo'); setCobrarAhora(false); setTocados({}); setIntento(false)
     setErrorGeneral(''); setEstadoCorreo('idle'); setDuplicado(null); setTelDuplicado(null)
   }
@@ -138,14 +164,12 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
 
   useEffect(() => {
     if (!isOpen) return
-    reset()
     supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre')
       .then(({ data }) => setSucursales(data || []))
   }, [isOpen])
 
   // Paquetes de la sucursal elegida (para migración)
   useEffect(() => {
-    setForm(p => ({ ...p, paquete_id: '', fecha_fin_membresia: '' }))
     if (!form.sucursal_id) { setPaquetes([]); return }
     supabase.from('paquetes')
       .select('id, nombre, vigencia_dias, max_usuarios, paquete_precios!inner(sucursal_id)')
@@ -155,8 +179,14 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
 
   useEffect(() => {
     const paq = paquetes.find(p => p.id === form.paquete_id)
-    if (paq?.vigencia_dias && form.fecha_inicio_membresia)
-      setForm(p => ({ ...p, fecha_fin_membresia: sumarDias(form.fecha_inicio_membresia, paq.vigencia_dias ?? 30) }))
+    if (paq?.vigencia_dias && form.fecha_inicio_membresia) {
+      const nuevaFechaFin = sumarDias(form.fecha_inicio_membresia, paq.vigencia_dias ?? 30)
+      setForm(p => {
+        const updated = { ...p, fecha_fin_membresia: nuevaFechaFin }
+        localStorage.setItem(STORAGE_DRAFT_KEY, JSON.stringify(updated))
+        return updated
+      })
+    }
   }, [form.paquete_id, form.fecha_inicio_membresia, paquetes])
 
   // Correo: válido y sin dueño (sin importar mayúsculas)
@@ -275,6 +305,9 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
       setNuevoId(cli.id)
       if (paquete?.max_usuarios === 2) { setTitularId(cli.id); setGuardando(false); return }
       if (tipo === 'nuevo' && cobrarAhora) { setNuevoCliente(cli); setModalPago(true); setGuardando(false); return }
+      
+      // Limpiar borrador local al guardar con éxito
+      localStorage.removeItem(STORAGE_DRAFT_KEY)
       setToast(true); onSuccess(); cerrar()
     } catch (e: any) {
       setErrorGeneral(e.message || 'No se pudo crear el cliente.')
