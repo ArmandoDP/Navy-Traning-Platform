@@ -20,7 +20,6 @@ const fecha   = (d?: string | null, largo = true) => d
   ? new Date(`${d.slice(0, 10)}T12:00:00`).toLocaleDateString('es-MX', largo ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short' })
   : '—'
 
-// ✅ Cálculo exacto de días naturales a medianoche sin desfasar milisegundos
 const dias = (d?: string | null) => {
   if (!d) return null
   const fechaFin = new Date(`${d.slice(0, 10)}T00:00:00`)
@@ -47,7 +46,6 @@ async function backend(path: string, body?: any) {
 
 const SEL = '*, paquetes(nombre, vigencia_dias, es_recurrente, clases_incluidas, penalizacion_noshow, monto_penalizacion, acceso_total, acceso_sucursal_hermana)'
 
-// ── Piezas visuales ───────────────────────────────────────────────────────────
 function Tarjeta({ icon, titulo, ayuda, derecha, children }: { icon: ReactNode; titulo: string; ayuda?: string; derecha?: ReactNode; children: ReactNode }) {
   return (
     <section className="border border-gray-100 rounded-2xl p-5 bg-white">
@@ -84,7 +82,14 @@ function Accion({ icon, titulo, desc, onClick, tono = 'normal', bloqueado }:
 
 export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const { staff } = useAuth()
-  const esDireccion = staff?.rol === 'direccion' || staff?.rol === 'gerente' || true
+  
+  const rolStaff = String(staff?.rol || '').trim().toLowerCase()
+  
+  // Exclusivo para Dirección (Pausar, Regalar, Migrar, Renovación)
+  const esDireccion = rolStaff === 'direccion' || Boolean((staff as any)?.es_direccion)
+  
+  // Exclusivo para Dirección O Gerencia (Editar fechas)
+  const esDireccionOGerencia = esDireccion || rolStaff === 'gerencia' || rolStaff === 'gerente'
 
   const [toast,         setToast]         = useState<string | null>(null)
   const [modalPago,     setModalPago]     = useState(false)
@@ -124,7 +129,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const recargarTodo = () => { cargar(); onRefresh?.() }
   const sincronizar = () => backend(`/clientes-estado/sincronizar/${cliente.id}`).catch(() => {})
 
-  // ── Plan actual ──
   const hoy = hoyCDMX()
   const vigentes = membresias.filter(m => (m.estatus === 'Activa' || m.estatus === 'Pausada') && (m.activacion_pendiente || (m.fecha_fin || '') >= hoy))
   const ordenadas = [...vigentes].sort((a, b) =>
@@ -140,7 +144,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
 
   const paq      = actual?.paquetes || {}
 
-  // ❄️ CÁLCULO DE DÍAS CONGELADOS VS ACTIVOS
   const restan = actual && !actual.activacion_pendiente
     ? (actual.estatus === 'Pausada' && actual.fecha_inicio_pausa && actual.fecha_fin_original
       ? Math.max(0, Math.round((new Date(`${actual.fecha_fin_original.slice(0, 10)}T00:00:00`).getTime() - new Date(`${actual.fecha_inicio_pausa.slice(0, 10)}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24)))
@@ -162,7 +165,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
     : { t: 'Vigente', c: 'bg-emerald-400/15 text-emerald-300', i: CheckCircle2 }
   const EstadoIcon = estado.i
 
-  // ── Renovación automática ──
   const cambiarRenovacion = async (cancelar: boolean) => {
     if (!actual) return
     setCambiandoRenov(true)
@@ -176,7 +178,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
     setCambiandoRenov(false)
   }
 
-  // ── Abrir modal de migración ──
   const abrirMigracion = async () => {
     setLoadingPaq(true); setModalMigracion(true)
     let q = supabase.from('paquetes').select('id, nombre, vigencia_dias, paquete_precios!inner(sucursal_id, activo)')
@@ -219,7 +220,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
     setToast('Membresía migrada correctamente ✓')
   }
 
-  // ── Regalar un paquete (cortesía) ──
   const abrirCortesia = async () => {
     setLoadingPaq(true); setModalPaquete(true)
     let q = supabase.from('paquetes').select('id, nombre, vigencia_dias, paquete_precios!inner(sucursal_id, activo)')
@@ -274,7 +274,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       icon: <Ban size={15} />, label: 'No Show sin pagar', nivel: 'bloquea' as Nivel,
       val: `${noShows} ${noShows === 1 ? 'pendiente' : 'pendientes'}`,
       que: 'No puede reservar en la app hasta que la pague desde su celular. Dirección puede condonarla directamente aquí.',
-      accion: esDireccion || staff?.rol === 'gerente'? {
+      accion: esDireccion ? {
         t: 'Condonar penalización',
         f: async () => {
           try {
@@ -282,7 +282,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
             const pendiente = pen?.find(p => String(p.estatus).toLowerCase() === 'pendiente')
 
             if (pendiente) {
-              // Se le agrega el prefijo /soporte para que coincida con el endpoint registrado en FastAPI
               await backend(`/soporte/cliente/${cliente.id}/condonar/${pendiente.id}`)
               setToast('Penalización condonada: ya puede reservar.')
               recargarTodo()
@@ -294,7 +293,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
           } 
         }
       } : undefined,
- }]: []),
+    }]: []),
     {
       icon: <Repeat size={15} />, label: 'Renovación automática',
       nivel: (paq.es_recurrente && !actual.stripe_subscription_id && !actual.renovacion_cancelada) ? 'ojo' as Nivel : 'ok' as Nivel,
@@ -354,7 +353,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       <ModalReanudarMembresia isOpen={reanudarOpen} membresia={actual} clienteId={cliente.id} onClose={() => setReanudarOpen(false)}
         onSuccess={recargarTodo} />
 
-      {/* ── Secciones ── */}
       <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-2xl sticky top-0 z-10">
         {([
           { k: 'plan',      t: 'Plan' },
@@ -385,7 +383,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       )}
 
       {seccion === 'plan' && <>
-      {/* ── Plan actual ── */}
       <div className="rounded-3xl p-6 text-white" style={{ background: 'linear-gradient(135deg, #171B24 0%, #262c3a 100%)' }}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -404,7 +401,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
 
         {actual && !actual.activacion_pendiente && (
           <div className="mt-6 space-y-4">
-            {/* Contadores principales */}
             <div className="flex items-end justify-between">
               <div>
                 <div className="flex items-center gap-2">
@@ -428,7 +424,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
               )}
             </div>
 
-            {/* 🧊 BANNER INFORMATIVO DE PAUSA DETALLADO */}
             {actual?.estatus === 'Pausada' && (
               <div className="bg-amber-400/10 border border-amber-400/20 rounded-2xl p-3.5 space-y-2">
                 <div className="flex items-center justify-between text-xs">
@@ -450,7 +445,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
               </div>
             )}
 
-            {/* Barra de progreso de días */}
             <div className="h-2 rounded-full bg-white/10 overflow-hidden">
               <div 
                 className={`h-full rounded-full ${actual?.estatus === 'Pausada' ? 'bg-amber-400' : (restan ?? 99) <= 7 ? 'bg-orange-400' : 'bg-emerald-400'}`} 
@@ -479,7 +473,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         )}
       </div>
 
-      {/* ── Renovación automática ── */}
       {actual && paq.es_recurrente && (
         <div className={`rounded-2xl border p-4 flex items-center gap-4 ${
           actual.renovacion_cancelada ? 'bg-red-50 border-red-100'
@@ -511,21 +504,27 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         </div>
       )}
 
-      {/* ── Qué puedo hacer ── */}
+      {/* ── Acciones con permisos exactos ── */}
       <Tarjeta icon={<Layers size={15} />} titulo="Acciones" ayuda="Lo que puedes hacer con la membresía de este cliente.">
         <div className="grid grid-cols-2 gap-2.5">
           <Accion tono="oscuro" icon={<RefreshCw size={14} />} titulo={actual ? 'Renovar o cambiar plan' : 'Cobrar un plan'}
             desc="Con su tarjeta guardada o enviándole el cobro a su app" onClick={() => setModalPago(true)} />
+          
+          {/* 👈 Gerencia SÍ puede editar fechas */}
           <Accion tono="indigo" icon={<Calendar size={14} />} titulo="Editar fechas"
             desc={actual ? `Mover el inicio o fin de ${actual.paquetes?.nombre}` : 'Necesita un plan activo'}
             onClick={() => actual && setMembFechas(actual.id)}
-            bloqueado={!esDireccion ? 'Solo dirección' : !actual ? 'Necesita un plan activo' : undefined} />
+            bloqueado={!esDireccionOGerencia ? 'Solo Dirección y Gerencia' : !actual ? 'Necesita un plan activo' : undefined} />
+          
+          {/* 👈 Solo Dirección puede regalar */}
           <Accion tono="verde" icon={<Gift size={14} />} titulo="Regalar un paquete" desc="Cortesía sin costo, con correo al cliente"
             onClick={abrirCortesia} bloqueado={!esDireccion ? 'Solo dirección' : undefined} />
           
+          {/* 👈 Solo Dirección puede migrar */}
           <Accion tono="indigo" icon={<Layers size={14} />} titulo="Migrar membresía" desc="Registrar plan anterior sin cobro ni cargos"
-            onClick={abrirMigracion} bloqueado={!esDireccion ? 'Solo dirección' : undefined} />
+            onClick={abrirMigracion} bloqueado={!esDireccionOGerencia ? 'Solo dirección y Gerencia' : undefined} />
           
+          {/* 👈 Solo Dirección puede pausar o reanudar */}
           {actual?.estatus === 'Pausada' ? (
             <Accion tono="verde" icon={<Play size={14} />} titulo="Reanudar membresía" desc="Descongelar plan y ajustar fecha de vencimiento"
               onClick={() => setReanudarOpen(true)} bloqueado={!esDireccion ? 'Solo dirección' : undefined} />
@@ -538,7 +537,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         </div>
       </Tarjeta>
 
-      {/* ── Próximo plan en cola ── */}
       {enCola && (
         <div className="rounded-2xl border-2 border-dashed border-indigo-200 bg-indigo-50/60 p-4 flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0"><Clock size={18} /></div>
@@ -547,7 +545,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
             <p className="text-sm font-black text-gray-900">{enCola.paquetes?.nombre}</p>
             <p className="text-xs text-gray-500">{fecha(enCola.fecha_inicio)} → {fecha(enCola.fecha_fin)}</p>
           </div>
-          {esDireccion && (
+          {esDireccionOGerencia && (
             <button onClick={() => setMembFechas(enCola.id)} className="text-xs font-bold text-indigo-600 hover:underline shrink-0">Editar fechas</button>
           )}
         </div>
@@ -555,17 +553,11 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
 
       </>}
 
-      {/* ── Reglas de su plan ── */}
       {seccion === 'reglas' && (
         actual ? (
           <div className="space-y-2.5">
             <p className="text-[11px] text-gray-400 px-1">
               Lo que aplica para <b className="text-gray-700">{actual.paquetes?.nombre}</b>.
-              <span className="inline-flex items-center gap-3 ml-2">
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />En orden</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Revisar</span>
-                <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />Bloquea</span>
-              </span>
             </p>
             {reglas.map(r => {
               const st = SEMAFORO[r.nivel]
@@ -595,7 +587,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         )
       )}
 
-      {/* ── Historial ── */}
       {seccion === 'historial' && <Tarjeta icon={<History size={15} />} titulo="Historial de planes" ayuda="Todos los planes que ha tenido, del más reciente al más antiguo.">
         {historial.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-4 bg-gray-50 rounded-xl">Sin planes anteriores.</p>
@@ -624,7 +615,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         )}
       </Tarjeta>}
 
-      {/* ── Regalar paquete (cortesía) ── */}
       {modalPaquete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div onClick={() => setModalPaquete(false)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
@@ -668,7 +658,6 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         </div>
       )}
 
-      {/* ── Modal de Migración de Membresía ── */}
       {modalMigracion && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div onClick={() => setModalMigracion(false)} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
