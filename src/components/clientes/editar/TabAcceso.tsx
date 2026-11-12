@@ -14,11 +14,12 @@ interface Props {
   cargando:    boolean
   recargar:    () => void
   esDireccion: boolean
+  puedeCondonar?: boolean   // quitar No Show: dirección y gerentes (si falta, solo dirección)
   irA:         (tab: string) => void
   onEliminado?: (mensaje: string) => void   // se unió o se eliminó: cerrar el drawer y recargar
 }
 
-export default function TabAcceso({ cliente, tipo, soporte, cargando, recargar, esDireccion, irA, onEliminado }: Props) {
+export default function TabAcceso({ cliente, tipo, soporte, cargando, recargar, esDireccion, puedeCondonar, irA, onEliminado }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [mensaje, setMensaje] = useState<{ tono: 'ok' | 'error'; texto: string } | null>(null)
 
@@ -143,10 +144,10 @@ export default function TabAcceso({ cliente, tipo, soporte, cargando, recargar, 
           descripcion="Mientras tenga una penalización sin pagar, la app no le deja reservar.">
           {penalizaciones.map((p: any) => (
             <Aviso key={p.id} tono="error" titulo={`${dinero(p.monto)} sin pagar`}
-              acciones={esDireccion
+              acciones={(puedeCondonar ?? esDireccion)
                 ? <Boton variante="peligro" cargando={ocupado === p.id}
                     onClick={() => accion(p.id, `/cliente/${cliente.id}/condonar/${p.id}`, 'Penalización condonada: ya puede reservar.')}>Condonar</Boton>
-                : <span className="text-[11px]">Solo dirección puede condonarla.</span>}>
+                : <span className="text-[11px]">Solo dirección y gerencia pueden condonarla.</span>}>
               Faltó a una clase sin cancelar ({fechaHora(p.created_at)}). Puede pagarla desde la app.
             </Aviso>
           ))}

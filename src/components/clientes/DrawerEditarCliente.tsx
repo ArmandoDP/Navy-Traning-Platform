@@ -33,8 +33,9 @@ const formVacio = {
 export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSuccess }: Props) {
   const { staff } = useAuth()
   const esDireccion = staff?.rol === 'direccion'
+  const puedeCondonar = esDireccion || ['gerente', 'gerencia'].includes(String(staff?.rol || '').trim().toLowerCase())   // quitar No Show: dirección y gerentes
 
-  const [tab,        setTab]        = useState<Tab>('datos')
+  const [tab,       setTab]        = useState<Tab>('datos')
   const [form,       setForm]       = useState(formVacio)
   const [notas,      setNotas]      = useState('')
   const [sucursales, setSucursales] = useState<{ id: string; nombre: string }[]>([])
@@ -241,7 +242,7 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
           {tab === 'seguimiento' && <TabProspecto cliente={cliente} soporte={soporte} cargando={cargandoSop} />}
           {tab === 'acceso' && (
             <TabAcceso cliente={cliente} tipo={tipo} soporte={soporte} cargando={cargandoSop}
-              recargar={cargarSoporte} esDireccion={esDireccion} irA={t => setTab(t as Tab)}
+              recargar={cargarSoporte} esDireccion={esDireccion} puedeCondonar={puedeCondonar} irA={t => setTab(t as Tab)}
               onEliminado={m => { alert(m); onSuccess(); onClose() }} />
           )}
         </div>

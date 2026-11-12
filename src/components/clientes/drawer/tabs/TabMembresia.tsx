@@ -273,8 +273,8 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
     ...(noShows > 0 ? [{
       icon: <Ban size={15} />, label: 'No Show sin pagar', nivel: 'bloquea' as Nivel,
       val: `${noShows} ${noShows === 1 ? 'pendiente' : 'pendientes'}`,
-      que: 'No puede reservar en la app hasta que la pague desde su celular. Dirección puede condonarla directamente aquí.',
-      accion: esDireccion ? {
+      que: 'No puede reservar en la app hasta que la pague desde su celular. Dirección y gerencia pueden condonarla directamente aquí.',
+      accion: esDireccionOGerencia ? {
         t: 'Condonar penalización',
         f: async () => {
           try {
