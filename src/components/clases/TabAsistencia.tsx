@@ -10,7 +10,8 @@ interface Props {
   historialClientes: Record<string, number>
   checkingIn:        string | boolean | null
   onCheckIn:         (reserva: any) => void
-  onCancelar:        (reservaId: string) => void
+  onNoShow:          (reservaId: string) => void                 // registra un No Show (NO cancela la reserva)
+  puedeMarcarNoShow?: boolean                                    // solo cuando la clase ya empezó
   onCancelarReserva?: (reserva: any) => Promise<string | null>   // cancelar a petición del cliente (regresa la clase); devuelve error o null
   puedeCancelarReserva?: boolean
 }
@@ -43,7 +44,7 @@ const hace = (iso?: string) => {
   return d <= 0 ? 'hoy' : d === 1 ? 'ayer' : d < 30 ? `hace ${d} días` : `hace ${Math.floor(d / 30)} ${Math.floor(d / 30) === 1 ? 'mes' : 'meses'}`
 }
 
-export default function TabAsistencia({ reservas, asistencias, historialClientes, checkingIn, onCheckIn, onCancelar, onCancelarReserva, puedeCancelarReserva }: Props) {
+export default function TabAsistencia({ reservas, asistencias, historialClientes, checkingIn, onCheckIn, onNoShow, puedeMarcarNoShow = true, onCancelarReserva, puedeCancelarReserva }: Props) {
   const [aCancelar, setACancelar]   = useState<any>(null)
   const [cancelando, setCancelando] = useState(false)
   const [errorCancelar, setErrorCancelar] = useState('')
@@ -101,7 +102,8 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
   const activos    = reservasUnicas.filter(r => r.estatus !== 'Cancelada')
   const cancelados = reservasUnicas.filter(r => r.estatus === 'Cancelada')
   const presentes  = activos.filter(estaPresente)
-  const pendientes = activos.filter(r => !estaPresente(r))
+  const noShows    = activos.filter(r => !estaPresente(r) && r.estatus === 'No Show')
+  const pendientes = activos.filter(r => !estaPresente(r) && r.estatus !== 'No Show')
 
   const previasDe = (clienteId?: string) => Math.max(
     historial[clienteId || '']?.total ?? 0,
@@ -206,6 +208,17 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
                     <span className="flex items-center gap-1.5 text-[11px] font-black text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100">
                       <CheckCircle2 size={12} /> Presente
                     </span>
+                  ) : r.estatus === 'No Show' ? (
+                    <>
+                      <span className="flex items-center gap-1.5 text-[11px] font-black text-red-600 bg-red-50 px-3 py-1.5 rounded-xl border border-red-100">
+                        <UserX size={12} /> No Show
+                      </span>
+                      <button onClick={() => onCheckIn(r)} disabled={guardando}
+                        title="Si llegó tarde, el Check-in corrige el No Show"
+                        className="flex items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-black bg-white border border-gray-200 text-gray-600 hover:border-emerald-200 hover:text-emerald-600 transition disabled:opacity-40">
+                        <UserCheck size={12} /> {guardando ? 'Guardando…' : 'Check-in'}
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button onClick={() => onCheckIn(r)} disabled={guardando}
@@ -222,8 +235,9 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
                           </button>
                         )
                       })()}
-                      <button onClick={() => onCancelar(r.id)}
-                        className="flex items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500 transition">
+                      <button onClick={() => onNoShow(r.id)} disabled={!puedeMarcarNoShow}
+                        title={puedeMarcarNoShow ? 'El cliente no llegó: se registra como No Show (no cancela la reserva)' : 'Disponible cuando empiece la clase'}
+                        className="flex items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-black bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500 transition disabled:opacity-30 disabled:cursor-not-allowed">
                         <UserX size={12} /> No-show
                       </button>
                     </>
@@ -266,11 +280,13 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
         <div className="flex h-2.5 rounded-full overflow-hidden bg-gray-200">
           <div className="bg-emerald-500" style={{ width: `${(presentes.length / (reservasUnicas.length || 1)) * 100}%` }} />
           <div className="bg-amber-400" style={{ width: `${(pendientes.length / (reservasUnicas.length || 1)) * 100}%` }} />
+          <div className="bg-red-400" style={{ width: `${(noShows.length / (reservasUnicas.length || 1)) * 100}%` }} />
           <div className="bg-gray-300" style={{ width: `${(cancelados.length / (reservasUnicas.length || 1)) * 100}%` }} />
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-bold">
           <span className="flex items-center gap-1.5 text-gray-600"><span className="w-2 h-2 rounded-full bg-emerald-500" />{presentes.length} presentes</span>
           <span className="flex items-center gap-1.5 text-gray-600"><span className="w-2 h-2 rounded-full bg-amber-400" />{pendientes.length} por llegar</span>
+          {noShows.length > 0 && <span className="flex items-center gap-1.5 text-red-500"><span className="w-2 h-2 rounded-full bg-red-400" />{noShows.length} no show</span>}
           {cancelados.length > 0 && <span className="flex items-center gap-1.5 text-gray-400"><span className="w-2 h-2 rounded-full bg-gray-300" />{cancelados.length} cancelaron</span>}
           {primeraVez > 0 && <span className="flex items-center gap-1.5 text-amber-700">🌱 {primeraVez} {primeraVez === 1 ? 'viene' : 'vienen'} por primera vez</span>}
         </div>
@@ -295,6 +311,7 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
 
       <Seccion titulo="Presentes"   n={presentes.length}  tono="bg-emerald-50 border-emerald-100 text-emerald-600" lista={presentes} />
       <Seccion titulo="Por llegar"  n={pendientes.length} tono="bg-amber-50 border-amber-100 text-amber-600"       lista={pendientes} />
+      <Seccion titulo="No Show"     n={noShows.length}    tono="bg-red-50 border-red-100 text-red-500"             lista={noShows} />
       <Seccion titulo="Canceladas"  n={cancelados.length} tono="bg-gray-50 border-gray-100 text-gray-400"          lista={cancelados} />
       {aCancelar && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">

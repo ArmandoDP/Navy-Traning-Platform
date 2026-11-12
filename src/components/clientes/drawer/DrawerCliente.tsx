@@ -29,14 +29,16 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
   const [pagos,         setPagos]         = useState<any[]>([])
   const [notas,         setNotas]         = useState<any[]>([])
   const [comunicaciones,setComunicaciones]= useState<any[]>([])
+  const [asistencias,   setAsistencias]   = useState<any[]>([])
   const [loading,       setLoading]       = useState(true)
   const [toast,         setToast]         = useState<string | null>(null)
 
-  const fetchData = async () => {
+  // silencioso = recarga sin el "Cargando..." (se usa al cambiar de pestaña para traer lo más reciente)
+  const fetchData = async (silencioso?: unknown) => {
     if (!clienteId) return
-    setLoading(true)
+    if (silencioso !== true) setLoading(true)
 
-    const [{ data: cli }, { data: res }, { data: pgs }, { data: nts }, { data: coms }] = await Promise.all([
+    const [{ data: cli }, { data: res }, { data: pgs }, { data: nts }, { data: coms }, { data: asis }] = await Promise.all([
       supabase.from('clientes').select('*, sucursales(nombre, color), paquetes(nombre, numero_clases, precio)')
         .eq('id', clienteId).single(),
       supabase.from('reservas').select('*, clases(nombre_clase, horario, tipo_clase, staff(nombre, primer_apellido), sucursales(nombre))')
@@ -47,6 +49,9 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
         .eq('cliente_id', clienteId).order('created_at', { ascending: false }),
       supabase.from('comunicaciones').select('*')
         .eq('cliente_id', clienteId).order('created_at', { ascending: false }),
+      // Check-ins registrados (por QR o desde la clase): el perfil los usa para saber si asistió
+      // (la tabla asistencias no tiene reserva_id: solo clase_id y fecha_checkin)
+      supabase.from('asistencias').select('clase_id, fecha_checkin').eq('cliente_id', clienteId),
     ])
 
     if (cli)  setCliente(cli)
@@ -54,12 +59,18 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
     setPagos(pgs     || [])
     setNotas(nts     || [])
     setComunicaciones(coms || [])
+    setAsistencias(asis || [])
     setLoading(false)
   }
 
   useEffect(() => {
     if (isOpen && clienteId) { fetchData(); setTab('membresia') }
   }, [isOpen, clienteId])
+
+  // Reservas y actividad cambian desde fuera (check-ins, cancelaciones): al entrar a esas pestañas se recarga
+  useEffect(() => {
+    if (isOpen && clienteId && (tab === 'reservas' || tab === 'actividad')) fetchData(true)
+  }, [tab])
 
   const noShows = reservas.filter(r => r.estatus === 'No Show').length
 
@@ -111,6 +122,7 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
               pagos={pagos}
               onEditar={() => onEditar(cliente)}
               noShows={noShows}
+              asistencias={asistencias}
             />
 
             {/* Tabs */}
@@ -131,11 +143,11 @@ export default function DrawerCliente({ clienteId, isOpen, onClose, onEditar }: 
             <div className="flex-1 overflow-y-auto px-6 py-5">
               {/* {tab === 'resumen'        && <TabResumen        cliente={cliente} reservas={reservas} onRefresh={fetchData} onEditar={onEditar} noShows={noShows} />} */}
               {tab === 'membresia'      && <TabMembresia      cliente={cliente} reservas={reservas} onRefresh={fetchData} />}
-              {tab === 'reservas'       && <TabReservas       reservas={reservas} />}
+              {tab === 'reservas'       && <TabReservas       reservas={reservas} asistencias={asistencias} />}
               {tab === 'pagos'          && <TabPagos          pagos={pagos} />}
               {tab === 'notas'          && <TabNotas          clienteId={clienteId!} notas={notas} onRefresh={fetchData} />}
               {tab === 'comunicaciones' && <TabComunicaciones cliente={cliente} comunicaciones={comunicaciones} />}
-              {tab === 'actividad'      && <TabActividad      reservas={reservas} pagos={pagos} comunicaciones={comunicaciones} />}
+              {tab === 'actividad'      && <TabActividad      reservas={reservas} pagos={pagos} comunicaciones={comunicaciones} asistencias={asistencias} />}
               {tab === 'acceso' && <TabAccesoCliente cliente={cliente} onRefresh={fetchData} />}
             </div>
 

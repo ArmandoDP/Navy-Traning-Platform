@@ -1,10 +1,12 @@
 'use client'
 import { Calendar, Check, Mail, CreditCard } from 'lucide-react'
+import { estadoReserva } from '@/lib/estadoReserva'
 
 interface Props {
   reservas:       any[]
   pagos:          any[]
   comunicaciones: any[]
+  asistencias?:   any[]
 }
 
 interface EventoActividad {
@@ -21,14 +23,18 @@ const TIPO_ICON: Record<string, React.ReactNode> = {
   pago:          <CreditCard size={15} className="text-gray-500"/>,
 }
 
-export default function TabActividad({ reservas, pagos, comunicaciones }: Props) {
+export default function TabActividad({ reservas, pagos, comunicaciones, asistencias = [] }: Props) {
   // Construir timeline unificado
   const eventos: EventoActividad[] = [
-    ...reservas.map(r => ({
+    ...reservas.map(r => {
+      const estado = estadoReserva(r, asistencias)
+      return {
       fecha:     new Date(r.clases?.horario || r.created_at),
-      tipo:      r.estatus === 'Confirmada' ? 'asistencia' : 'reserva' as any,
-      titulo:    r.estatus === 'Confirmada'
+      tipo:      estado === 'asistio' ? 'asistencia' : 'reserva' as any,
+      titulo:    estado === 'asistio'
         ? `Asistió a clase`
+        : estado === 'cancelada' ? `Reserva cancelada: ${r.clases?.nombre_clase || ''}`
+        : estado === 'no_show'   ? `No Show: ${r.clases?.nombre_clase || ''}`
         : `Reserva de clase ${r.clases?.nombre_clase || ''}`,
       subtitulo: [
         r.clases?.nombre_clase,
@@ -37,7 +43,8 @@ export default function TabActividad({ reservas, pagos, comunicaciones }: Props)
           : null,
         r.clases?.sucursales?.nombre
       ].filter(Boolean).join(' · '),
-    })),
+      }
+    }),
     ...pagos.map(p => ({
       fecha:     new Date(p.fecha_pago),
       tipo:      'pago' as const,

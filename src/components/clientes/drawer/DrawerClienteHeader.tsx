@@ -1,5 +1,6 @@
 'use client'
 import { Pencil, Star } from 'lucide-react'
+import { estadoReserva } from '@/lib/estadoReserva'
 
 interface Props {
   cliente:  any
@@ -7,14 +8,16 @@ interface Props {
   pagos:    any[]
   onEditar: () => void
   noShows:  number
+  asistencias?: any[]
 }
 
-export default function DrawerClienteHeader({ cliente, reservas, pagos, onEditar, noShows }: Props) {
+export default function DrawerClienteHeader({ cliente, reservas, pagos, onEditar, noShows, asistencias = [] }: Props) {
   const sucNombre = cliente.sucursales?.nombre || ''
   const sucColor  = cliente.sucursales?.color  || '#6b7280'
 
   // Calcular dinámico desde datos reales
-  const visitas     = reservas.filter(r => r.estatus === 'Confirmada').length
+  // Visitas = clases a las que sí asistió (antes contaba reservas 'Confirmada', incluidas las futuras)
+  const visitas     = reservas.filter(r => estadoReserva(r, asistencias) === 'asistio').length
   const valorCliente = pagos
     .filter(p => p.estatus === 'Completado')
     .reduce((acc, p) => acc + (Number(p.monto) || 0), 0)

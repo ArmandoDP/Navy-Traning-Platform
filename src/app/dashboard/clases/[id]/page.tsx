@@ -146,11 +146,11 @@ export default function DetalleClase() {
     setCheckingIn(null)
   }
 
-  // ── Cancelar reserva ───────────────────────────────────────────────────────
-  const handleCancelarReserva = async (reservaId: string) => {
+  // ── No-show: registra la falta; NO cancela la reserva ──────────────────────
+  const handleMarcarNoShow = async (reservaId: string) => {
     const { error } = await supabase
       .from('reservas')
-      .update({ estatus: 'Cancelada' })
+      .update({ estatus: 'No Show' })
       .eq('id', reservaId)
 
     if (!error) fetchData()
@@ -309,10 +309,10 @@ export default function DetalleClase() {
                           {checkingIn === r.clientes?.id ? '...' : hizoChekin ? 'Check-in hecho' : 'Check-in'}
                         </button>
                       )}
-                      {/* Cancelar reserva */}
-                      {!cancelada && !hizoChekin && (
+                      {/* No-show (registra la falta, no cancela) */}
+                      {!cancelada && !hizoChekin && r.estatus !== 'No Show' && (
                         <button
-                          onClick={() => handleCancelarReserva(r.id)}
+                          onClick={() => handleMarcarNoShow(r.id)}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-zinc-800 hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"
                         >
                           <UserX size={13} /> No-show

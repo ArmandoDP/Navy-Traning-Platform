@@ -1,22 +1,26 @@
 'use client'
 import { Check, ChevronRight, Clock } from 'lucide-react'
+import { estadoReserva } from '@/lib/estadoReserva'
 
-interface Props { reservas: any[] }
+interface Props { reservas: any[]; asistencias?: any[] }
 
-export default function TabReservas({ reservas }: Props) {
+export default function TabReservas({ reservas, asistencias = [] }: Props) {
   const sorted = [...reservas].sort((a, b) =>
     new Date(b.clases?.horario || b.created_at).getTime() -
     new Date(a.clases?.horario || a.created_at).getTime()
   )
 
+  // El criterio vive en lib/estadoReserva.ts (el mismo para el encabezado y la actividad)
   const getEstadoUI = (r: any) => {
-    const horario = r.clases?.horario
-    const esProxima = horario && new Date(horario) > new Date()
-    if (esProxima)               return { label: 'Próxima',    color: 'text-orange-500', icon: <ChevronRight size={13} className="text-orange-400"/> }
-    if (r.estatus === 'Confirmada') return { label: 'Asistió',    color: 'text-green-600',  icon: <Check size={13} className="text-green-500"/> }
-    if (r.estatus === 'Cancelada')  return { label: 'Cancelada',  color: 'text-red-500',    icon: <span className="text-red-400 text-xs">✕</span> }
-    if (r.lista_espera)             return { label: 'No asistió', color: 'text-gray-400',   icon: <span className="text-gray-400 text-xs">–</span> }
-    return { label: 'Pendiente', color: 'text-yellow-600', icon: <Clock size={13} className="text-yellow-500"/> }
+    switch (estadoReserva(r, asistencias)) {
+      case 'cancelada':   return { label: 'Cancelada',    color: 'text-red-500',    icon: <span className="text-red-400 text-xs">✕</span> }
+      case 'no_show':     return { label: 'No Show',      color: 'text-red-600',    icon: <span className="text-red-500 text-xs">✕</span> }
+      case 'asistio':     return { label: 'Asistió',      color: 'text-green-600',  icon: <Check size={13} className="text-green-500"/> }
+      case 'proxima':     return { label: 'Próxima',      color: 'text-orange-500', icon: <ChevronRight size={13} className="text-orange-400"/> }
+      case 'espera':      return { label: 'En espera',    color: 'text-blue-500',   icon: <Clock size={13} className="text-blue-400"/> }
+      case 'no_asistio':  return { label: 'No asistió',   color: 'text-gray-400',   icon: <span className="text-gray-400 text-xs">–</span> }
+      default:            return { label: 'Sin check-in', color: 'text-yellow-600', icon: <Clock size={13} className="text-yellow-500"/> }
+    }
   }
 
   return (

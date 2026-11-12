@@ -149,10 +149,11 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     try {
       // 1. Insertar en tabla asistencias
       if (clienteId) {
+        // OJO: la tabla `asistencias` NO tiene columna reserva_id. Mandarla hacía fallar todo el insert
+        // (desde el 22-sep no se guardó ninguna asistencia) mientras la reserva sí quedaba como 'Asistió'.
         const payloadAsistencia: any = {
           cliente_id:       clienteId,
           clase_id:         claseId,
-          reserva_id:       reservaId || null,
           fecha_checkin:    new Date().toISOString(),
           sucursal_id:      clase?.sucursal_id || null,
           staff_id:         clase?.coach_id || null,
@@ -164,7 +165,9 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           .insert([payloadAsistencia])
 
         if (errAsistencia) {
-          console.warn('Advertencia en asistencias:', errAsistencia.message)
+          // Antes solo se dejaba en consola y nadie se enteraba de que no se guardaba
+          console.error('Error guardando la asistencia:', errAsistencia)
+          alert(`El check-in se marcó en la reserva, pero NO se pudo guardar en el historial de asistencias: ${errAsistencia.message}`)
         }
       }
 
@@ -210,11 +213,19 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     }
   }
 
-  const handleCancelarReserva = async (reservaId: string) => {
-    await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', reservaId)
+  // No-show: el cliente no llegó. Solo cambia el estatus de la reserva a 'No Show'; NO la cancela
+  // (no libera el lugar ni regresa la clase). Si llega tarde, el Check-in la pasa a 'Asistió'.
+  const handleMarcarNoShow = async (reservaId: string) => {
+    const { error } = await supabase.from('reservas').update({ estatus: 'No Show' }).eq('id', reservaId)
+    if (error) {
+      console.error('Error marcando No Show:', error)
+      alert(`No se pudo registrar el No Show: ${error.message}`)
+      return
+    }
     await fetchData()
     onSuccess()
   }
+  const claseIniciada = Boolean(clase?.horario) && new Date(clase.horario).getTime() <= Date.now()
 
   // Cancelar la reserva de un cliente que lo pide en sucursal (sin límite de horario, se le regresa la clase)
   const handleCancelarReservaCliente = async (r: any): Promise<string | null> => {
@@ -772,7 +783,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
               historialClientes={historialClientes}
               checkingIn={checkingIn}
               onCheckIn={handleCheckIn}
-              onCancelar={handleCancelarReserva}
+              onNoShow={handleMarcarNoShow}
+              puedeMarcarNoShow={claseIniciada}
               onCancelarReserva={handleCancelarReservaCliente}
               puedeCancelarReserva={puedeCancelar}
             />
