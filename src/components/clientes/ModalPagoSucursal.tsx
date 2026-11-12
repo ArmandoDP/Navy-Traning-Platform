@@ -14,8 +14,8 @@ interface Props { isOpen: boolean; cliente: any; onClose: () => void; onSuccess:
 type Metodo = 'tarjeta' | 'app' | 'Terminal'
 type Paso   = 'form' | 'resumen' | 'esperando' | 'exito'
 
-// Mientras Navy deja de usar la terminal, solo dirección la ve
-const TERMINAL_SOLO_DIRECCION = true
+// true = solo dirección ve la opción "Terminal"; false = todo el staff que cobra puede usarla
+const TERMINAL_SOLO_DIRECCION = false
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
 async function api(path: string, method: 'GET' | 'POST' = 'GET', body?: any) {
@@ -173,7 +173,7 @@ export default function ModalPagoSucursal({ isOpen, cliente, onClose, onSuccess 
     setSolicitud(null); setPaso('form')
   }
 
-  // ── Terminal (registro manual, solo dirección) ──
+  // ── Terminal (registro manual; ver TERMINAL_SOLO_DIRECCION) ──
   const registrarManual = async () => {
     const { error: errPago } = await supabase.from('pagos').insert({
       cliente_id: cliente.id, monto: Number(monto), metodo_pago: metodo, fecha_pago: new Date().toISOString(),
