@@ -36,6 +36,8 @@ export function estadoDe(c: any): EstadoKey {
 
   if (e === 'activo') {
     const membs: any[] = c?.membresias || []
+    // Plan por clases en uso (sin fecha_fin): dura hasta que se acaben las clases, no está "por activar"
+    if (!c?.fecha_venc_plan && membs.some(m => m.estatus === 'Activa' && !m.activacion_pendiente && !m.fecha_fin)) return 'activo'
     const pendiente = !c?.fecha_venc_plan ||
       (membs.some(m => m.estatus === 'Activa' && m.activacion_pendiente) &&
        !membs.some(m => m.estatus === 'Activa' && !m.activacion_pendiente && (m.fecha_fin || '') >= hoyCDMX()))

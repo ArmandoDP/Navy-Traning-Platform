@@ -130,7 +130,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
   const sincronizar = () => backend(`/clientes-estado/sincronizar/${cliente.id}`).catch(() => {})
 
   const hoy = hoyCDMX()
-  const vigentes = membresias.filter(m => (m.estatus === 'Activa' || m.estatus === 'Pausada') && (m.activacion_pendiente || (m.fecha_fin || '') >= hoy))
+  const vigentes = membresias.filter(m => (m.estatus === 'Activa' || m.estatus === 'Pausada') && (m.activacion_pendiente || !m.fecha_fin || m.fecha_fin >= hoy))   // sin fecha_fin = plan por clases: dura hasta que se acaben
   const ordenadas = [...vigentes].sort((a, b) =>
     Number(esMigracion(a)) - Number(esMigracion(b)) ||
     Number((b.fecha_inicio || '') <= hoy) - Number((a.fecha_inicio || '') <= hoy) ||
@@ -311,7 +311,7 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
       nivel: total && total - usadas <= 1 ? 'ojo' as Nivel : 'ok' as Nivel,
       val: total ? `${usadas} de ${total} usadas` : `Ilimitadas · ${usadas} reservadas`,
       que: total ? (total - usadas <= 0 ? 'Ya usó todas sus clases; necesita otro plan para seguir reservando.'
-                                         : `Le ${total - usadas === 1 ? 'queda 1 clase' : `quedan ${total - usadas} clases`} hasta el ${fecha(actual.fecha_fin, false)}.`)
+                                         : `Le ${total - usadas === 1 ? 'queda 1 clase' : `quedan ${total - usadas} clases`}${actual.fecha_fin ? ` hasta el ${fecha(actual.fecha_fin, false)}` : ''}.`)
                  : 'Puede reservar todas las clases que quiera mientras su plan esté vigente.',
     },
     {

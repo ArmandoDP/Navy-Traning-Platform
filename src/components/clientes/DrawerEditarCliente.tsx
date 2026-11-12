@@ -92,8 +92,8 @@ export default function DrawerEditarCliente({ isOpen, cliente, onClose, onSucces
   const hoy = hoyCDMX()
   const activas = membresias.filter(m => m.estatus === 'Activa')
   const actual = activas
-      .filter(m => m.fecha_inicio <= hoy && m.fecha_fin >= hoy && !m.activacion_pendiente)
-      .sort((a, b) => a.fecha_fin.localeCompare(b.fecha_fin))[0]
+      .filter(m => m.fecha_inicio <= hoy && (!m.fecha_fin || m.fecha_fin >= hoy) && !m.activacion_pendiente)
+      .sort((a, b) => (a.fecha_fin || '9999-12-31').localeCompare(b.fecha_fin || '9999-12-31'))[0]
     || activas.find(m => m.activacion_pendiente) || null
 
   useEffect(() => { setNotas(actual?.notas || '') }, [actual?.id])  // eslint-disable-line react-hooks/exhaustive-deps
