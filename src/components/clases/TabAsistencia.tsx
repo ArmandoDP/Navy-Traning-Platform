@@ -57,9 +57,18 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
   const [historial,    setHistorial]    = useState<Historial>({})
   const [verLeyenda,   setVerLeyenda]   = useState(false)
 
-  // Una reserva por cliente (o por reserva, si es externa)
-  const reservasUnicas = useMemo(() => reservas.filter((r, i, arr) =>
-    arr.findIndex(x => (x.clientes?.id && x.clientes?.id === r.clientes?.id) || x.id === r.id) === i), [reservas])
+  // Una reserva por cliente (o por reserva, si es externa).
+  // Si el cliente canceló y volvió a reservar la misma clase, vale la ACTIVA: antes se quedaba con la más
+  // antigua (la cancelada) y el cliente aparecía como cancelado aunque tuviera su lugar confirmado.
+  const reservasUnicas = useMemo(() => {
+    const elegida = new Map<string, any>()
+    for (const r of reservas) {
+      const clave = r.clientes?.id ? `c:${r.clientes.id}` : `r:${r.id}`
+      const actual = elegida.get(clave)
+      if (!actual || (actual.estatus === 'Cancelada' && r.estatus !== 'Cancelada')) elegida.set(clave, r)
+    }
+    return [...elegida.values()]
+  }, [reservas])
 
   // Clases que cada cliente ya tomó ANTES de esta (de cualquier canal; sin canceladas ni faltas)
   useEffect(() => {
