@@ -231,13 +231,14 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
     })
     const dataAuth = await resAuth.json()
     if (dataAuth.userId) supabaseUserId = dataAuth.userId
-    else if (dataAuth.error?.toLowerCase().includes('already registered')) {
+    else if (dataAuth.code === 'email_exists' || /already.*registered|already been registered|email_exists/i.test(dataAuth.error || '')) {
+      // Ya tiene cuenta (por ejemplo, intentó crear su perfil desde la app): se reutiliza
       const r = await fetch('/api/clientes/buscar-usuario', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
       })
       supabaseUserId = (await r.json()).userId || null
     }
-    if (!supabaseUserId) throw new Error('No se pudo crear su acceso a la app. Revisa el correo e inténtalo de nuevo.')
+    if (!supabaseUserId) throw new Error(`No se pudo crear su acceso a la app${dataAuth.error ? ` (${dataAuth.error})` : ''}. Revisa el correo e inténtalo de nuevo.`)
 
     // 2. Cliente
     const nombreCompleto = [form.nombre, form.primer_apellido, form.segundo_apellido].map(x => x.trim()).filter(Boolean).join(' ')

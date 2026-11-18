@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       password,
       email_confirm: true,
     })
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    if (error) return NextResponse.json({ error: error.message, code: (error as any).code || null }, { status: 400 })
     return NextResponse.json({ userId: data.user?.id })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
