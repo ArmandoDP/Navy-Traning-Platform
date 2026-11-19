@@ -5,6 +5,7 @@ import { supabase }         from '@/lib/supabase'
 import AuthCard             from '@/components/auth/AuthCard'
 import AuthLogo             from '@/components/auth/AuthLogo'
 import AuthToast            from '@/components/auth/AuthToast'
+import { limpiarCorreo }    from '@/lib/correo'
 
 type ToastInfo = { mensaje: string; tipo: 'error' | 'warning' | 'success' } | null
 type Paso = 'correo' | 'otp'
@@ -25,8 +26,10 @@ export default function LoginPage() {
 
     setLoading(true)
 
+    // Sin importar mayúsculas ni espacios al escribir o al dar de alta (antes era una comparación exacta)
+    const correo = limpiarCorreo(email)
     const { data: staffData } = await supabase
-      .from('staff').select('id, estatus').eq('email', email).maybeSingle()
+      .from('staff').select('id, estatus').ilike('email', correo.replace(/[\\%_]/g, '\\$&')).limit(1).maybeSingle()
 
     if (!staffData) {
       setError('Este correo no tiene acceso al CRM.')
@@ -41,7 +44,7 @@ export default function LoginPage() {
     }
 
     const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
+      email: correo,
       options: { shouldCreateUser: false },
     })
 
@@ -91,8 +94,9 @@ export default function LoginPage() {
 
     setLoading(true)
 
+    const correo = limpiarCorreo(email)
     const { data, error: verifyError } = await supabase.auth.verifyOtp({
-      email,
+      email: correo,
       token,
       type: 'email',
     })
@@ -114,11 +118,11 @@ export default function LoginPage() {
         supabase_user_id: data.user.id,
         ultima_sesion: new Date().toISOString(),
       })
-      .eq('email', email)
+      .ilike('email', correo.replace(/[\\%_]/g, '\\$&'))
     // -------------------------------------------------------------
 
     const { data: staffData } = await supabase
-      .from('staff').select('rol').eq('email', email).maybeSingle()
+      .from('staff').select('rol').ilike('email', correo.replace(/[\\%_]/g, '\\$&')).limit(1).maybeSingle()
 
     document.cookie = `navy_rol=${staffData?.rol || 'staff_navy'}; path=/; max-age=31536000`
     router.push('/dashboard/ejecutivo')

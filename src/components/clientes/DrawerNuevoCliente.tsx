@@ -9,6 +9,7 @@ import ModalInvitado     from './ModalInvitado'
 import ModalPagoSucursal from './ModalPagoSucursal'
 import { logActividad }  from '@/lib/log-actividad'
 import { useAuth }       from '@/context/AuthContext'
+import { limpiarCorreo } from '@/lib/correo'
 
 interface Props { isOpen: boolean; onClose: () => void; onSuccess: () => void }
 interface Sucursal { id: string; nombre: string }
@@ -192,7 +193,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   // Correo: válido y sin dueño (sin importar mayúsculas)
   useEffect(() => {
     if (timerCorreo.current) clearTimeout(timerCorreo.current)
-    const email = form.email.trim().toLowerCase()
+    const email = limpiarCorreo(form.email)
     setDuplicado(null)
     if (!email) { setEstadoCorreo('idle'); return }
     if (!EMAIL_RE.test(email)) { setEstadoCorreo('invalido'); return }
@@ -220,7 +221,7 @@ export default function DrawerNuevoCliente({ isOpen, onClose, onSuccess }: Props
   }, [form.telefono])
 
   const crearEnBase = async () => {
-    const email = form.email.trim().toLowerCase()
+    const email = limpiarCorreo(form.email)
     const paquete = paquetes.find(p => p.id === form.paquete_id)
 
     // 1. Acceso a la app (o el que ya exista con ese correo)

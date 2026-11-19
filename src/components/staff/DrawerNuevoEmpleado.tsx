@@ -6,6 +6,7 @@ import ModalReglaBono from './ModalReglaBono'
 import ToastExito from '@/components/ToastExito'
 import { useAuth }      from '@/context/AuthContext'
 import { logActividad } from '@/lib/log-actividad'
+import { limpiarCorreo } from '@/lib/correo'
 
 interface Props {
   isOpen:    boolean
@@ -158,7 +159,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
         primer_apellido:         form.primer_apellido.trim(),
         segundo_apellido:        form.segundo_apellido.trim() || null,
         rfc_identificacion:      form.rfc,
-        email:                   form.email.trim(),
+        email:                   limpiarCorreo(form.email),
         telefono:                form.telefono.trim(),
         fecha_ingreso:           form.fecha_ingreso || null,
         estatus:                 form.estatus,
@@ -194,7 +195,7 @@ export default function DrawerNuevoEmpleado({ isOpen, onClose, onSuccess }: Prop
         const res = await fetch('/api/staff/crear-auth', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ email: form.email.trim(), staff_id: staffId }),
+          body:    JSON.stringify({ email: limpiarCorreo(form.email), staff_id: staffId }),
         })
         authOk = res.ok
         if (!res.ok) console.error('Error creando acceso:', await res.text())
