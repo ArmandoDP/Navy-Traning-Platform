@@ -3,8 +3,6 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { CheckCircle2, XCircle, RefreshCw, Mail, Shield, Smartphone, Clock } from 'lucide-react'
 
-const RESEND_KEY = process.env.RESEND_API_KEY!
-
 interface Props { cliente: any; onRefresh: () => void }
 
 function genPassword() {
@@ -24,72 +22,44 @@ export default function TabAccesoCliente({ cliente, onRefresh }: Props) {
     setTimeout(() => setToast(null), 3500)
   }
 
+  // Todo pasa por el servidor: la llave de administrador nunca debe estar en el navegador
   const handleResetPassword = async () => {
     setLoading(true)
-    const nuevaPass = genPassword()
-
-    const res = await fetch(`https://knigqmxpenteolnwomir.supabase.co/auth/v1/admin/users/${cliente.supabase_user_id}`, {
-      method:  'PUT',
-      headers: {
-        'apikey':        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuaWdxbXhwZW50ZW9sbndvbWlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDQwODcyNiwiZXhwIjoyMDg5OTg0NzI2fQ.RXW5o9aLFfBesO9rysw8uohih6GWY6exdWjfkS4DUNE',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtuaWdxbXhwZW50ZW9sbndvbWlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDQwODcyNiwiZXhwIjoyMDg5OTg0NzI2fQ.RXW5o9aLFfBesO9rysw8uohih6GWY6exdWjfkS4DUNE',
-        'Content-Type':  'application/json',
-      },
-      body: JSON.stringify({ password: nuevaPass }),
-    })
-
-    if (!res.ok) { showToast('Error al resetear contraseña', 'error'); setLoading(false); return }
-
-    await supabase.from('clientes').update({
-      password_temporal:     nuevaPass,
-      debe_cambiar_password: true,
-    }).eq('id', cliente.id)
-
-    showToast(`Nueva contraseña: ${nuevaPass}`)
-    onRefresh()
-    setLoading(false)
+    try {
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: cliente.supabase_user_id, clienteId: cliente.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.tempPassword) { showToast(data.error || 'Error al resetear contraseña', 'error'); return }
+      showToast(`Nueva contraseña: ${data.tempPassword}`)
+      onRefresh()
+    } catch {
+      showToast('Error al resetear contraseña', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleReenviarCorreo = async () => {
+    if (!cliente.password_temporal) {
+      showToast('Primero genera una contraseña temporal con "Resetear contraseña"', 'error')
+      return
+    }
     setLoading(true)
-    const pass = cliente.password_temporal || '—'
-    const nombre = cliente.nombre_completo?.split(' ')[0] || ''
-
-    const html = `
-    <div style="font-family:sans-serif;max-width:560px;margin:40px auto">
-      <div style="background:#171B24;border-radius:20px 20px 0 0;padding:36px 32px;text-align:center">
-        <p style="color:#fff;font-size:28px;font-weight:900;margin:0;letter-spacing:4px">NAVY</p>
-        <p style="color:#4b5563;font-size:10px;font-weight:700;margin:4px 0 0;letter-spacing:6px">TRAINING CENTER</p>
-      </div>
-      <div style="background:#fff;padding:32px;border:1px solid #e5e7eb">
-        <h2 style="color:#111">Es momento de activarte 💪</h2>
-        <p style="color:#6b7280">Hola ${nombre}, aquí están tus datos de acceso a la app de Navy Training Center.</p>
-        <div style="background:#f9fafb;border-radius:12px;padding:20px;margin:20px 0">
-          <table style="width:100%;font-size:14px;border-collapse:collapse">
-            <tr><td style="color:#9ca3af;padding:6px 0">Usuario</td><td style="color:#111;font-weight:700">${cliente.email}</td></tr>
-            <tr><td style="color:#9ca3af;padding:6px 0">Contraseña temporal</td><td style="color:#111;font-weight:700;font-family:monospace;letter-spacing:2px;font-size:16px">${pass}</td></tr>
-          </table>
-        </div>
-        <p style="color:#6b7280;font-size:13px">Al iniciar sesión deberás cambiar tu contraseña. Descarga la app en App Store o Google Play.</p>
-      </div>
-      <div style="background:#f9fafb;border-radius:0 0 20px 20px;padding:16px 32px;text-align:center;border:1px solid #e5e7eb;border-top:none">
-        <p style="color:#9ca3af;font-size:11px;margin:0">© 2026 Navy Training Center · Condesa</p>
-      </div>
-    </div>`
-
-    await fetch('https://api.resend.com/emails', {
-      method:  'POST',
-      headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from:    'Navy Training Center <noreply@navytrainingcenter.com>',
-        to:      cliente.email,
-        subject: 'Es momento de activarte — Navy Training Center',
-        html,
-      }),
-    })
-
-    showToast('Correo enviado correctamente ✓')
-    setLoading(false)
+    try {
+      const res = await fetch('/api/correo/acceso-cliente', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cliente.email, nombre: cliente.nombre_completo, password: cliente.password_temporal }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok && data.ok) showToast('Correo enviado correctamente ✓')
+      else showToast(`No se pudo enviar el correo${data.error ? `: ${String(data.error).slice(0, 120)}` : ''}`, 'error')
+    } catch {
+      showToast('No se pudo enviar el correo', 'error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
