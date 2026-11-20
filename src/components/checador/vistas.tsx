@@ -18,35 +18,40 @@ export const C = {
 }
 const NEGRO_NAVY = '#171B24'  // el negro del sidebar del CRM
 
-/** Logo oficial de Navy (versión blanca). Va en /public con este nombre. */
-export const LOGO_NAVY_BLANCO = '/images/navy-white.png'
+const TZ = 'America/Mexico_City'
+export const hora = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: TZ }) : '—'
 
-/** Marca de Navy arriba de cada pantalla: el logo oficial blanco sobre el negro de Navy
- *  (si el archivo todavía no está en /public, se muestra la "N" del CRM). */
+/** Logo oficial de Navy (archivo en /public). */
+export const LOGO_NAVY = '/images/navy-white.png'
+/** true si el archivo es el logo en negro (va directo sobre el fondo blanco);
+ *  false si es el logo blanco (va dentro de un cuadro negro). */
+export const LOGO_ES_NEGRO = true
+
+/** Marca de Navy arriba de cada pantalla. Si el logo no carga, muestra la "N" del CRM
+ *  y avisa en la consola del navegador con la ruta que falló. */
 export function Marca({ detalle }: { detalle?: string | null }) {
   const [sinLogo, setSinLogo] = useState(false)
+  const logo = (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={LOGO_NAVY} alt="Navy Training Center" draggable={false}
+         className={`${LOGO_ES_NEGRO ? 'h-9' : 'h-6'} w-auto select-none`}
+         onError={() => { console.warn(`[Navy] No cargó el logo: ${LOGO_NAVY}`); setSinLogo(true) }} />
+  )
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        <span className="grid h-9 min-w-9 place-items-center rounded-xl px-1.5" style={{ background: NEGRO_NAVY }}>
-          {sinLogo ? (
-            <span className="text-sm font-black text-white">N</span>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={LOGO_NAVY_BLANCO} alt="Navy Training Center" className="h-6 w-auto select-none"
-                 draggable={false} onError={() => setSinLogo(true)} />
-          )}
-        </span>
-        {sinLogo && <span className="text-sm font-black tracking-tight" style={{ color: C.texto }}>NAVY</span>}
-      </div>
+      {sinLogo ? (
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-9 w-9 place-items-center rounded-xl text-sm font-black text-white" style={{ background: NEGRO_NAVY }}>N</span>
+          <span className="text-sm font-black tracking-tight" style={{ color: C.texto }}>NAVY</span>
+        </div>
+      ) : LOGO_ES_NEGRO ? logo : (
+        <span className="grid h-9 min-w-9 place-items-center rounded-xl px-1.5" style={{ background: NEGRO_NAVY }}>{logo}</span>
+      )}
       {detalle && <span className="text-sm" style={{ color: C.suave }}>{detalle}</span>}
     </div>
   )
 }
-
-const TZ = 'America/Mexico_City'
-export const hora = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: TZ }) : '—'
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Piezas animadas
