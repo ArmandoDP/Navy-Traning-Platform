@@ -9,7 +9,7 @@ import { LayoutDashboard, Package, Bell, BarChart2, Settings, LogOut, ChevronLef
   ChevronRight, BookOpen, Calendar, UserCircle,
   Users, CreditCard, Star, Activity, ChevronDown,
   DollarSign, MapPin, Puzzle, ShoppingBag, Lock,
-  Sparkles, Tag
+  Sparkles, Tag, ScanLine
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Modulo, RUTAS_MODULOS } from '@/lib/permisos'
@@ -21,6 +21,7 @@ interface Integration { label: string; icon: string; href: string }
 const NAV: NavItem[] = [
   { href: '/dashboard/ejecutivo',    label: 'Dashboard',     icon: LayoutDashboard },
   { href: '/dashboard/checkin',      label: 'Check-in',      icon: Activity        },
+  { href: '/dashboard/checador',     label: 'Checador staff', icon: ScanLine       },
   { href: '/dashboard/degali',       label: 'The Galley',    icon: ShoppingBag     },
   { href: '/dashboard/reservas',     label: 'Reservas',      icon: Calendar        },
   { href: '/dashboard/clases',       label: 'Clases',        icon: BookOpen        },
@@ -61,6 +62,15 @@ const RUTA_A_MODULO: Record<string, Modulo> = {
   '/dashboard/actividad':   'actividad',
   '/dashboard/integraciones':'integraciones',
   '/dashboard/configuracion':'configuracion',
+}
+
+// Checador de staff: lo abren Front Desk, gerentes y dirección (el backend lo vuelve a validar).
+// Front Desk tiene rol "staff_navy" igual que los coaches, así que se distingue por su tipo.
+function puedeVerChecador(staff: any): boolean {
+  if (!staff) return false
+  if (staff.rol === 'direccion' || staff.rol === 'gerente') return true
+  const tipo = (staff.tipo || '').toLowerCase()
+  return tipo === 'front' || tipo === 'manager' || tipo === 'submanager' || tipo === 'admin' || staff.tipo === undefined
 }
 
 // Modal sin acceso
@@ -147,7 +157,9 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {NAV.filter(item => item.href !== '/dashboard/promociones' || staff?.rol === 'direccion').map((item) => {
+          {NAV.filter(item => item.href !== '/dashboard/promociones' || staff?.rol === 'direccion')
+              .filter(item => item.href !== '/dashboard/checador' || puedeVerChecador(staff))
+              .map((item) => {
             const active  = isActive(item.href!)
             const modulo  = RUTA_A_MODULO[item.href!]
             const blocked = !loading && modulo ? !tieneAcceso(modulo) : false
