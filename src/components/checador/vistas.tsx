@@ -19,7 +19,7 @@ export const C = {
 const NEGRO_NAVY = '#171B24'  // el negro del sidebar del CRM
 
 /** Logo oficial de Navy (versión blanca). Va en /public con este nombre. */
-export const LOGO_NAVY_BLANCO = '/navy-logo-blanco.png'
+export const LOGO_NAVY_BLANCO = '/navy-icon-white.png'
 
 /** Marca de Navy arriba de cada pantalla: el logo oficial blanco sobre el negro de Navy
  *  (si el archivo todavía no está en /public, se muestra la "N" del CRM). */
