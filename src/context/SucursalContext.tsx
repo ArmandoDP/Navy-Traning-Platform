@@ -2,7 +2,7 @@
 // src/context/SucursalContext.tsx — sucursal elegida arriba en el CRM
 // Dirección: ve todas las sucursales y "Global".
 // Todo el demás staff: SOLO sus sucursales vinculadas (staff_sucursales + sucursal asignada), sin "Global".
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -41,6 +41,8 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
   const [puedeGlobal,    setPuedeGlobal]    = useState(false)
   const [sinSucursales,  setSinSucursales]  = useState(false)
   const [cargando,       setCargando]       = useState(true)
+  // Usuario con el que se calcularon las sucursales (ver onAuthStateChange abajo)
+  const usuarioActual = useRef<string | null | undefined>(undefined)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -50,6 +52,7 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
 
     // ¿Quién está dentro?
     const { data: { session } } = await supabase.auth.getSession()
+    usuarioActual.current = session?.user?.id ?? null
     const correo = session?.user?.email
     const { data: st } = correo
       ? await supabase.from('staff').select('id, rol, sucursal_asignada_id').ilike('email', correo).maybeSingle()
@@ -64,7 +67,8 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
       permitidas = lista.filter(s => ids.has(s.id))
     }
 
-    setSucursales(permitidas)
+    // Si la lista no cambió, se conserva el mismo arreglo (evita recargas en las pantallas)
+    setSucursales(prev => JSON.stringify(prev) === JSON.stringify(permitidas) ? prev : permitidas)
     setPuedeGlobal(global)
     setSinSucursales(!global && permitidas.length === 0)
 
@@ -72,15 +76,22 @@ export function SucursalProvider({ children }: { children: ReactNode }) {
     let guardada: string | null = null
     try { guardada = localStorage.getItem(CLAVE) } catch {}
     const previa = permitidas.find(s => s.id === guardada) || null
-    setActiva(global ? previa : (previa || permitidas[0] || null))
+    const nueva = global ? previa : (previa || permitidas[0] || null)
+    setActiva(prev => (prev?.id ?? null) === (nueva?.id ?? null) ? prev : nueva)
     setCargando(false)
   }, [])
 
   useEffect(() => {
     cargar()
-    // Al entrar o salir de sesión, se vuelve a calcular qué sucursales puede ver
-    const { data: sub } = supabase.auth.onAuthStateChange((evento) => {
-      if (evento === 'SIGNED_IN' || evento === 'SIGNED_OUT' || evento === 'USER_UPDATED') cargar()
+    // Al entrar o salir de sesión, se vuelve a calcular qué sucursales puede ver.
+    // Supabase dispara SIGNED_IN cada vez que regresas a la pestaña aunque sea el mismo usuario:
+    // en ese caso NO se recarga (antes eso ponía "cargando", las pantallas se recargaban y se
+    // borraban los drawers abiertos).
+    const { data: sub } = supabase.auth.onAuthStateChange((evento, session) => {
+      const uid = session?.user?.id ?? null
+      const cambio = evento === 'SIGNED_OUT' ||
+        ((evento === 'SIGNED_IN' || evento === 'USER_UPDATED') && uid !== usuarioActual.current)
+      if (cambio) setTimeout(() => cargar(), 0)              // fuera del callback de Supabase
     })
     return () => sub.subscription.unsubscribe()
   }, [cargar])
