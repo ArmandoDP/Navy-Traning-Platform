@@ -4,38 +4,41 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion, animate } from 'framer-motion'
 
-// Paleta de Navy: la misma del CRM (sidebar oscuro, blanco como color principal).
+// Paleta de Navy: fondo blanco y detalles en negro, como el resto del CRM.
 export const C = {
-  fondo:   '#171B24',
-  capa:    '#232B38',
-  linea:   '#2A3344',
-  texto:   '#FFFFFF',
-  suave:   '#A0AABF',
-  espera:  '#FFFFFF',
-  ok:      '#34D399',
-  error:   '#F87171',
-  aviso:   '#FBBF24',
+  fondo:   '#FFFFFF',
+  capa:    '#F4F5F7',   // el gris de fondo del CRM
+  linea:   '#E5E7EB',
+  texto:   '#111827',
+  suave:   '#6B7280',
+  espera:  '#111827',
+  ok:      '#10B981',
+  error:   '#E11D48',
+  aviso:   '#D97706',
 }
+const NEGRO_NAVY = '#171B24'  // el negro del sidebar del CRM
 
 /** Logo oficial de Navy (versión blanca). Va en /public con este nombre. */
-export const LOGO_NAVY_BLANCO = '/logo-navy.svg'
+export const LOGO_NAVY_BLANCO = '/navy-logo-blanco.png'
 
-/** Marca de Navy arriba de cada pantalla: el logo oficial blanco
+/** Marca de Navy arriba de cada pantalla: el logo oficial blanco sobre el negro de Navy
  *  (si el archivo todavía no está en /public, se muestra la "N" del CRM). */
 export function Marca({ detalle }: { detalle?: string | null }) {
   const [sinLogo, setSinLogo] = useState(false)
   return (
     <div className="flex items-center justify-between">
-      {sinLogo ? (
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-sm font-black text-black">N</span>
-          <span className="text-sm font-black tracking-tight text-white">NAVY</span>
-        </div>
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={LOGO_NAVY_BLANCO} alt="Navy Training Center" className="h-8 w-auto select-none"
-             draggable={false} onError={() => setSinLogo(true)} />
-      )}
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-9 min-w-9 place-items-center rounded-xl px-1.5" style={{ background: NEGRO_NAVY }}>
+          {sinLogo ? (
+            <span className="text-sm font-black text-white">N</span>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={LOGO_NAVY_BLANCO} alt="Navy Training Center" className="h-6 w-auto select-none"
+                 draggable={false} onError={() => setSinLogo(true)} />
+          )}
+        </span>
+        {sinLogo && <span className="text-sm font-black tracking-tight" style={{ color: C.texto }}>NAVY</span>}
+      </div>
       {detalle && <span className="text-sm" style={{ color: C.suave }}>{detalle}</span>}
     </div>
   )
@@ -78,7 +81,7 @@ export function Anillo({ color, letra, radar = false, girando = false }: { color
           transition={{ duration: girando ? 1.2 : 3.2, repeat: Infinity, ease: 'linear' }} />
       </svg>
       <motion.div className="grid h-28 w-28 place-items-center rounded-[1.75rem] text-5xl font-black"
-        style={{ background: letra ? C.texto : C.capa, color: C.fondo }}
+        style={{ background: letra ? NEGRO_NAVY : C.capa, color: '#FFFFFF' }}
         animate={quieto ? undefined : { scale: [1, 1.035, 1] }}
         transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}>
         {letra.toUpperCase()}
