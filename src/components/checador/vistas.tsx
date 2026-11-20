@@ -155,35 +155,60 @@ export function Lejos({ titulo, mensaje, distancia }: { titulo: string; mensaje:
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Confirmado: bienvenida + su día
+// Confirmado: "¡Listo!" y luego su día
 // ══════════════════════════════════════════════════════════════════════════════
+
+const saludo = () => {
+  const h = Number(new Date().toLocaleString('es-MX', { hour: 'numeric', hour12: false, timeZone: TZ }))
+  return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'
+}
+const fechaHoy = () =>
+  new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', timeZone: TZ }).replace(',', '')
+const iniciales = (n: string) => (n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase()
+
+function useAhora(ms = 1000) {
+  const [t, setT] = useState(Date.now())
+  useEffect(() => { const i = setInterval(() => setT(Date.now()), ms); return () => clearInterval(i) }, [ms])
+  return t
+}
 
 export function Bienvenida({ datos, conPalomita = true }: { datos: any; conPalomita?: boolean }) {
   const [listo, setListo] = useState(!conPalomita)
-  useEffect(() => { if (!conPalomita) return; const t = setTimeout(() => setListo(true), 1100); return () => clearTimeout(t) }, [conPalomita])
+  useEffect(() => { if (!conPalomita) return; const t = setTimeout(() => setListo(true), 1900); return () => clearTimeout(t) }, [conPalomita])
 
   return (
     <motion.section className="flex flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <AnimatePresence mode="wait">
         {!listo ? (
-          <motion.div key="check" className="flex flex-1 flex-col items-center justify-center"
-            exit={{ opacity: 0, scale: 0.9, y: -30 }} transition={{ duration: 0.3 }}>
+          <motion.div key="listo" className="flex flex-1 flex-col items-center justify-center text-center"
+            exit={{ opacity: 0, scale: 0.94, y: -24 }} transition={{ duration: 0.35 }}>
             <Palomita />
+            <motion.h1 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55, type: 'spring', stiffness: 260, damping: 20 }}
+              className="mt-10 text-[40px] font-black leading-none tracking-tight">
+              ¡Listo, {datos.nombre}!
+            </motion.h1>
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.75 }}
+              className="mt-3 text-[15px] leading-relaxed" style={{ color: C.suave }}>
+              {datos.confirmado_por ? `${datos.confirmado_por} de Front Desk confirmó tu entrada` : 'Tu entrada quedó registrada'}
+              <br />{hora(datos.hora)} · {datos.sucursal}
+            </motion.p>
+            <motion.div className="mt-7 flex gap-1.5" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.9 }}>
+              {[0, 1, 2].map(i => (
+                <motion.span key={i} className="h-1.5 rounded-full" style={{ background: C.texto }}
+                  initial={{ width: 6, opacity: 0.25 }} animate={{ width: [6, 22, 6], opacity: [0.25, 1, 0.25] }}
+                  transition={{ duration: 0.9, delay: 0.9 + i * 0.25, repeat: Infinity, repeatDelay: 0.3 }} />
+              ))}
+            </motion.div>
+            <p className="mt-2.5 text-xs" style={{ color: C.suave }}>Abriendo tu día…</p>
           </motion.div>
         ) : (
           <motion.div key="dia" initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
-            <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl" style={{ background: `${C.ok}26` }}>
-                <svg viewBox="0 0 24 24" className="h-5 w-5"><path d="M5 12.5 9.5 17 19 7.5" fill="none" stroke={C.ok} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </span>
-              <p className="text-sm" style={{ color: C.suave }}>{datos.sucursal}, entrada a las {hora(datos.hora)}</p>
-            </div>
-            <h1 className="mt-5 text-4xl font-black leading-tight tracking-tight">Bienvenido, {datos.nombre}</h1>
-
+            <p className="mt-5 text-xs first-letter:uppercase" style={{ color: C.suave }}>{fechaHoy()}</p>
+            <h1 className="mt-0.5 text-[32px] font-black leading-tight tracking-tight">{saludo()}, {datos.nombre}</h1>
             {datos.vista === 'coach'
-              ? <ClasesCoach clases={datos.clases || []} />
-              : <DiaStaff turno={datos.turno} clases={datos.sucursal_hoy || []} />}
+              ? <ClasesCoach clases={datos.clases || []} quincena={datos.quincena} />
+              : <DiaStaff turno={datos.turno} clases={datos.sucursal_hoy || []} quincena={datos.quincena} sucursal={datos.sucursal} />}
           </motion.div>
         )}
       </AnimatePresence>
@@ -191,107 +216,206 @@ export function Bienvenida({ datos, conPalomita = true }: { datos: any; conPalom
   )
 }
 
-export function ClasesCoach({ clases }: { clases: any[] }) {
-  const [abierta, setAbierta] = useState<string | null>(clases[0]?.id ?? null)
-  const quieto = useReducedMotion()
+/** Lista de alumnos que se despliega */
+function Alumnos({ alumnos, oscuro = false }: { alumnos: any[]; oscuro?: boolean }) {
   return (
-    <div className="mt-8">
-      <p className="mb-3 text-base font-semibold" style={{ color: C.suave }}>
-        {clases.length === 1 ? 'Tu clase de hoy' : `Tus ${clases.length} clases de hoy`}
-      </p>
-      <div className="space-y-3">
-        {clases.map((c, i) => {
-          const llena = c.cupo > 0 ? Math.min(c.reservas / c.cupo, 1) : 0
-          const abierto = abierta === c.id
-          return (
-            <motion.div key={c.id} layout
-              initial={quieto ? false : { opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: quieto ? 0 : 0.08 * i, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="overflow-hidden rounded-3xl" style={{ background: C.capa }}>
-              <button onClick={() => setAbierta(abierto ? null : c.id)} className="w-full p-5 text-left">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-3xl font-black tabular-nums tracking-tight">{hora(c.horario)}</span>
-                  <span className="text-sm" style={{ color: C.suave }}>{c.duracion} min{c.room ? `, ${c.room}` : ''}</span>
-                </div>
-                <p className="mt-1 text-lg font-bold">{c.nombre}</p>
-                <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full" style={{ background: C.linea }}>
-                  <motion.div className="h-full rounded-full" style={{ background: C.ok }}
-                    initial={{ width: 0 }} animate={{ width: `${llena * 100}%` }}
-                    transition={{ delay: 0.25 + 0.08 * i, duration: 0.7, ease: 'easeOut' }} />
-                </div>
-                <p className="mt-2 text-sm" style={{ color: C.suave }}>
-                  {c.reservas} de {c.cupo} reservados{c.lista_espera ? `, ${c.lista_espera} en lista de espera` : ''}
-                </p>
-              </button>
-              <AnimatePresence initial={false}>
-                {abierto && (
-                  <motion.ul initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                    className="border-t px-5" style={{ borderColor: C.linea }}>
-                    {(c.alumnos || []).length === 0 && <li className="py-4 text-sm" style={{ color: C.suave }}>Todavía no hay reservas.</li>}
-                    {(c.alumnos || []).map((a: any, j: number) => (
-                      <li key={j} className="flex items-center justify-between gap-3 py-3 text-sm"
-                          style={{ borderTop: j ? `1px solid ${C.linea}` : undefined }}>
-                        <span className={a.lista_espera ? 'opacity-60' : ''}>{a.nombre}</span>
-                        <span className="shrink-0 rounded-md px-2 py-0.5 text-xs"
-                          style={{ background: C.fondo, color: a.lista_espera ? C.aviso : C.suave }}>
-                          {a.lista_espera ? 'Lista de espera' : a.origen}
-                        </span>
-                      </li>
-                    ))}
-                  </motion.ul>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )
-        })}
+    <motion.ul initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden">
+      {alumnos.length === 0 && <li className="pt-3 text-sm" style={{ color: oscuro ? 'rgba(255,255,255,.6)' : C.suave }}>Todavía no hay reservas.</li>}
+      {alumnos.map((a: any, j: number) => (
+        <li key={j} className="flex items-center justify-between gap-3 py-2.5 text-sm"
+            style={{ borderTop: `1px solid ${oscuro ? 'rgba(255,255,255,.1)' : C.linea}` }}>
+          <span className={a.lista_espera ? 'opacity-60' : ''}>{a.nombre}</span>
+          <span className="shrink-0 rounded-md px-2 py-0.5 text-xs"
+            style={{ background: oscuro ? 'rgba(255,255,255,.1)' : C.fondo, color: a.lista_espera ? C.aviso : oscuro ? 'rgba(255,255,255,.7)' : C.suave }}>
+            {a.lista_espera ? 'Lista de espera' : a.origen}
+          </span>
+        </li>
+      ))}
+    </motion.ul>
+  )
+}
+
+export function ClasesCoach({ clases, quincena }: { clases: any[]; quincena?: any }) {
+  const ahora = useAhora(1000)
+  const quieto = useReducedMotion()
+  const [abierta, setAbierta] = useState<string | null>(null)
+
+  const conTiempo = clases.map(c => {
+    const ini = new Date(c.horario).getTime()
+    return { ...c, ini, fin: ini + c.duracion * 60000 }
+  })
+  const proxima = conTiempo.find(c => c.fin > ahora)
+  const despues = conTiempo.filter(c => c !== proxima && c.fin > ahora)
+  const alumnosHoy = clases.reduce((a, c) => a + (c.reservas || 0), 0)
+
+  let contador = '', leyenda = ''
+  if (proxima) {
+    if (proxima.ini > ahora) {
+      const seg = Math.floor((proxima.ini - ahora) / 1000)
+      const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s2 = seg % 60
+      contador = h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(s2).padStart(2, '0')}`
+      leyenda = h > 0 ? 'horas para empezar' : 'min para empezar'
+    } else {
+      const resta = Math.ceil((proxima.fin - ahora) / 60000)
+      contador = `${resta}`
+      leyenda = 'min para terminar'
+    }
+  }
+  const pct = proxima && proxima.cupo > 0 ? Math.min(100, (proxima.reservas / proxima.cupo) * 100) : 0
+
+  return (
+    <div className="mt-4">
+      {proxima ? (
+        <motion.div layout className="rounded-[26px] p-5 text-white" style={{ background: NEGRO_NAVY }}
+          initial={quieto ? false : { opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 24 }}>
+          <div className="flex justify-between text-[11px] font-semibold tracking-wide text-white/60">
+            <span>{proxima.ini > ahora ? 'TU PRÓXIMA CLASE' : 'EN CURSO'}</span><span>{proxima.room || ''}</span>
+          </div>
+          <p className="mt-2 text-[19px] font-extrabold">{proxima.nombre} · {hora(proxima.horario)}</p>
+          <div className="mt-1 flex items-end justify-between">
+            <span className="text-[54px] font-black leading-none tracking-tight tabular-nums">{contador}</span>
+            <span className="mb-1.5 text-[13px] text-white/75">{leyenda}</span>
+          </div>
+          <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-white/20">
+            <motion.i className="block h-full rounded-full bg-white" initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ delay: 0.3, duration: 0.8 }} />
+          </div>
+          <button onClick={() => setAbierta(abierta === proxima.id ? null : proxima.id)}
+            className="mt-2 flex w-full justify-between text-xs text-white/85">
+            <span>{proxima.reservas} de {proxima.cupo} reservados</span>
+            <span>{abierta === proxima.id ? 'Ocultar alumnos ↑' : 'Ver alumnos →'}</span>
+          </button>
+          <AnimatePresence initial={false}>
+            {abierta === proxima.id && <Alumnos alumnos={proxima.alumnos || []} oscuro />}
+          </AnimatePresence>
+        </motion.div>
+      ) : (
+        <div className="rounded-[26px] p-6 text-white" style={{ background: NEGRO_NAVY }}>
+          <p className="text-[11px] font-semibold tracking-wide text-white/60">HOY</p>
+          <p className="mt-2 text-2xl font-black">Terminaste tus clases de hoy</p>
+          <p className="mt-1 text-sm text-white/70">Recuerda checar tu salida en Front Desk.</p>
+        </div>
+      )}
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        {[['Clases hoy', clases.length], ['Alumnos', alumnosHoy], ['Esta quincena', quincena?.clases ?? '—']].map(([t, v], i) => (
+          <motion.div key={t as string} className="rounded-2xl p-3" style={{ background: C.capa }}
+            initial={quieto ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + i * 0.06 }}>
+            <p className="text-[11px]" style={{ color: C.suave }}>{t}</p>
+            <p className="text-xl font-black tracking-tight tabular-nums">{v}</p>
+          </motion.div>
+        ))}
       </div>
+
+      {despues.length > 0 && <p className="mb-1 mt-4 text-sm font-extrabold">Después</p>}
+      {despues.map((c, i) => {
+        const abierto = abierta === c.id
+        const avs = (c.alumnos || []).filter((a: any) => !a.lista_espera).slice(0, 4)
+        return (
+          <motion.div key={c.id} layout className="mt-2.5 rounded-[20px] px-4 py-3.5" style={{ background: C.capa }}
+            initial={quieto ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 + i * 0.07 }}>
+            <button onClick={() => setAbierta(abierto ? null : c.id)} className="w-full text-left">
+              <div className="flex items-baseline justify-between">
+                <b className="text-[22px] font-black tracking-tight tabular-nums">{hora(c.horario)}</b>
+                <span className="text-xs" style={{ color: C.suave }}>{c.duracion} min{c.room ? ` · ${c.room}` : ''}</span>
+              </div>
+              <b className="text-base">{c.nombre}</b>
+              <div className="mt-2.5 flex items-center justify-between">
+                <div className="flex">
+                  {avs.map((a: any, j: number) => (
+                    <span key={j} className="grid h-[26px] w-[26px] place-items-center rounded-[9px] text-[10px] font-extrabold text-white"
+                      style={{ background: NEGRO_NAVY, border: `2px solid ${C.capa}`, marginLeft: j ? -6 : 0 }}>{iniciales(a.nombre)}</span>
+                  ))}
+                  {c.reservas > avs.length && (
+                    <span className="grid h-[26px] place-items-center rounded-[9px] px-1.5 text-[10px] font-extrabold"
+                      style={{ background: C.linea, color: C.texto, border: `2px solid ${C.capa}`, marginLeft: avs.length ? -6 : 0 }}>
+                      +{c.reservas - avs.length}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[13px] font-bold">{c.reservas}/{c.cupo}{c.reservas >= c.cupo && c.cupo ? ' · llena' : ''}</span>
+              </div>
+            </button>
+            <AnimatePresence initial={false}>{abierto && <Alumnos alumnos={c.alumnos || []} />}</AnimatePresence>
+          </motion.div>
+        )
+      })}
     </div>
   )
 }
 
-export function DiaStaff({ turno, clases }: { turno: any; clases: any[] }) {
-  const [ahora, setAhora] = useState(Date.now())
-  useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 30000); return () => clearInterval(t) }, [])
-  const mins = Math.max(0, Math.floor((ahora - new Date(turno?.entrada).getTime()) / 60000))
+export function DiaStaff({ turno, clases, quincena, sucursal }: { turno: any; clases: any[]; quincena?: any; sucursal?: string }) {
+  const ahora = useAhora(30000)
   const quieto = useReducedMotion()
+  const entrada = new Date(turno?.entrada).getTime()
+  const salida = turno?.salida_programada ? new Date(turno.salida_programada).getTime() : null
+  const mins = Math.max(0, Math.floor((ahora - entrada) / 60000))
+  const faltan = salida ? Math.max(0, Math.ceil((salida - ahora) / 60000)) : null
+  const pct = salida ? Math.min(100, Math.max(0, ((ahora - entrada) / (salida - entrada)) * 100)) : 0
+  const hm = (m: number) => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`
+
+  const estado = (c: any) => {
+    const ini = new Date(c.horario).getTime(), fin = ini + c.duracion * 60000
+    if (fin < ahora) return { txt: 'Terminó', bg: C.linea, fg: C.suave, paso: true }
+    if (c.coach_llego) return ini <= ahora ? { txt: 'En clase', bg: NEGRO_NAVY, fg: '#fff' } : { txt: 'Llegó', bg: '#D1FAE5', fg: '#047857' }
+    if (ini - ahora <= 30 * 60000) return { txt: 'No ha llegado', bg: '#FEF3C7', fg: '#92400E' }
+    return { txt: '—', bg: C.capa, fg: C.suave }
+  }
 
   return (
-    <div className="mt-8">
-      <div className="rounded-3xl p-5" style={{ background: C.capa }}>
-        <p className="text-sm" style={{ color: C.suave }}>Llevas</p>
-        <p className="text-5xl font-black tabular-nums tracking-tight">{Math.floor(mins / 60)} h {String(mins % 60).padStart(2, '0')} min</p>
-        <p className="mt-2 text-sm" style={{ color: C.suave }}>
-          {turno?.salida_programada ? `Tu salida es a las ${hora(turno.salida_programada)}. Si se te olvida checar, se registra 10 min después.`
-                                    : 'No tienes horario capturado para hoy: recuerda checar tu salida.'}
-        </p>
-      </div>
+    <div className="mt-4">
+      <motion.div className="rounded-[26px] p-5 text-white" style={{ background: NEGRO_NAVY }}
+        initial={quieto ? false : { opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 24 }}>
+        <p className="text-[11px] font-semibold tracking-wide text-white/60">TU TURNO</p>
+        <div className="mt-2 flex items-end justify-between">
+          <span className="text-[44px] font-black leading-none tracking-tight tabular-nums">{hm(mins)}</span>
+          {faltan != null && <span className="mb-1 text-[13px] text-white/75">faltan {hm(faltan)}</span>}
+        </div>
+        {salida ? (
+          <>
+            <div className="relative mt-4 h-2 rounded-full bg-white/20">
+              <motion.i className="absolute inset-y-0 left-0 block rounded-full bg-white" initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.9 }} />
+              <motion.span className="absolute -top-[5px] h-[18px] w-[18px] -translate-x-1/2 rounded-[7px] border-[3px]"
+                style={{ background: C.ok, borderColor: NEGRO_NAVY }} initial={{ left: 0 }} animate={{ left: `${pct}%` }} transition={{ duration: 0.9 }} />
+            </div>
+            <div className="mt-2 flex justify-between text-xs text-white/85">
+              <span>Entrada {hora(turno.entrada)}</span><span>Salida {hora(turno.salida_programada)}</span>
+            </div>
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-white/70">Entraste a las {hora(turno?.entrada)}. No tienes horario capturado hoy: recuerda checar tu salida.</p>
+        )}
+      </motion.div>
 
-      <p className="mb-3 mt-8 text-base font-semibold" style={{ color: C.suave }}>Hoy en la sucursal</p>
-      {clases.length === 0 && <p className="text-sm" style={{ color: C.suave }}>No hay clases programadas hoy.</p>}
-      <ul className="space-y-2">
-        {clases.map((c, i) => {
-          const paso = new Date(c.horario).getTime() + c.duracion * 60000 < ahora
-          return (
-            <motion.li key={c.id} initial={quieto ? false : { opacity: 0, x: -12 }} animate={{ opacity: paso ? 0.45 : 1, x: 0 }}
-              transition={{ delay: quieto ? 0 : 0.05 * i, duration: 0.35 }}
-              className="flex items-center gap-4 rounded-2xl px-4 py-3" style={{ background: C.capa }}>
-              <span className="w-14 shrink-0 text-lg font-black tabular-nums">{hora(c.horario)}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-bold">{c.nombre}</span>
-                <span className="block truncate text-sm" style={{ color: C.suave }}>
-                  {c.coach || 'Sin coach asignado'}, {c.reservas}/{c.cupo}
-                </span>
-              </span>
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" title={c.coach_llego ? 'Ya llegó' : 'No ha llegado'}
-                style={{ background: c.coach_llego ? C.ok : paso ? C.linea : C.aviso }} />
-            </motion.li>
-          )
-        })}
-      </ul>
-      {clases.length > 0 && (
-        <p className="mt-3 text-xs" style={{ color: C.suave }}>Punto verde: el coach ya checó. Amarillo: todavía no llega.</p>
+      {quincena && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {[['Días esta quincena', quincena.dias], ['Horas esta quincena', quincena.horas]].map(([t, v]) => (
+            <div key={t as string} className="rounded-2xl p-3" style={{ background: C.capa }}>
+              <p className="text-[11px]" style={{ color: C.suave }}>{t}</p>
+              <p className="text-xl font-black tracking-tight tabular-nums">{v}</p>
+            </div>
+          ))}
+        </div>
       )}
+
+      <p className="mb-1 mt-5 text-sm font-extrabold">Hoy en {sucursal || 'la sucursal'}</p>
+      {clases.length === 0 && <p className="text-sm" style={{ color: C.suave }}>No hay clases programadas hoy.</p>}
+      {clases.map((c, i) => {
+        const e = estado(c)
+        return (
+          <motion.div key={c.id} className="mt-2 flex items-center gap-3 rounded-[20px] px-3.5 py-3" style={{ background: C.capa }}
+            initial={quieto ? false : { opacity: 0, x: -12 }} animate={{ opacity: e.paso ? 0.45 : 1, x: 0 }} transition={{ delay: 0.05 * i }}>
+            <b className="w-[50px] shrink-0 text-[17px] font-black tabular-nums">{hora(c.horario)}</b>
+            <div className="min-w-0 flex-1">
+              <b className="block truncate text-sm">{c.nombre}</b>
+              <p className="truncate text-xs" style={{ color: C.suave }}>{c.coach || 'Sin coach'} · {c.reservas}/{c.cupo}</p>
+            </div>
+            <span className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-extrabold" style={{ background: e.bg, color: e.fg }}>{e.txt}</span>
+          </motion.div>
+        )
+      })}
     </div>
   )
 }
