@@ -14,6 +14,8 @@ import { logActividad }  from '@/lib/log-actividad'
 import ModalEditarClase from '../ModalEditarClase'
 import ModalCancelarClase from './ModalCancelarClase'
 import TabActividad from './TabActividad'
+import ModalAgregarClienteClase from './ModalAgregarClienteClase'
+import { faseDeClase } from '@/lib/ventanaReserva'
 
 interface Props {
   isOpen:    boolean
@@ -50,6 +52,7 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
   const { staff, esGlobal } = useAuth()
   const [modalEditar, setModalEditar] = useState(false)
   const [modalCancelar, setModalCancelar] = useState(false)
+  const [modalAgregar,  setModalAgregar]  = useState(false)
   const puedeEditar   = ['direccion', 'gerente'].includes(staff?.rol || '')                // editar: dirección y gerentes
   const puedeCancelar = ['direccion', 'gerente', 'staff_navy'].includes(staff?.rol || '')  // cancelar: también recepción
   const esAdmin = puedeCancelar
@@ -73,13 +76,14 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
     setLoading(true)
 
     try {
-      const [{ data: claseData }, { data: reservasData }, { data: asistData }, { data: coachData }] = await Promise.all([
+      const [{ data: claseData }, { data: reservasData }, { data: asistData }, { data: coachData }, { data: spotsCRM }] = await Promise.all([
         supabase.from('clases')
           .select('*, totalpass_occurrence_uuid, wellhub_slot_id, publicar_wellhub, staff(id, nombre, primer_apellido), categorias_clase(nombre, color), sucursales(nombre)')
           .eq('id', claseId).single(),
         supabase.from('reservas')
           .select(`
             *,
+            room_spots(numero),
             clientes(
               id, nombre_completo, email, plan, origen,
               is_founding_member, fecha_alta_original,
@@ -89,6 +93,8 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           .eq('clase_id', claseId).order('created_at'),
         supabase.from('asistencias').select('*').eq('clase_id', claseId),
         supabase.from('staff').select('id, nombre, primer_apellido').eq('tipo', 'Coach').eq('estatus', 'Activo').order('nombre'),
+        // Lugares que el CRM guardó al reservar (tabla spots): la app guarda el suyo en la propia reserva (spot_id)
+        supabase.from('spots').select('numero, cliente_id').eq('clase_id', claseId),
       ])
 
       if (claseData) {
@@ -106,7 +112,13 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           estado:           claseData.estado           || 'Activa',
         })
       }
-      if (reservasData)   setReservas(reservasData)
+      // Lugar de cada reserva: el de la app (spot_id → room_spots), el guardado en la reserva, o el que eligió el CRM (tabla spots)
+      const lugarCRM: Record<string, any> = {}
+      for (const s of (spotsCRM as any[]) || []) if (s?.cliente_id && s?.numero != null) lugarCRM[s.cliente_id] = s.numero
+      if (reservasData)   setReservas(reservasData.map((r: any) => ({
+        ...r,
+        lugar: r.room_spots?.numero ?? r.spot_numero ?? (r.estatus === 'Cancelada' ? null : (lugarCRM[r.cliente_id] ?? null)),
+      })))
       if (asistData)      setAsistencias(asistData)
       if (coachData)      setCoaches(coachData)
 
@@ -776,6 +788,14 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           )}
 
           {/* Tab Asistencia */}
+          {tab === 'asistencia' && puedeCancelar && clase?.estado === 'Activa' && faseDeClase(clase.horario).fase !== 'cerrada' && (
+            <div className="px-6 pt-4">
+              <button onClick={() => setModalAgregar(true)}
+                className="w-full py-2.5 border-2 border-dashed border-gray-300 hover:border-gray-900 hover:bg-gray-50 rounded-xl text-sm font-bold text-gray-700 transition">
+                + Agregar cliente {faseDeClase(clase.horario).fase === 'tarde' ? '(llegó tarde)' : ''}
+              </button>
+            </div>
+          )}
           {tab === 'asistencia' && (
             <TabAsistencia
               reservas={reservas}
@@ -962,6 +982,14 @@ export default function DrawerDetalleClase({ isOpen, claseId, onClose, onSuccess
           </div>
         </div>
       )}
+
+      <ModalAgregarClienteClase
+        isOpen={modalAgregar}
+        clase={clase}
+        reservas={reservas}
+        onClose={() => setModalAgregar(false)}
+        onSuccess={async () => { await fetchData(); onSuccess() }}
+      />
     </>
   )
 }

@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Rol, Modulo, tieneAcceso, puedeEditar, esGlobal } from '@/lib/permisos'
 
@@ -29,18 +29,28 @@ const AuthContext = createContext<AuthContextType>({
   esGlobal:    false,
 })
 
+// Si el staff que llega es igual al que ya está, no se reemplaza el objeto: así nada se vuelve a pintar ni a cargar.
+const mismoStaff = (a: StaffSesion | null, b: StaffSesion | null) =>
+  !!a && !!b && JSON.stringify(a) === JSON.stringify(b)
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [staff,   setStaff]   = useState<StaffSesion | null>(null)
   const [loading, setLoading] = useState(true)
+  const usuarioId = useRef<string | null>(null)   // de quién es la sesión que ya se cargó
 
   useEffect(() => {
     // Solo carga una vez al inicio
     fetchStaff()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       // Solo recargar en SIGNED_IN y SIGNED_OUT, no en TOKEN_REFRESHED
-      if (event === 'SIGNED_IN')  fetchStaff()
-      if (event === 'SIGNED_OUT') { 
+      if (event === 'SIGNED_IN') {
+        // Supabase puede repetir SIGNED_IN (por ejemplo al volver a la pestaña). Si es la misma persona, no se recarga nada.
+        if (session?.user?.id && session.user.id === usuarioId.current) return
+        fetchStaff()
+      }
+      if (event === 'SIGNED_OUT') {
+        usuarioId.current = null
         setStaff(null)
         setLoading(false)
         localStorage.removeItem('navy_staff')
@@ -52,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchStaff = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setStaff(null); setLoading(false); return }
+    usuarioId.current = session.user.id
 
     // -------------------------------------------------------------
     // ACTUALIZACIÓN AUTOMÁTICA DE CLIENTE (supabase_user_id y ultima_sesion)
@@ -71,7 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Intentar cargar desde localStorage primero
     const cached = localStorage.getItem('navy_staff')
     if (cached) {
-      setStaff(JSON.parse(cached))
+      const guardado = JSON.parse(cached) as StaffSesion
+      setStaff(prev => mismoStaff(prev, guardado) ? prev : guardado)
       setLoading(false)
       // Actualizar en segundo plano sin mostrar loading
       supabase.from('staff')
@@ -88,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               sucursal_id:     data.sucursal_asignada_id,
               foto_url:        data.foto_url,
             }
-            setStaff(staffData)
+            setStaff(prev => mismoStaff(prev, staffData) ? prev : staffData)
             localStorage.setItem('navy_staff', JSON.stringify(staffData))
           }
         })
@@ -110,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sucursal_id:     data.sucursal_asignada_id,
         foto_url:        data.foto_url,
       }
-      setStaff(staffData)
+      setStaff(prev => mismoStaff(prev, staffData) ? prev : staffData)
       localStorage.setItem('navy_staff', JSON.stringify(staffData))
     }
     setLoading(false)

@@ -137,7 +137,7 @@ export default function TabAsistencia({ reservas, asistencias, historialClientes
     const previas    = clienteId ? previasDe(clienteId) : 0
     const nivel      = nivelDe(previas)
     const ultima     = hace(historial[clienteId]?.ultima)
-    const spotNum    = r.room_spots?.numero
+    const spotNum    = r.lugar ?? r.room_spots?.numero
     const paquete    = cliente?.paquetes?.nombre || cliente?.plan
     const iniciales  = (cliente?.nombre_completo || r.nombre_externo || '?').split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
     const guardando  = typeof checkingIn === 'boolean' ? checkingIn
