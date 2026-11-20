@@ -17,14 +17,25 @@ export const C = {
   aviso:   '#FBBF24',
 }
 
-/** Marca de Navy arriba de cada pantalla (la misma del CRM). */
+/** Logo oficial de Navy (versión blanca). Va en /public con este nombre. */
+export const LOGO_NAVY_BLANCO = '/logo-navy.svg'
+
+/** Marca de Navy arriba de cada pantalla: el logo oficial blanco
+ *  (si el archivo todavía no está en /public, se muestra la "N" del CRM). */
 export function Marca({ detalle }: { detalle?: string | null }) {
+  const [sinLogo, setSinLogo] = useState(false)
   return (
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-sm font-black text-black">N</span>
-        <span className="text-sm font-black tracking-tight text-white">NAVY</span>
-      </div>
+      {sinLogo ? (
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-sm font-black text-black">N</span>
+          <span className="text-sm font-black tracking-tight text-white">NAVY</span>
+        </div>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={LOGO_NAVY_BLANCO} alt="Navy Training Center" className="h-8 w-auto select-none"
+             draggable={false} onError={() => setSinLogo(true)} />
+      )}
       {detalle && <span className="text-sm" style={{ color: C.suave }}>{detalle}</span>}
     </div>
   )
