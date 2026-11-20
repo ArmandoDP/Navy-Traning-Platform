@@ -21,7 +21,8 @@ export default function TarjetaQR({ qr, ahora, ultima }: { qr: QR | null; ahora:
     <section className="flex h-full min-h-0 flex-col rounded-[22px] p-5 text-white" style={{ background: NEGRO }}>
       <div className="flex shrink-0 items-center justify-between">
         <span className="flex items-center gap-2.5">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-[13px] font-black text-black">N</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/images/navy-icon-white.png" alt="Navy" className="h-7 w-auto select-none" draggable={false} />
           <b className="text-[15px]">Escanea para checar</b>
         </span>
         <span className="text-xs text-white/60">Entrada y salida</span>
