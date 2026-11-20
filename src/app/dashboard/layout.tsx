@@ -64,13 +64,25 @@ const RUTA_A_MODULO: Record<string, Modulo> = {
   '/dashboard/configuracion':'configuracion',
 }
 
+// Tipo del staff logueado (Coach, Front, Manager…). Front Desk tiene rol "staff_navy" igual que
+// los coaches, así que para el checador se distingue por su tipo. Si el AuthContext no lo trae, se consulta.
+function useTipoStaff(staff: any): string | null {
+  const [tipo, setTipo] = useState<string | null>(staff?.tipo ?? null)
+  useEffect(() => {
+    if (!staff) { setTipo(null); return }
+    if (staff.tipo !== undefined) { setTipo(staff.tipo); return }
+    supabase.from('staff').select('tipo').eq('id', staff.id).maybeSingle()
+      .then(({ data }: { data: any }) => setTipo(data?.tipo ?? null))
+  }, [staff?.id, staff?.tipo])
+  return tipo
+}
+
 // Checador de staff: lo abren Front Desk, gerentes y dirección (el backend lo vuelve a validar).
-// Front Desk tiene rol "staff_navy" igual que los coaches, así que se distingue por su tipo.
-function puedeVerChecador(staff: any): boolean {
+function puedeVerChecador(staff: any, tipo: string | null): boolean {
   if (!staff) return false
   if (staff.rol === 'direccion' || staff.rol === 'gerente') return true
-  const tipo = (staff.tipo || '').toLowerCase()
-  return tipo === 'front' || tipo === 'manager' || tipo === 'submanager' || tipo === 'admin' || staff.tipo === undefined
+  const t = (tipo || '').toLowerCase()
+  return t === 'front' || t === 'manager' || t === 'submanager' || t === 'admin'
 }
 
 // Modal sin acceso
@@ -107,6 +119,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   const pathname              = usePathname()
   const router                = useRouter()
   const { staff, tieneAcceso, loading } = useAuth()
+  const tipoStaff = useTipoStaff(staff)
   const [modalBlocked, setModalBlocked] = useState<{ modulo: string } | null>(null)
   const [modalLogout, setModalLogout] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -158,7 +171,7 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
           {NAV.filter(item => item.href !== '/dashboard/promociones' || staff?.rol === 'direccion')
-              .filter(item => item.href !== '/dashboard/checador' || puedeVerChecador(staff))
+              .filter(item => item.href !== '/dashboard/checador' || puedeVerChecador(staff, tipoStaff))
               .map((item) => {
             const active  = isActive(item.href!)
             const modulo  = RUTA_A_MODULO[item.href!]
@@ -300,11 +313,27 @@ function Topbar() {
   )
 }
 
+// Después de iniciar sesión desde el checador del celular, regresar a "Mi día" en lugar del CRM
+function RegresoDespuesDeLogin() {
+  const router = useRouter()
+  const { staff, loading } = useAuth()
+  useEffect(() => {
+    if (loading || !staff) return
+    const destino = localStorage.getItem('navy_despues_login')
+    if (destino) {
+      localStorage.removeItem('navy_despues_login')
+      router.replace(destino)
+    }
+  }, [staff, loading, router])
+  return null
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
 
   return (
     <SucursalProvider>
+      <RegresoDespuesDeLogin />
       <div className="flex h-screen bg-[#F4F5F7]">  {/* ← quita overflow-hidden */}
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
