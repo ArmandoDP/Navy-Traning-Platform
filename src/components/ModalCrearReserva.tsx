@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { X, Search, Check, AlertCircle, Snowflake } from 'lucide-react'
 import { logActividad } from '@/lib/log-actividad'
 import { useAuth } from '@/context/AuthContext'
+import { traducirErrorReserva } from '@/lib/ventanaReserva'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Cliente {
@@ -58,12 +59,16 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
   const [clientes,   setClientes]   = useState<Cliente[]>([])
   const [clases,     setClases]     = useState<Clase[]>([])
   const [sucursales, setSucursales] = useState<Sucursal[]>([])
-  const [spots,      setSpots]      = useState<Spot[]>([])
+  // Mapa real del salón (el mismo que usa la app): el lugar se guarda en reservas.spot_id
+  const [layout,     setLayout]     = useState<any[]>([])
+  const [roomSpots,  setRoomSpots]  = useState<any[]>([])
+  const [ocupados,   setOcupados]   = useState<string[]>([])
+  const [cargandoMapa, setCargandoMapa] = useState(false)
 
   // Selecciones
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null)
   const [claseSeleccionada,   setClaseSeleccionada]   = useState<Clase | null>(null)
-  const [spotSeleccionado,    setSpotSeleccionado]    = useState<number | null>(null)
+  const [spotSeleccionado,    setSpotSeleccionado]    = useState<any | null>(null)   // fila de room_spots
 
   // Filtros paso 2
   const [busCliente,     setBusCliente]     = useState('')
@@ -121,15 +126,22 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
 
   // ── Cargar spots cuando se selecciona clase ───────────────────────────────────
   useEffect(() => {
-    if (!claseSeleccionada) { setSpots([]); return }
+    if (!claseSeleccionada) { setLayout([]); setRoomSpots([]); setOcupados([]); setSpotSeleccionado(null); return }
     const cargarSpots = async () => {
-      const { data } = await supabase.from('spots').select('*').eq('clase_id', claseSeleccionada.id)
-      const spotsExistentes = data || []
-      const todosSpots = Array.from({ length: claseSeleccionada.capacidad_max }, (_, i) => {
-        const existe = spotsExistentes.find((s: Spot) => s.numero === i + 1)
-        return existe || { id: `virtual-${i+1}`, numero: i + 1, estatus: 'disponible', cliente_id: null }
-      })
-      setSpots(todosSpots)
+      setCargandoMapa(true)
+      const roomId = (claseSeleccionada as any).room_id
+      const [{ data: room }, { data: res }] = await Promise.all([
+        roomId
+          ? supabase.from('rooms').select('layout, room_spots(id, numero, tipo, fila, columna, bloqueado)').eq('id', roomId).single()
+          : Promise.resolve({ data: null as any }),
+        supabase.from('reservas').select('spot_id, estatus').eq('clase_id', claseSeleccionada.id).not('spot_id', 'is', null),
+      ])
+      setLayout(Array.isArray(room?.layout) ? room.layout : [])
+      setRoomSpots(room?.room_spots || [])
+      // Ocupado = cualquier reserva no cancelada (incluye 'Asistió')
+      setOcupados((res || []).filter((r: any) => !['Cancelada', 'Cancelado'].includes(r.estatus)).map((r: any) => r.spot_id))
+      setSpotSeleccionado(null)
+      setCargandoMapa(false)
     }
     cargarSpots()
   }, [claseSeleccionada])
@@ -145,7 +157,7 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
   // ── Reset ─────────────────────────────────────────────────────────────────────
   const resetForm = () => {
     setStep(1); setBusCliente(''); setClienteSeleccionado(null)
-    setClaseSeleccionada(null); setSpotSeleccionado(null)
+    setClaseSeleccionada(null); setSpotSeleccionado(null); setOcupados([])
     setSucursalFiltro('Todas'); setFechaActiva(new Date())
     setHorarioFiltro('Cualquiera'); setYaReservado(false)
   }
@@ -166,15 +178,27 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     const reservasActivas = claseSeleccionada.total_reservas || 0
     const llena = reservasActivas >= claseSeleccionada.capacidad_max
 
+    // El lugar pudo ocuparse mientras el modal estaba abierto (la base no lo valida en reservas del CRM)
+    if (spotSeleccionado && !llena) {
+      const { data: tomado } = await supabase.from('reservas').select('id')
+        .eq('clase_id', claseSeleccionada.id).eq('spot_id', spotSeleccionado.id)
+        .not('estatus', 'in', '("Cancelada","Cancelado")').limit(1)
+      if (tomado && tomado.length > 0) {
+        alert('Ese lugar acaba de ser tomado. Elige otro.')
+        setOcupados(o => [...o, spotSeleccionado.id]); setSpotSeleccionado(null); setLoading(false); return
+      }
+    }
+
     const { data: reserva, error } = await supabase.from('reservas').insert([{
       cliente_id:   clienteSeleccionado.id,
       clase_id:     claseSeleccionada.id,
       estatus:      'Confirmada',
       lista_espera: llena,
       origen:       'CRM',
+      spot_id:      llena ? null : (spotSeleccionado?.id ?? null),   // igual que la app: el lugar va en la reserva
     }]).select().single()
 
-    if (error) { alert('Error: ' + error.message); setLoading(false); return }
+    if (error) { alert('Error: ' + traducirErrorReserva(error.message)); setLoading(false); return }
 
     // Sincronizar cupos
     try {
@@ -184,16 +208,6 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
         body:    JSON.stringify({ clase_id: claseSeleccionada.id }),
       })
     } catch (e) { console.warn('Error sincronizando cupos:', e) }
-
-    // Si eligió spot y la clase no está llena, guardarlo
-    if (spotSeleccionado && reserva && !llena) {
-      await supabase.from('spots').upsert({
-        clase_id:   claseSeleccionada.id,
-        numero:     spotSeleccionado,
-        estatus:    'ocupado',
-        cliente_id: clienteSeleccionado.id,
-      }, { onConflict: 'clase_id,numero' })
-    }
 
     // Notificación + correo
     if (reserva) {
@@ -236,14 +250,11 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
     return mismaFecha && sucOk && horOk
   })
 
-  // ── Spot colors ───────────────────────────────────────────────────────────────
-  const getSpotStyle = (spot: Spot, num: number) => {
-    if (spot.estatus === 'coach')     return 'bg-gray-800 text-white'
-    if (spot.estatus === 'bloqueado') return 'bg-gray-200 text-gray-400 cursor-not-allowed'
-    if (spot.estatus === 'ocupado')   return 'bg-gray-700 text-white cursor-not-allowed'
-    if (spotSeleccionado === num)     return 'bg-gray-900 text-white ring-2 ring-gray-900 ring-offset-1'
-    return 'bg-white border-2 border-gray-200 text-gray-700 hover:border-gray-900 cursor-pointer'
-  }
+  // ── Mapa del salón ────────────────────────────────────────────────────────────
+  const CELL = 48, GAP = 6
+  const maxCol = layout.length ? Math.max(...layout.map((s: any) => s.columna)) : 0
+  const maxFil = layout.length ? Math.max(...layout.map((s: any) => s.fila))    : 0
+  const libres = roomSpots.filter(s => !s.bloqueado && !ocupados.includes(s.id)).length
 
   const DIAS_SHORT = ['dom','lun','mar','mié','jue','vie','sáb']
   const MESES_SHORT = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
@@ -486,36 +497,48 @@ export default function ModalCrearReserva({ isOpen, onClose, onSuccess }: Props)
             </div>
 
             {/* Grid de spots */}
-            <div className="grid grid-cols-5 gap-2">
-              {spots.map(spot => {
-                const esCoach    = spot.estatus === 'coach'
-                const bloqueado  = spot.estatus === 'bloqueado' || spot.estatus === 'ocupado' || llena
-                return (
-                  <div key={spot.numero} className="relative">
-                    {esCoach && (
-                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full z-10 whitespace-nowrap">
-                        COACH
-                      </span>
-                    )}
-                    <button
-                      disabled={bloqueado}
-                      onClick={() => !bloqueado && setSpotSeleccionado(spotSeleccionado === spot.numero ? null : spot.numero)}
-                      className={`w-full aspect-square rounded-xl text-sm font-bold transition flex items-center justify-center ${getSpotStyle(spot, spot.numero)}`}
-                    >
-                      {spot.numero}
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
+            {cargandoMapa ? (
+              <p className="text-xs text-gray-400 py-8 text-center">Cargando mapa del salón...</p>
+            ) : layout.length === 0 ? (
+              <p className="text-xs text-gray-400 bg-gray-50 rounded-xl p-4 text-center">Este salón no tiene mapa de lugares. Se reservará sin lugar.</p>
+            ) : (
+              <div className="bg-gray-50 rounded-2xl p-3 overflow-auto max-h-80">
+                <div style={{ position: 'relative', width: (maxCol + 1) * (CELL + GAP), height: (maxFil + 1) * (CELL + GAP) }}>
+                  {layout.map((celda: any, i: number) => {
+                    const left = celda.columna * (CELL + GAP), top = celda.fila * (CELL + GAP)
+                    if (celda.tipo === 'Coach')   return <div key={i} style={{ position: 'absolute', left, top, width: CELL, height: CELL }} className="flex items-center justify-center rounded-xl bg-gray-800 text-lg">🎤</div>
+                    if (celda.tipo === 'Entrada') return <div key={i} style={{ position: 'absolute', left, top, width: CELL, height: CELL }} className="flex items-center justify-center rounded-xl bg-gray-100 text-lg">🚪</div>
+                    const spot = roomSpots.find((rs: any) => rs.fila === celda.fila && rs.columna === celda.columna)
+                    if (!spot) return null
+                    const tomado = ocupados.includes(spot.id) || spot.bloqueado || llena
+                    const sel = spotSeleccionado?.id === spot.id
+                    return (
+                      <button key={i} disabled={tomado} onClick={() => setSpotSeleccionado(sel ? null : spot)}
+                        style={{ position: 'absolute', left, top, width: CELL, height: CELL }}
+                        className={`rounded-xl border-2 text-xs font-bold transition flex items-center justify-center ${
+                          tomado ? 'bg-red-100 border-red-200 text-red-400 cursor-not-allowed'
+                          : sel  ? 'bg-gray-900 border-gray-900 text-white'
+                          :        'bg-white border-gray-200 text-gray-600 hover:border-gray-400'}`}>
+                        {spot.numero}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {layout.length > 0 && !llena && (
+              <p className="text-[11px] text-gray-400">
+                {spotSeleccionado ? `Lugar elegido: ${spotSeleccionado.numero}` : libres === 0 ? 'No quedan lugares libres: se reservará sin lugar.' : 'Elige el lugar del cliente (igual que en la app). Si no eliges, queda sin lugar asignado.'}
+              </p>
+            )}
 
             {/* Leyenda */}
             <div className="flex items-center gap-4 flex-wrap">
               {[
-                { label: `Disponible · ${llena ? 0 : spots.filter(s => s.estatus === 'disponible').length}`, cls: 'border-2 border-gray-200 bg-white' },
+                { label: `Disponible · ${llena ? 0 : libres}`, cls: 'border-2 border-gray-200 bg-white' },
                 { label: `Seleccionado`, cls: 'bg-gray-900' },
-                { label: `Ocupado · ${spots.filter(s => s.estatus === 'ocupado').length}`, cls: 'bg-gray-700' },
-                { label: `Bloqueado · ${spots.filter(s => s.estatus === 'bloqueado').length}`, cls: 'bg-gray-200' },
+                { label: `Ocupado`, cls: 'bg-red-100' },
               ].map(l => (
                 <div key={l.label} className="flex items-center gap-1.5">
                   <div className={`w-3.5 h-3.5 rounded-md flex-shrink-0 ${l.cls}`}/>
