@@ -2,46 +2,51 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import { SucursalProvider } from '@/context/SucursalContext'
 import SucursalSelector     from '@/components/SucursalSelector'
 import { LayoutDashboard, Package, Bell, BarChart2, Settings, LogOut, ChevronLeft,
-  ChevronRight, BookOpen, Calendar, UserCircle,
-  Users, CreditCard, Star, Activity, ChevronDown,
-  DollarSign, MapPin, Puzzle, ShoppingBag, Lock,
-  Sparkles, Tag
+  ChevronRight, BookOpen, Calendar, Users, ChevronDown, DollarSign, MapPin, Puzzle,
+  ShoppingBag, Lock, Sparkles, Tag, ScanLine, Activity, UserCog, History
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Modulo, RUTAS_MODULOS } from '@/lib/permisos'
 
-interface NavChild  { href: string; label: string }
-interface NavItem   { href?: string; label: string; icon: React.ElementType; children?: NavChild[] }
-interface Integration { label: string; icon: string; href: string }
+// Logo oficial de Navy (versión blanca, para el sidebar oscuro)
+const LOGO_NAVY_BLANCO = '/images/navy-icon-white.png'
+const NEGRO_NAVY = '#171B24'
 
-const NAV: NavItem[] = [
-  { href: '/dashboard/ejecutivo',    label: 'Dashboard',     icon: LayoutDashboard },
-  { href: '/dashboard/checkin',      label: 'Check-in',      icon: Activity        },
-  { href: '/dashboard/degali',       label: 'The Galley',    icon: ShoppingBag     },
-  { href: '/dashboard/reservas',     label: 'Reservas',      icon: Calendar        },
-  { href: '/dashboard/clases',       label: 'Clases',        icon: BookOpen        },
-  { href: '/dashboard/clases-muestra', label: 'Clases Muestra', icon: Sparkles },
-  { href: '/dashboard/sucursales',   label: 'Sucursales',    icon: MapPin          },
-  { href: '/dashboard/clientes',     label: 'Clientes',      icon: Users           },
-  { href: '/dashboard/staff',        label: 'Staff',         icon: Users           },
-  { href: '/dashboard/paquetes',     label: 'Paquetes',      icon: Package         },
-  { href: '/dashboard/promociones',  label: 'Promociones',   icon: Tag             },
-  { href: '/dashboard/finanzas',     label: 'Finanzas',      icon: DollarSign      },
-  { href: '/dashboard/alertas',      label: 'Alertas',       icon: Bell            },
-  { href: '/dashboard/reportes',     label: 'Reportes',      icon: BarChart2       },
-  { href: '/dashboard/actividad',    label: 'Actividad',     icon: Activity },
-  { href: '/dashboard/integraciones',label: 'Integraciones', icon: Puzzle          },
-  { href: '/dashboard/configuracion',label: 'Configuración', icon: Settings        },
-]
+interface NavItem  { href: string; label: string; icon: React.ElementType }
+interface NavGrupo { titulo: string; items: NavItem[] }
 
-const INTEGRATIONS: Integration[] = [
-  { label: 'Stripe',  icon: '💳', href: '/dashboard/integraciones/stripe'  },
-  { label: 'Fitpass', icon: '🏃', href: '/dashboard/integraciones/fitpass' },
-  { label: 'InBody',  icon: '⚡', href: '/dashboard/integraciones/inbody'  },
+const NAV: NavGrupo[] = [
+  { titulo: 'Operación', items: [
+    { href: '/dashboard/ejecutivo',      label: 'Dashboard',      icon: LayoutDashboard },
+    { href: '/dashboard/checkin',        label: 'Check-in',       icon: Activity        },
+    { href: '/dashboard/checador',       label: 'Checador staff', icon: ScanLine        },
+    { href: '/dashboard/reservas',       label: 'Reservas',       icon: Calendar        },
+    { href: '/dashboard/clases',         label: 'Clases',         icon: BookOpen        },
+    { href: '/dashboard/clases-muestra', label: 'Clases Muestra', icon: Sparkles        },
+    { href: '/dashboard/degali',         label: 'The Galley',     icon: ShoppingBag     },
+  ]},
+  { titulo: 'Gestión', items: [
+    { href: '/dashboard/clientes',       label: 'Clientes',       icon: Users           },
+    { href: '/dashboard/staff',          label: 'Staff',          icon: UserCog         },
+    { href: '/dashboard/paquetes',       label: 'Paquetes',       icon: Package         },
+    { href: '/dashboard/promociones',    label: 'Promociones',    icon: Tag             },
+    { href: '/dashboard/sucursales',     label: 'Sucursales',     icon: MapPin          },
+  ]},
+  { titulo: 'Análisis', items: [
+    { href: '/dashboard/finanzas',       label: 'Finanzas',       icon: DollarSign      },
+    { href: '/dashboard/reportes',       label: 'Reportes',       icon: BarChart2       },
+    { href: '/dashboard/alertas',        label: 'Alertas',        icon: Bell            },
+    { href: '/dashboard/actividad',      label: 'Actividad',      icon: History         },
+  ]},
+  { titulo: 'Sistema', items: [
+    { href: '/dashboard/integraciones',  label: 'Integraciones',  icon: Puzzle          },
+    { href: '/dashboard/configuracion',  label: 'Configuración',  icon: Settings        },
+  ]},
 ]
 
 // Mapeo ruta → módulo
@@ -61,6 +66,27 @@ const RUTA_A_MODULO: Record<string, Modulo> = {
   '/dashboard/actividad':   'actividad',
   '/dashboard/integraciones':'integraciones',
   '/dashboard/configuracion':'configuracion',
+}
+
+// Tipo del staff logueado (Coach, Front, Manager…). Front Desk tiene rol "staff_navy" igual que
+// los coaches, así que para el checador se distingue por su tipo. Si el AuthContext no lo trae, se consulta.
+function useTipoStaff(staff: any): string | null {
+  const [tipo, setTipo] = useState<string | null>(staff?.tipo ?? null)
+  useEffect(() => {
+    if (!staff) { setTipo(null); return }
+    if (staff.tipo !== undefined) { setTipo(staff.tipo); return }
+    supabase.from('staff').select('tipo').eq('id', staff.id).maybeSingle()
+      .then(({ data }: { data: any }) => setTipo(data?.tipo ?? null))
+  }, [staff?.id, staff?.tipo])
+  return tipo
+}
+
+// Checador de staff: lo abren Front Desk, gerentes y dirección (el backend lo vuelve a validar).
+function puedeVerChecador(staff: any, tipo: string | null): boolean {
+  if (!staff) return false
+  if (staff.rol === 'direccion' || staff.rol === 'gerente') return true
+  const t = (tipo || '').toLowerCase()
+  return t === 'front' || t === 'manager' || t === 'submanager' || t === 'admin'
 }
 
 // Modal sin acceso
@@ -93,13 +119,21 @@ function ModalSinAcceso({ modulo, rol, onClose }: { modulo: string; rol: string;
   )
 }
 
+const ROLES: Record<string, string> = {
+  direccion:    'Dirección',
+  gerente:      'Gerente',
+  staff_navy:   'Staff Navy',
+  staff_galley: 'The Galley',
+}
+
 function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const pathname              = usePathname()
-  const router                = useRouter()
+  const pathname = usePathname()
   const { staff, tieneAcceso, loading } = useAuth()
+  const tipoStaff = useTipoStaff(staff)
   const [modalBlocked, setModalBlocked] = useState<{ modulo: string } | null>(null)
   const [modalLogout, setModalLogout] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [sinLogo, setSinLogo] = useState(false)
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
@@ -111,116 +145,121 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
     window.location.href = '/login'
   }
 
-  const handleNavClick = (href: string, e: React.MouseEvent) => {
-    const modulo = RUTA_A_MODULO[href]
-    if (modulo && !tieneAcceso(modulo)) {
-      e.preventDefault()
-      setModalBlocked({ modulo })
-    }
-  }
+  const visible = (item: NavItem) =>
+    (item.href !== '/dashboard/promociones' || staff?.rol === 'direccion') &&
+    (item.href !== '/dashboard/checador' || puedeVerChecador(staff, tipoStaff))
 
-  const itemBase    = 'flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 whitespace-nowrap w-full'
-  const itemActive  = 'bg-white text-gray-900 font-bold'
-  const itemDefault = 'text-white hover:bg-[#232B38]'
-  const itemBlocked = 'text-white/30 cursor-pointer'
+  const iniciales = staff ? (staff.nombre[0] + (staff.primer_apellido?.[0] || '')).toUpperCase() : ''
 
   return (
     <>
-      <aside
-        style={{ backgroundColor: '#171B24', width: collapsed ? '60px' : '220px' }}
-        className="flex flex-col h-screen flex-shrink-0 transition-all duration-300 overflow-hidden border-r border-[#2A3344]"
-      >
-        {/* Logo */}
-        <div className="flex items-center justify-between px-3 py-4 border-b border-[#2A3344] min-h-[56px]">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center flex-shrink-0 text-black font-black text-sm">
-              N
-            </div>
-            {!collapsed && (
-              <span className="text-white font-black text-sm tracking-tight whitespace-nowrap">NAVY CRM</span>
-            )}
-          </div>
-          <button onClick={onToggle} className="text-[#A0AABF] hover:text-white transition flex-shrink-0">
+      {/* Contenedor con margen: el sidebar "flota" sobre el fondo del CRM */}
+      <div className="h-screen flex-shrink-0 py-3 pl-3">
+        <aside
+          style={{ backgroundColor: NEGRO_NAVY, width: collapsed ? 76 : 244 }}
+          className="relative flex h-full flex-col rounded-[26px] shadow-[0_24px_60px_-24px_rgba(17,24,39,.55)] ring-1 ring-white/[.06] transition-[width] duration-300 ease-[cubic-bezier(.22,1,.36,1)]">
+
+          {/* Botón para contraer / expandir */}
+          <button onClick={onToggle} title={collapsed ? 'Expandir menú' : 'Contraer menú'}
+            className="absolute -right-3 top-9 z-10 grid h-7 w-7 place-items-center rounded-full bg-white text-gray-700 shadow-md ring-1 ring-black/5 transition hover:scale-110 hover:text-black">
             {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
-        </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-          {NAV.filter(item => item.href !== '/dashboard/promociones' || staff?.rol === 'direccion').map((item) => {
-            const active  = isActive(item.href!)
-            const modulo  = RUTA_A_MODULO[item.href!]
-            const blocked = !loading && modulo ? !tieneAcceso(modulo) : false
+          {/* Logo al centro */}
+          <div className="flex shrink-0 flex-col items-center px-3 pb-4 pt-6">
+            {sinLogo ? (
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-lg font-black text-black">N</span>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={LOGO_NAVY_BLANCO} alt="Navy Training Center" draggable={false}
+                   onError={() => setSinLogo(true)}
+                   className={`w-auto select-none object-contain transition-all duration-300 ${collapsed ? 'h-9' : 'h-14'}`} />
+            )}
+            <AnimatePresence initial={false}>
+              {!collapsed && (
+                <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                  className="mt-2 overflow-hidden whitespace-nowrap text-[11px] font-semibold tracking-[.18em] text-white/40">
+                  CRM
+                </motion.p>
+              )}
+            </AnimatePresence>
+            <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+          </div>
 
-            if (blocked) return (
-              <div key={item.href}
-                className={`${itemBase} opacity-30 cursor-not-allowed select-none`}>
-                <item.icon size={16} className="text-white" />
-                {!collapsed && (
-                  <>
-                    <span className="text-sm flex-1 text-white">{item.label}</span>
-                    <Lock size={11} className="text-white flex-shrink-0" />
-                  </>
-                )}
+          {/* Navegación */}
+          <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 [scrollbar-color:rgba(255,255,255,.15)_transparent] [scrollbar-width:thin]">
+            {NAV.map((grupo, gi) => {
+              const items = grupo.items.filter(visible)
+              if (!items.length) return null
+              return (
+                <div key={grupo.titulo} className={gi ? 'mt-3' : ''}>
+                  {collapsed
+                    ? (gi > 0 && <div className="mx-auto mb-3 h-px w-6 bg-white/10" />)
+                    : <p className="mb-1.5 px-3 text-[11px] font-semibold text-white/35">{grupo.titulo}</p>}
+
+                  <div className="space-y-0.5">
+                    {items.map(item => {
+                      const active  = isActive(item.href)
+                      const modulo  = RUTA_A_MODULO[item.href]
+                      const blocked = !loading && modulo ? !tieneAcceso(modulo) : false
+
+                      const contenido = (
+                        <>
+                          {active && (
+                            <motion.span layoutId="nav-activo" className="absolute inset-0 rounded-xl bg-white shadow-sm"
+                              transition={{ type: 'spring', stiffness: 420, damping: 34 }} />
+                          )}
+                          <item.icon size={18} strokeWidth={active ? 2.4 : 2}
+                            className={`relative shrink-0 ${active ? 'text-gray-900' : 'text-white/75 group-hover:text-white'}`} />
+                          {!collapsed && (
+                            <span className={`relative truncate text-[14px] ${active ? 'font-extrabold text-gray-900' : 'font-medium text-white/80 group-hover:text-white'}`}>
+                              {item.label}
+                            </span>
+                          )}
+                          {blocked && !collapsed && <Lock size={12} className="relative ml-auto text-white/60" />}
+                        </>
+                      )
+                      const clases = `group relative flex h-9 items-center gap-3 rounded-xl transition-colors ${collapsed ? 'justify-center' : 'px-3'}`
+
+                      if (blocked) return (
+                        <div key={item.href} title={item.label} onClick={() => setModalBlocked({ modulo: modulo! })}
+                          className={`${clases} cursor-not-allowed select-none opacity-30`}>
+                          {contenido}
+                        </div>
+                      )
+                      return (
+                        <Link key={item.href} href={item.href} title={collapsed ? item.label : undefined}
+                          className={`${clases} ${active ? '' : 'hover:bg-white/[.06]'}`}>
+                          {contenido}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </nav>
+
+          {/* Usuario y cerrar sesión */}
+          <div className="shrink-0 p-3 pt-0">
+            <div className={`flex items-center gap-2.5 rounded-2xl bg-white/[.05] p-2 ring-1 ring-white/[.06] ${collapsed ? 'flex-col' : ''}`}>
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-xs font-black text-gray-900">
+                {loading || !staff ? '…' : iniciales}
               </div>
-            )
-
-            return (
-              <Link key={item.href} href={item.href!}
-                className={`${itemBase} ${active ? itemActive : itemDefault}`}>
-                <item.icon size={16} className={active ? 'text-gray-900' : 'text-white'} />
-                {!collapsed && <span className="text-sm">{item.label}</span>}
-              </Link>
-            )
-          })}
-
-          {/* Integraciones */}
-          {!collapsed && (
-            <div className="pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[#4B5563] px-2.5 mb-2">
-                Integraciones
-              </p>
-              {INTEGRATIONS.map(i => (
-                <Link key={i.label} href={i.href}
-                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#A0AABF] hover:text-white hover:bg-[#232B38] transition text-sm">
-                  <span className="text-base">{i.icon}</span>
-                  {i.label}
-                </Link>
-              ))}
+              {!collapsed && (
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-bold text-white">{staff ? `${staff.nombre} ${staff.primer_apellido || ''}`.trim() : 'Cargando…'}</p>
+                  <p className="truncate text-[11px] text-white/45">{ROLES[staff?.rol || ''] || staff?.rol?.replace('_', ' ') || ''}</p>
+                </div>
+              )}
+              <button onClick={() => setModalLogout(true)} title="Cerrar sesión"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white/60 transition hover:bg-red-500/15 hover:text-red-400">
+                <LogOut size={16} />
+              </button>
             </div>
-          )}
-          {collapsed && (
-            <div className="pt-4 space-y-0.5">
-              {INTEGRATIONS.map(i => (
-                <Link key={i.label} href={i.href} title={i.label}
-                  className="flex items-center justify-center px-2.5 py-2 rounded-lg text-[#A0AABF] hover:text-white hover:bg-[#232B38] transition">
-                  <span className="text-base">{i.icon}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </nav>
-
-        {/* Footer */}
-        <div className="border-t border-[#2A3344] p-2 space-y-1">
-          {!collapsed && !loading && staff &&(
-            <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg mb-1">
-              <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-black flex-shrink-0">
-                {(staff.nombre[0] + (staff.primer_apellido?.[0] || '')).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-white text-xs font-bold truncate">{staff.nombre} {staff.primer_apellido}</p>
-                <p className="text-[#4B5563] text-[10px] capitalize truncate">{staff.rol?.replace('_', ' ')}</p>
-              </div>
-            </div>
-          )}
-          <button onClick={() => setModalLogout(true)}
-            className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[#A0AABF] hover:text-red-400 hover:bg-red-500/10 transition w-full group">
-            <LogOut size={16} className="group-hover:text-red-400 transition flex-shrink-0" />
-            {!collapsed && <span className="text-sm">Cerrar sesión</span>}
-          </button>
-        </div>
-      </aside>
+          </div>
+        </aside>
+      </div>
 
       {/* Modal sin acceso */}
       {modalBlocked && (
@@ -230,29 +269,35 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
           onClose={() => setModalBlocked(null)}
         />
       )}
+
       {/* Modal cerrar sesión */}
-      {modalLogout && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div onClick={() => setModalLogout(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
-            <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <LogOut size={24} className="text-red-500" />
-            </div>
-            <h2 className="text-lg font-black text-gray-900 mb-2">¿Cerrar sesión?</h2>
-            <p className="text-sm text-gray-400 mb-6">Se cerrará tu sesión y tendrás que volver a iniciar sesión para acceder al CRM.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setModalLogout(false)}
-                className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition">
-                Cancelar
-              </button>
-              <button onClick={handleLogout} disabled={loggingOut}
-                className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold transition disabled:opacity-60">
-                {loggingOut ? 'Cerrando...' : 'Cerrar sesión'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {modalLogout && (
+          <motion.div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div onClick={() => setModalLogout(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div className="relative w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-2xl"
+              initial={{ y: 20, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 10, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 28 }}>
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50">
+                <LogOut size={24} className="text-red-500" />
+              </div>
+              <h2 className="mb-2 text-lg font-black text-gray-900">¿Cerrar sesión?</h2>
+              <p className="mb-6 text-sm text-gray-400">Se cerrará tu sesión y tendrás que volver a iniciar sesión para acceder al CRM.</p>
+              <div className="flex gap-3">
+                <button onClick={() => setModalLogout(false)}
+                  className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-bold text-gray-700 transition hover:bg-gray-50">
+                  Cancelar
+                </button>
+                <button onClick={handleLogout} disabled={loggingOut}
+                  className="flex-1 rounded-xl bg-red-500 py-3 text-sm font-bold text-white transition hover:bg-red-600 disabled:opacity-60">
+                  {loggingOut ? 'Cerrando...' : 'Cerrar sesión'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
@@ -288,14 +333,34 @@ function Topbar() {
   )
 }
 
+// Después de iniciar sesión desde el checador del celular, regresar a "Mi día" en lugar del CRM
+function RegresoDespuesDeLogin() {
+  const router = useRouter()
+  const { staff, loading } = useAuth()
+  useEffect(() => {
+    if (loading || !staff) return
+    const destino = localStorage.getItem('navy_despues_login')
+    if (destino) {
+      localStorage.removeItem('navy_despues_login')
+      router.replace(destino)
+    }
+  }, [staff, loading, router])
+  return null
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
 
+  // Recordar si el menú estaba contraído
+  useEffect(() => { setCollapsed(localStorage.getItem('navy_sidebar') === 'contraido') }, [])
+  const alternar = () => setCollapsed(c => { localStorage.setItem('navy_sidebar', c ? 'abierto' : 'contraido'); return !c })
+
   return (
     <SucursalProvider>
-      <div className="flex h-screen bg-[#F4F5F7]">  {/* ← quita overflow-hidden */}
-        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <RegresoDespuesDeLogin />
+      <div className="flex h-screen bg-[#F4F5F7]">
+        <Sidebar collapsed={collapsed} onToggle={alternar} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <Topbar />
           <main className="flex-1 overflow-auto p-6">
             {children}
