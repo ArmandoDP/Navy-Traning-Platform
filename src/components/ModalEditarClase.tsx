@@ -110,8 +110,9 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
   const original     = clase ? aLocal(clase.horario) : { fecha: '', hora: '' }
   const cambiaHora   = !!clase && (form.fecha !== original.fecha || form.hora !== original.hora)
   const cambiaNombre = !!clase && form.nombre.trim() !== (clase.nombre_clase || '').trim()
-  const cambiaCoach  = !!clase && (form.coach_id || null) !== (clase.coach_id || null)
-  const avisara      = conReservas && (cambiaNombre || cambiaCoach)
+  // El coach ya no se cambia aquí: se usa el botón "Cambiar" del detalle (pide motivo, avisa a los
+  // coaches y deja registrada la suplencia para la quincena).
+  const avisara      = conReservas && cambiaNombre
   const excedeSpots  = spots !== null && spots > 0 && Number(form.capacidad_max) > spots
 
   const handleGuardar = async () => {
@@ -120,7 +121,6 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
 
     const body: any = { clase_id: clase.id }
     if (cambiaNombre) body.nombre = form.nombre.trim()
-    if (cambiaCoach)  body.coach_id = form.coach_id || null
     if (Number(form.capacidad_max) !== clase.capacidad_max) body.capacidad_max = Number(form.capacidad_max)
     if (!conReservas && cambiaHora) body.horario = aIso(form.fecha, form.hora)
     if (!conReservas && Number(form.duracion_minutos) !== clase.duracion_minutos) body.duracion_minutos = Number(form.duracion_minutos)
@@ -208,14 +208,11 @@ export default function ModalEditarClase({ isOpen, claseId, onClose, onSuccess }
             </div>
 
             <div>
-              <label className="text-xs font-bold text-gray-500 uppercase">Coach</label>
-              <select value={form.coach_id} onChange={e => set('coach_id', e.target.value)}
-                className="mt-1 w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:border-gray-400">
-                <option value="">Sin coach</option>
-                {coaches.map(c => (
-                  <option key={c.id} value={c.id}>{`${c.nombre} ${c.primer_apellido || ''}`.replace(/\s+/g, ' ').trim()}</option>
-                ))}
-              </select>
+              <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">Coach <Lock size={11} /></label>
+              <div className="mt-1 w-full px-3 py-2.5 border border-gray-100 bg-gray-50 rounded-xl text-sm text-gray-700">
+                {(() => { const c = coaches.find(x => x.id === form.coach_id); return c ? `${c.nombre} ${c.primer_apellido || ''}`.trim() : 'Sin coach' })()}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Para cambiarlo usa el botón <b>Cambiar</b> junto al coach en el detalle: pide el motivo y avisa a los coaches.</p>
             </div>
 
             <div>

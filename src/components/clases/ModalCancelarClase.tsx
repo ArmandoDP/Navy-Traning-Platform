@@ -50,15 +50,15 @@ export default function ModalCancelarClase({ claseId, onClose, onHecho }: Props)
   const plataformas = (prev?.reservas || []).filter((r: any) => !r.aviso.startsWith('Correo'))
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-        <div className="bg-red-50 px-6 py-4 border-b border-red-100 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><AlertTriangle size={18} className="text-red-600" /></div>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/45 backdrop-blur-[2px] p-4">
+      <div className="bg-white w-full max-w-lg rounded-[24px] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="bg-[#171B24] px-6 py-5 flex items-center gap-3 text-white">
+          <div className="w-10 h-10 rounded-[12px] bg-rose-600 flex items-center justify-center"><AlertTriangle size={18} className="text-white" /></div>
           <div className="flex-1">
-            <h3 className="text-sm font-black text-red-700">Cancelar y eliminar clase</h3>
-            <p className="text-xs text-red-500">No se puede deshacer</p>
+            <h3 className="text-lg font-black tracking-tight">Cancelar y eliminar clase</h3>
+            <p className="text-xs text-white/55">No se puede deshacer</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-red-100 text-red-400"><X size={16} /></button>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white"><X size={16} /></button>
         </div>
 
         {resultado ? (
@@ -70,7 +70,7 @@ export default function ModalCancelarClase({ claseId, onClose, onHecho }: Props)
               {resultado.plataformas ? ` · ${resultado.plataformas} de Wellhub/TotalPass (les avisa su plataforma)` : ''}.
             </p>
             {resultado.forzada && <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3">Se eliminó aunque una plataforma no respondió: revisa en su portal que ya no aparezca.</p>}
-            <button onClick={onHecho} className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm">Listo</button>
+            <button onClick={onHecho} className="w-full py-3 bg-[#171B24] text-white rounded-xl font-bold text-sm">Listo</button>
           </div>
         ) : !prev ? (
           <div className="p-10 flex justify-center">{error ? <p className="text-sm text-red-600">{error}</p> : <Loader2 className="animate-spin text-gray-400" />}</div>
@@ -141,7 +141,7 @@ export default function ModalCancelarClase({ claseId, onClose, onHecho }: Props)
             <div className="px-6 py-4 border-t border-gray-100 flex gap-2">
               <button onClick={onClose} className="flex-1 py-3 border border-gray-200 rounded-xl text-sm font-bold text-gray-700">Volver</button>
               <button onClick={() => cancelar(false)} disabled={!listo || enviando}
-                className="flex-1 py-3 bg-red-600 text-white rounded-xl text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2">
+                className="flex-1 py-3 bg-rose-600 text-white rounded-xl text-sm font-black disabled:opacity-40 flex items-center justify-center gap-2">
                 {enviando && <Loader2 size={14} className="animate-spin" />} Cancelar y eliminar
               </button>
             </div>

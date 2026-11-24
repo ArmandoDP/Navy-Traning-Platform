@@ -47,7 +47,7 @@ export const PERMISOS: Record<Rol, Record<Modulo, Permiso>> = {
     clases:         'ver_y_editar',
     sucursales:     'solo_ver',
     clientes:       'ver_y_editar',
-    staff:          'sin_acceso',
+    staff:          'ver_y_editar',   // Managers ven y editan su equipo; tarifas, cierre de quincena y CLABE completa: solo Dirección
     paquetes:       'sin_acceso',
     finanzas:       'ver_y_editar',
     nomina:         'sin_acceso',
@@ -95,17 +95,32 @@ export const PERMISOS: Record<Rol, Record<Modulo, Permiso>> = {
   },
 }
 
+export const ROLES_VALIDOS = Object.keys(PERMISOS) as Rol[]
+
+/** Normaliza el rol que venga de la base o de la cookie ("Direccion " → "direccion"). Si no es válido, null. */
+export function normalizarRol(rol?: string | null): Rol | null {
+  const r = (rol || '').trim().toLowerCase() as Rol
+  return ROLES_VALIDOS.includes(r) ? r : null
+}
+
+// Un rol desconocido no tiene acceso a nada (antes podía tronar o dejar pasar)
 export function tieneAcceso(rol: Rol, modulo: Modulo): boolean {
-  return PERMISOS[rol][modulo] !== 'sin_acceso'
+  const p = PERMISOS[normalizarRol(rol) as Rol]?.[modulo] ?? 'sin_acceso'
+  return p !== 'sin_acceso'
 }
 
 export function puedeEditar(rol: Rol, modulo: Modulo): boolean {
-  const p = PERMISOS[rol][modulo]
+  const p = PERMISOS[normalizarRol(rol) as Rol]?.[modulo] ?? 'sin_acceso'
   return p === 'ver_y_editar' || p === 'todo'
 }
 
+/** Lo que dentro de Staff es solo de Dirección: tarifas y bonos, cerrar quincena y ver la CLABE completa. */
+export function esDireccion(rol?: string | null): boolean {
+  return normalizarRol(rol) === 'direccion'
+}
+
 export function esGlobal(rol: Rol): boolean {
-  return rol === 'direccion'
+  return normalizarRol(rol) === 'direccion'
 }
 
 export const RUTAS_MODULOS: Record<string, Modulo> = {
