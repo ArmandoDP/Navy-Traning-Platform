@@ -6,6 +6,9 @@ import { logActividad } from '@/lib/log-actividad'
 import { useAuth } from '@/context/AuthContext'
 import { useSucursal } from '@/context/SucursalContext'
 import ModalConfirmacion from './ModalConfirmacion'
+import MedidaInput from './MedidaInput'
+import { convertir, normalizarUnidad, redondear, formatoNumero, equivalenciaInversa } from '@/lib/medidas'
+import { aplicarEquivalenciaARecetas } from '@/lib/recetasMedidas'
 import { limpiarNombre, normalizar } from '@/lib/buscar'
 
 interface Props {
@@ -37,6 +40,10 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
   const [precios,     setPrecios]     = useState<Record<string, string>>({})
   const [costos,      setCostos]      = useState<Record<string, string>>({})
   const [vendeEn,     setVendeEn]     = useState<Record<string, boolean>>({})   // sucursal → ¿se vende aquí?
+  const [equivalencias, setEquivalencias] = useState<Record<string, number>>({}) // "insumo|medida" → cuánto vale en la unidad base del insumo
+  const [equivTemp,     setEquivTemp]     = useState<Record<number, string>>({}) // equivalencia que se está escribiendo, por ingrediente
+  const [equivListo,    setEquivListo]    = useState(true)                       // false si falta crear la tabla en la base
+  const [errorReceta,   setErrorReceta]   = useState('')
   const [receta,      setReceta]      = useState<any[]>([])
   const [insumos,     setInsumos]     = useState<any[]>([])
   const [sucursales,  setSucursales]  = useState<any[]>([])
@@ -51,6 +58,8 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
     if (!isOpen) return
     fetchInsumos()
     fetchSucursales()
+    fetchEquivalencias()
+    setErrorReceta('')
     if (producto) {
       // Cargar precios existentes
       const p: Record<string, string> = {}
@@ -64,14 +73,18 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
       setPrecios(p)
       setCostos(c)
       setVendeEn(v)
-      // Cargar receta existente
-      setReceta(producto.receta_ingredientes?.map((ri: any) => ({
-        insumo_id: ri.insumo_id,
-        cantidad:  ri.cantidad?.toString(),
-        unidad:    ri.unidad,
-        es_opcional: ri.es_opcional || false,
-        nombre:    ri.insumos?.nombre,
-      })) || [])
+      // Cargar receta existente: se lee directo para traer también la medida que se escribió (cucharadas, tazas…)
+      supabase.from('receta_ingredientes').select('*, insumos(nombre)').eq('producto_id', producto.id)
+        .then(({ data, error }) => {
+          const filas = !error && data ? data : (producto.receta_ingredientes || [])
+          setReceta(filas.map((ri: any) => ({
+            insumo_id:   ri.insumo_id,
+            cantidad:    (ri.cantidad_medida ?? ri.cantidad)?.toString(),
+            unidad:      ri.unidad_medida || ri.unidad,
+            es_opcional: ri.es_opcional || false,
+            nombre:      ri.insumos?.nombre,
+          })))
+        })
     }
   }, [isOpen, producto])
 
@@ -85,8 +98,114 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
     setSucursales(data || [])
   }
 
+  const fetchEquivalencias = async () => {
+    const { data, error } = await supabase.from('insumo_equivalencias').select('insumo_id, unidad, cantidad_base')
+    if (error) { setEquivListo(false); return }
+    setEquivListo(true)
+    const m: Record<string, number> = {}
+    ;(data || []).forEach((e: any) => { m[`${e.insumo_id}|${e.unidad}`] = Number(e.cantidad_base) })
+    setEquivalencias(m)
+  }
+
+  const claveEquiv = (insumoId: string, unidad: string) => `${insumoId}|${normalizarUnidad(unidad)}`
+
+  // Guarda cuánto vale 1 medida (ej. 1 cucharada) de un insumo en su unidad base; sirve para todas las recetas
+  const guardarEquivalencia = async (idx: number, r: any) => {
+    const entrada = Number(equivTemp[idx])
+    if (!(entrada > 0)) return
+    // En insumos por pieza (plátano…) se escribe cuánto pesa 1 pza; se guarda cuántas piezas hay en 1 g
+    const valor = equivalenciaInversa(insumos.find(i => i.id === r.insumo_id)?.unidad, r.unidad) ? 1 / entrada : entrada
+    const { error } = await supabase.from('insumo_equivalencias').upsert(
+      { insumo_id: r.insumo_id, unidad: normalizarUnidad(r.unidad), cantidad_base: valor },
+      { onConflict: 'insumo_id,unidad' })
+    if (error) {
+      setErrorReceta(/does not exist|schema cache/i.test(error.message)
+        ? 'Falta actualizar la base de datos para guardar equivalencias. Avisa a sistemas.'
+        : 'No se pudo guardar la equivalencia: ' + error.message)
+      return
+    }
+    // La equivalencia es del insumo: se aplica a todas las demás recetas que lo usan con esa medida
+    const aplicada = await aplicarEquivalenciaARecetas(r.insumo_id, normalizarUnidad(r.unidad), valor)
+    setErrorReceta(aplicada.error ? 'La equivalencia se guardó, pero no se pudieron actualizar otras recetas: ' + aplicada.error : '')
+    setEquivalencias(prev => ({ ...prev, [claveEquiv(r.insumo_id, r.unidad)]: valor }))
+    setEquivTemp(prev => { const n = { ...prev }; delete n[idx]; return n })
+  }
+
+  // Ingredientes listos para guardar: la cantidad se convierte a la unidad del inventario (para que descuente bien)
+  // y se conserva lo que se escribió (2 cucharadas) para mostrarlo en la receta.
+  const filasReceta = (productoId: string) => {
+    const filas: any[] = []
+    const faltan: string[] = []
+    const sinMedida: string[] = []
+    for (const r of receta.filter(x => x.insumo_id && x.cantidad)) {
+      const ins = insumos.find(i => i.id === r.insumo_id)
+      if (!String(r.unidad || '').trim()) { sinMedida.push(ins?.nombre || 'insumo'); continue }
+      const conv = convertir(Number(r.cantidad), r.unidad, ins?.unidad, equivalencias[claveEquiv(r.insumo_id, r.unidad)])
+      if (conv.base === null) { faltan.push(`${ins?.nombre || 'insumo'} (${r.unidad})`); continue }
+      const igual = conv.via === 'igual'
+      filas.push({
+        producto_id: productoId, insumo_id: r.insumo_id,
+        cantidad: redondear(conv.base), unidad: ins?.unidad || r.unidad, es_opcional: r.es_opcional,
+        ...(igual ? {} : { cantidad_medida: Number(r.cantidad), unidad_medida: String(r.unidad).trim() }),
+      })
+    }
+    return { filas, faltan, sinMedida }
+  }
+
+  const mensajeReceta = (msg: string) =>
+    /cantidad_medida|unidad_medida/.test(msg)
+      ? 'Falta actualizar la base de datos para guardar medidas como cucharadas o tazas. Avisa a sistemas.'
+      : 'No se pudo guardar la receta: ' + msg
+
+  // Debajo de cada ingrediente: a cuánto equivale en el inventario, o el campo para registrar la equivalencia
+  const estadoIngrediente = (r: any, idx: number) => {
+    const ins = insumos.find(i => i.id === r.insumo_id)
+    if (ins && !String(r.unidad || '').trim()) {
+      return <p className="text-[11px] text-gray-400">Escribe la medida que usan en la cocina (cualquiera). El inventario de {ins.nombre} se lleva en {ins.unidad}.</p>
+    }
+    if (!ins || !r.cantidad || !String(r.unidad || '').trim()) return null
+    const clave = claveEquiv(r.insumo_id, r.unidad)
+    const conv = convertir(Number(r.cantidad), r.unidad, ins.unidad, equivalencias[clave])
+    const editando = equivTemp[idx] !== undefined
+    const inversa = equivalenciaInversa(ins.unidad, r.unidad)
+
+    if (conv.base !== null && !editando) {
+      if (conv.via === 'igual') return null
+      return (
+        <p className="text-xs font-bold text-emerald-600">
+          ≈ {formatoNumero(conv.base)} {ins.unidad} en el inventario
+          {conv.via === 'equivalencia' && (
+            <button type="button" onClick={() => setEquivTemp(prev => ({ ...prev, [idx]: String(inversa ? redondear(1 / equivalencias[clave]) : equivalencias[clave]) }))}
+              className="ml-2 font-normal text-gray-400 underline">cambiar equivalencia</button>
+          )}
+        </p>
+      )
+    }
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+        <p className="text-xs font-bold text-amber-700">
+          {inversa
+            ? <>¿Cuántos {normalizarUnidad(r.unidad)} pesa (o equivale) 1 pza de {ins.nombre}?</>
+            : <>¿Cuántos {ins.unidad} equivale 1 {normalizarUnidad(r.unidad)} de {ins.nombre}?</>}
+        </p>
+        <div className="flex items-center gap-2">
+          <input type="number" min="0" step="any" placeholder="Ej. 10" value={equivTemp[idx] ?? ''}
+            onChange={e => setEquivTemp(prev => ({ ...prev, [idx]: e.target.value }))}
+            className="w-28 border border-gray-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-gray-400 bg-white" />
+          <span className="text-xs text-gray-500">{inversa ? normalizarUnidad(r.unidad) : ins.unidad}</span>
+          <button type="button" onClick={() => guardarEquivalencia(idx, r)} disabled={!(Number(equivTemp[idx]) > 0)}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-40" style={{ backgroundColor: '#171B24' }}>
+            Guardar equivalencia
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-400">Se guarda para este insumo y se usa en todas las recetas. Así el inventario descuenta bien.</p>
+        {!equivListo && <p className="text-[11px] font-bold text-red-500">Falta actualizar la base de datos para guardar equivalencias. Avisa a sistemas.</p>}
+      </div>
+    )
+  }
+
   const agregarIngrediente = () => {
-    setReceta(prev => [...prev, { insumo_id: '', cantidad: '', unidad: 'g', es_opcional: false, nombre: '' }])
+    setReceta(prev => [...prev, { insumo_id: '', cantidad: '', unidad: '', es_opcional: false, nombre: '' }])
   }
 
   const actualizarIngrediente = (idx: number, campo: string, valor: any) => {
@@ -94,7 +213,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
       if (i !== idx) return r
       if (campo === 'insumo_id') {
         const ins = insumos.find(ins => ins.id === valor)
-        return { ...r, insumo_id: valor, nombre: ins?.nombre || '', unidad: ins?.unidad || 'g' }
+        return { ...r, insumo_id: valor, nombre: ins?.nombre || '' }
       }
       return { ...r, [campo]: valor }
     }))
@@ -116,6 +235,19 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
       return
     }
 
+    // Toda medida de la receta debe poder convertirse a la unidad del inventario
+    setErrorReceta('')
+    if (tipo === 'con_receta') {
+      const { faltan, sinMedida } = filasReceta('')
+      if (sinMedida.length || faltan.length) {
+        setErrorReceta(sinMedida.length
+          ? `Escribe la medida de: ${sinMedida.join(', ')} (por ejemplo g, ml, cucharada, taza).`
+          : `Falta la equivalencia de: ${faltan.join(', ')}. Escríbela debajo del ingrediente.`)
+        setActiveTab('receta'); setGuardando(false)
+        return
+      }
+    }
+
     if (esNuevo) {
       // Crear producto
       const { data: prod } = await supabase.from('productos').insert({
@@ -124,17 +256,17 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
 
       if (!prod) { setGuardando(false); return }
 
-      // Insertar receta
-      if (tipo === 'con_receta' && receta.length > 0) {
-        await supabase.from('receta_ingredientes').insert(
-          receta.filter(r => r.insumo_id && r.cantidad).map(r => ({
-            producto_id: prod.id,
-            insumo_id:   r.insumo_id,
-            cantidad:    parseFloat(r.cantidad),
-            unidad:      r.unidad,
-            es_opcional: r.es_opcional,
-          }))
-        )
+      // Insertar receta (si falla, se deshace el producto para no dejarlo a medias)
+      if (tipo === 'con_receta') {
+        const { filas } = filasReceta(prod.id)
+        if (filas.length) {
+          const { error: errR } = await supabase.from('receta_ingredientes').insert(filas)
+          if (errR) {
+            await supabase.from('productos').delete().eq('id', prod.id)
+            setErrorReceta(mensajeReceta(errR.message)); setGuardando(false)
+            return
+          }
+        }
       }
 
       // Insertar precios
@@ -153,20 +285,16 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
       // Actualizar producto
       await supabase.from('productos').update({ nombre: nombreLimpio, categoria, tipo, descripcion, activo }).eq('id', producto.id)
 
-      // Actualizar receta — borrar y reinsertar
+      // Actualizar receta: primero se inserta la nueva y solo si salió bien se borra la anterior
       if (tipo === 'con_receta') {
-        await supabase.from('receta_ingredientes').delete().eq('producto_id', producto.id)
-        if (receta.length > 0) {
-          await supabase.from('receta_ingredientes').insert(
-            receta.filter(r => r.insumo_id && r.cantidad).map(r => ({
-              producto_id: producto.id,
-              insumo_id:   r.insumo_id,
-              cantidad:    parseFloat(r.cantidad),
-              unidad:      r.unidad,
-              es_opcional: r.es_opcional,
-            }))
-          )
+        const { data: viejas } = await supabase.from('receta_ingredientes').select('id').eq('producto_id', producto.id)
+        const { filas } = filasReceta(producto.id)
+        if (filas.length) {
+          const { error: errR } = await supabase.from('receta_ingredientes').insert(filas)
+          if (errR) { setErrorReceta(mensajeReceta(errR.message)); setGuardando(false); return }
         }
+        const ids = (viejas || []).map((v: any) => v.id)
+        if (ids.length) await supabase.from('receta_ingredientes').delete().in('id', ids)
       }
 
       // Actualizar precios — upsert
@@ -324,7 +452,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
                             className="rounded" />
                           Opcional
                         </label>
-                        <button onClick={() => setReceta(prev => prev.filter((_, i) => i !== idx))}
+                        <button onClick={() => { setReceta(prev => prev.filter((_, i) => i !== idx)); setEquivTemp({}) }}
                           className="p-1 hover:bg-red-50 rounded text-red-400">
                           <Trash2 size={12} />
                         </button>
@@ -341,18 +469,21 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
                     </select>
                     <div className="grid grid-cols-2 gap-2">
                       <input
-                        type="number" placeholder="Cantidad" min="0"
+                        type="number" placeholder="Cantidad" min="0" step="any"
                         className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400"
                         value={r.cantidad}
                         onChange={e => actualizarIngrediente(idx, 'cantidad', e.target.value)}
                       />
-                      <input
-                        placeholder="Unidad"
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400"
-                        value={r.unidad}
-                        onChange={e => actualizarIngrediente(idx, 'unidad', e.target.value)}
+                      <MedidaInput
+                        value={r.unidad || ''}
+                        onChange={v => actualizarIngrediente(idx, 'unidad', v)}
+                        extras={[
+                          ...(insumos.find(i => i.id === r.insumo_id)?.unidad ? [insumos.find(i => i.id === r.insumo_id)!.unidad] : []),
+                          ...Object.keys(equivalencias).filter(k => k.startsWith(`${r.insumo_id}|`)).map(k => k.split('|')[1]),
+                        ]}
                       />
                     </div>
+                    {estadoIngrediente(r, idx)}
                   </div>
                 ))}
                 {receta.length === 0 && (
@@ -423,6 +554,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100">
+          {errorReceta && <p className="mb-3 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{errorReceta}</p>}
           <button
             onClick={() => handleGuardar()}
             disabled={!nombre || guardando}

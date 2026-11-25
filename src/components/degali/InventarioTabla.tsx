@@ -1,11 +1,14 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { RefreshCw, AlertTriangle, Plus, Pencil } from 'lucide-react'
+import { RefreshCw, AlertTriangle, Plus, Pencil, Scale } from 'lucide-react'
 import ModalCompraInsumo from './ModalCompraInsumo'
 import ModalMerma from './ModalMerma'
 import ModalNuevoInsumo from './ModalNuevoInsumo'
 import ModalEditarInsumo from './ModalEditarInsumo'
+import ModalEquivalencias from './ModalEquivalencias'
+import { cargarEquivalencias } from '@/lib/recetasMedidas'
+import { useAuth } from '@/context/AuthContext'
 
 interface Props { sucursalId: string | null }
 
@@ -19,11 +22,20 @@ export default function InventarioTabla({ sucursalId }: Props) {
   const [modalMerma, setModalMerma] = useState<any>(null)
   const [modalNuevo, setModalNuevo] = useState(false)
   const [modalEditar, setModalEditar] = useState<any>(null)
+  const [modalEquiv, setModalEquiv] = useState(false)
+  const [equivPendientes, setEquivPendientes] = useState(0)   // insumos con medidas sin equivalencia
+  const { puedeEditar } = useAuth()
 
   useEffect(() => {
     if (!sucursalId) return
     fetchInsumos()
+    contarPendientes()
   }, [sucursalId])
+
+  const contarPendientes = async () => {
+    try { setEquivPendientes((await cargarEquivalencias()).filter(f => f.base === null).length) }
+    catch { setEquivPendientes(0) }
+  }
 
   const fetchInsumos = async () => {
     setLoading(true)
@@ -55,6 +67,19 @@ export default function InventarioTabla({ sucursalId }: Props) {
         </div>
       )}
 
+      {equivPendientes > 0 && (
+        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-3">
+            <Scale size={16} className="text-amber-500 flex-shrink-0" />
+            <p className="text-sm font-bold text-amber-700">
+              {equivPendientes} {equivPendientes === 1 ? 'insumo tiene' : 'insumos tienen'} recetas con una medida sin equivalencia: el inventario no descuenta bien
+            </p>
+          </div>
+          <button onClick={() => setModalEquiv(true)}
+            className="text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition flex-shrink-0">Resolver</button>
+        </div>
+      )}
+
       {/* Filtros y Acción de Nuevo Insumo */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex gap-2 flex-wrap">
@@ -68,6 +93,12 @@ export default function InventarioTabla({ sucursalId }: Props) {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          {puedeEditar('galley') && (
+            <button onClick={() => setModalEquiv(true)}
+              className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition cursor-pointer">
+              <Scale size={14} /> Equivalencias
+            </button>
+          )}
           <button 
             onClick={() => setModalNuevo(true)}
             className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-gray-900 text-white hover:bg-gray-700 transition cursor-pointer">
@@ -153,6 +184,10 @@ export default function InventarioTabla({ sucursalId }: Props) {
           </table>
         )}
       </div>
+
+      {modalEquiv && (
+        <ModalEquivalencias onClose={() => setModalEquiv(false)} onCambio={contarPendientes} />
+      )}
 
       {modalNuevo && (
         <ModalNuevoInsumo
