@@ -79,7 +79,7 @@ export default function TabListaEspera({ claseId, onCambio }: { claseId: string;
 
   const Fila = ({ l, n }: { l: any; n: number }) => (
     <div className="flex items-center gap-3 px-5 py-3">
-      <div className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center text-sm font-black shrink-0">#{n}</div>
+      <div className="w-9 h-9 rounded-[12px] bg-[#171B24] text-white flex items-center justify-center text-xs font-black shrink-0">#{n}</div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-gray-900 truncate">{l.cliente?.nombre_completo || '—'}</p>
         <p className="text-[11px] text-gray-400 truncate">
@@ -105,7 +105,7 @@ export default function TabListaEspera({ claseId, onCambio }: { claseId: string;
   return (
     <div>
       {/* Resumen */}
-      <div className="px-5 py-4 bg-gray-50 border-b border-gray-100 space-y-2">
+      <div className="mx-5 mt-5 rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-4 space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-sm font-black text-gray-900">{remota.length + sucursal.length} esperando lugar</p>
           <span className={`text-[11px] font-bold px-2 py-1 rounded-lg ${datos.libres > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-200 text-gray-600'}`}>
@@ -124,7 +124,7 @@ export default function TabListaEspera({ claseId, onCambio }: { claseId: string;
               <Smartphone size={13} /> Agregar a la lista automática
             </button>
           )}
-          <button onClick={() => setAgregar('Sucursal')} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gray-900 text-xs font-bold text-white hover:bg-gray-700">
+          <button onClick={() => setAgregar('Sucursal')} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-[#171B24] text-xs font-bold text-white hover:brightness-125">
             <Store size={13} /> Espera en sucursal
           </button>
         </div>
@@ -172,9 +172,9 @@ export default function TabListaEspera({ claseId, onCambio }: { claseId: string;
 
       {/* Fila automática */}
       <div className="mt-3">
-        <div className="px-5 py-2 bg-indigo-50 border-y border-indigo-100 flex items-center gap-2">
-          <Smartphone size={12} className="text-indigo-600" />
-          <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Lista automática · {remota.length}</p>
+        <div className="px-5 py-2 flex items-center gap-2">
+          <Smartphone size={13} className="text-gray-900" />
+          <p className="text-xs font-black text-gray-900">Lista automática <span className="text-gray-400">· {remota.length}</span></p>
         </div>
         {remota.length === 0
           ? <p className="px-5 py-4 text-xs text-gray-400">Nadie en la lista automática.</p>
@@ -183,9 +183,9 @@ export default function TabListaEspera({ claseId, onCambio }: { claseId: string;
 
       {/* En sucursal */}
       <div className="mt-3">
-        <div className="px-5 py-2 bg-amber-50 border-y border-amber-100 flex items-center gap-2">
-          <Store size={12} className="text-amber-600" />
-          <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Esperando en sucursal · {sucursal.length}</p>
+        <div className="px-5 py-2 flex items-center gap-2">
+          <Store size={13} className="text-amber-600" />
+          <p className="text-xs font-black text-gray-900">Esperando en sucursal <span className="text-gray-400">· {sucursal.length}</span></p>
         </div>
         {sucursal.length === 0
           ? <p className="px-5 py-4 text-xs text-gray-400">Nadie esperando en sucursal.</p>
@@ -200,8 +200,8 @@ export default function TabListaEspera({ claseId, onCambio }: { claseId: string;
       {/* Historial */}
       {historial.length > 0 && (
         <div className="mt-3 pb-4">
-          <div className="px-5 py-2 bg-gray-50 border-y border-gray-100">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Historial · {historial.length}</p>
+          <div className="px-5 py-2">
+            <p className="text-xs font-black text-gray-500">Historial <span className="text-gray-400">· {historial.length}</span></p>
           </div>
           <div className="divide-y divide-gray-50">
             {historial.map(l => (

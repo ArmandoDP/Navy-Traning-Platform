@@ -171,17 +171,17 @@ export default function ModalAgregarClienteClase({ isOpen, clase, reservas, onCl
   const libres = roomSpots.filter(s => !s.bloqueado && !ocupados.includes(s.id)).length
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        <div className="flex justify-between items-start px-6 pt-5 pb-3">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-900/45 backdrop-blur-[2px] p-4">
+      <div className="bg-white w-full max-w-lg rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="flex justify-between items-start px-6 py-5 bg-[#171B24] text-white">
           <div>
-            <h2 className="text-base font-black text-gray-900">Agregar cliente</h2>
-            <p className="text-xs text-gray-400 mt-0.5">{clase.nombre_clase} · {ocupadas}/{clase.capacidad_max} lugares</p>
+            <h2 className="text-lg font-black tracking-tight">Agregar cliente</h2>
+            <p className="text-xs text-white/55 mt-0.5">{(clase.nombre_clase || '').trim()} · {ocupadas}/{clase.capacidad_max} lugares</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-xl text-white/60 hover:bg-white/10 hover:text-white"><X size={16}/></button>
         </div>
 
-        <div className="px-6 pb-4 space-y-4 overflow-y-auto">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto">
           {fase === 'cerrada' ? (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-xs font-bold">
               <AlertCircle size={14} className="flex-shrink-0 mt-0.5"/>
@@ -190,7 +190,7 @@ export default function ModalAgregarClienteClase({ isOpen, clase, reservas, onCl
           ) : (
             <>
               {fase === 'tarde' && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-blue-800 text-xs font-bold">
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-xs font-bold">
                   La clase empezó hace {minutos} min. Se creará la reserva y quedará como <u>clase asistida</u>.
                 </div>
               )}
@@ -214,7 +214,7 @@ export default function ModalAgregarClienteClase({ isOpen, clase, reservas, onCl
                     {clientes.map(c => (
                       <button key={c.id} onClick={() => setCliente(c)}
                         className="w-full text-left px-3 py-2 rounded-xl flex items-center gap-3 hover:bg-gray-50 border border-transparent">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-black flex-shrink-0">{c.nombre_completo.charAt(0)}</div>
+                        <div className="w-8 h-8 rounded-[10px] bg-[#171B24] text-white flex items-center justify-center text-xs font-black flex-shrink-0">{c.nombre_completo.charAt(0)}</div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-gray-900 truncate">{c.nombre_completo}</p>
                           <p className="text-xs text-gray-400 truncate">{c.email}</p>
@@ -225,8 +225,8 @@ export default function ModalAgregarClienteClase({ isOpen, clase, reservas, onCl
                   </div>
                 )}
                 {cliente && (
-                  <div className={`mt-2 rounded-xl px-4 py-3 flex items-center gap-3 border ${cliente.pausada ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-                    <Check size={14} className={cliente.pausada ? 'text-amber-600' : 'text-green-600'}/>
+                  <div className={`mt-2 rounded-xl px-4 py-3 flex items-center gap-3 border ${cliente.pausada ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <Check size={14} className={cliente.pausada ? 'text-amber-600' : 'text-emerald-600'}/>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-gray-900">{cliente.nombre_completo}</p>
                       <p className="text-xs text-gray-500">
@@ -266,8 +266,8 @@ export default function ModalAgregarClienteClase({ isOpen, clase, reservas, onCl
                           <button key={i} disabled={tomado} onClick={() => setSpotSel(sel ? null : spot)}
                             style={{ position: 'absolute', left, top, width: CELL, height: CELL }}
                             className={`rounded-xl border-2 text-xs font-bold transition flex items-center justify-center ${
-                              tomado ? 'bg-red-100 border-red-200 text-red-400 cursor-not-allowed'
-                              : sel  ? 'bg-gray-900 border-gray-900 text-white'
+                              tomado ? 'bg-gray-200 border-gray-200 text-gray-400 cursor-not-allowed line-through'
+                              : sel  ? 'bg-[#171B24] border-[#171B24] text-white scale-105'
                               :        'bg-white border-gray-200 text-gray-600 hover:border-gray-400'}`}>
                             {spot.numero}
                           </button>
@@ -292,7 +292,7 @@ export default function ModalAgregarClienteClase({ isOpen, clase, reservas, onCl
           <button onClick={onClose} className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancelar</button>
           <div className="flex-1"/>
           <button onClick={confirmar} disabled={guardando || fase === 'cerrada' || !cliente || cliente.pausada || !!yaEsta}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40">
+            className="flex items-center gap-2 px-6 py-2.5 bg-[#171B24] hover:brightness-125 text-white font-black rounded-xl text-sm disabled:opacity-40">
             <Check size={15}/>
             {guardando ? 'Agregando...' : fase === 'tarde' ? 'Agregar y marcar asistencia' : 'Agregar a la clase'}
           </button>
