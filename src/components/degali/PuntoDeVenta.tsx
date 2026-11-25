@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Search, Plus, Minus, Trash2, ShoppingCart } from 'lucide-react'
 import ModalNuevaVenta from './ModalNuevaVenta'
+import { coincide } from '@/lib/buscar'
 
 interface Props { sucursalId: string | null }
 
@@ -27,7 +28,7 @@ export default function PuntoDeVenta({ sucursalId }: Props) {
       .from('productos')
       .select(`
         *,
-        producto_precios(precio_venta, costo_total, sucursal_id),
+        producto_precios(precio_venta, costo_total, sucursal_id, activo),
         receta_ingredientes(
           cantidad, unidad, es_opcional,
           insumos(nombre),
@@ -38,17 +39,13 @@ export default function PuntoDeVenta({ sucursalId }: Props) {
       .order('categoria')
 
     if (data) {
+      // Solo se vende en esta sucursal lo que tiene precio activo aquí (el catálogo es distinto en cada sucursal)
       const filtrados = data.map(p => {
-        const precioSucursal = p.producto_precios?.find((pp: any) => pp.sucursal_id === sucursalId)
-        
-        // Asigna el precio de la sucursal o toma el precio base del producto
-        const precioFinal = precioSucursal?.precio_venta ?? p.precio_venta ?? p.precio ?? 0
-        const costoFinal = precioSucursal?.costo_total ?? p.costo_total ?? p.costo ?? 0
-
-        return { 
-          ...p, 
-          precio_sucursal: Number(precioFinal), 
-          costo_sucursal: Number(costoFinal) 
+        const precioSucursal = p.producto_precios?.find((pp: any) => pp.sucursal_id === sucursalId && pp.activo !== false)
+        return {
+          ...p,
+          precio_sucursal: Number(precioSucursal?.precio_venta ?? 0),
+          costo_sucursal:  Number(precioSucursal?.costo_total ?? 0),
         }
       }).filter(p => p.precio_sucursal > 0)
 
@@ -59,7 +56,7 @@ export default function PuntoDeVenta({ sucursalId }: Props) {
 
   // Filtrado flexible por categoría (insensible a mayúsculas/minúsculas)
   const productosFiltrados = productos.filter(p => {
-    const matchBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const matchBusqueda = coincide(p.nombre, busqueda)
     const matchCategoria = categoria === 'Todos' || 
       (p.categoria && p.categoria.toLowerCase() === categoria.toLowerCase())
     

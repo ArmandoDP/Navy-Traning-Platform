@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase'
 import { X, Plus, Trash2 } from 'lucide-react'
 import { logActividad } from '@/lib/log-actividad'
 import { useAuth } from '@/context/AuthContext'
+import { useSucursal } from '@/context/SucursalContext'
+import ModalConfirmacion from './ModalConfirmacion'
+import { limpiarNombre, normalizar } from '@/lib/buscar'
 
 interface Props {
   producto:   any | null
@@ -33,12 +36,16 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
   const [activo,      setActivo]      = useState(producto?.activo ?? true)
   const [precios,     setPrecios]     = useState<Record<string, string>>({})
   const [costos,      setCostos]      = useState<Record<string, string>>({})
+  const [vendeEn,     setVendeEn]     = useState<Record<string, boolean>>({})   // sucursal → ¿se vende aquí?
   const [receta,      setReceta]      = useState<any[]>([])
   const [insumos,     setInsumos]     = useState<any[]>([])
   const [sucursales,  setSucursales]  = useState<any[]>([])
   const [guardando,   setGuardando]   = useState(false)
   const [activeTab,   setActiveTab]   = useState<'info' | 'receta' | 'precios'>('info')
   const { staff } = useAuth()
+  // Dirección edita las de todas las sucursales; el demás personal, solo las suyas
+  const { sucursales: misSucursales, puedeGlobal } = useSucursal()
+  const puedeEnSucursal = (id: string) => puedeGlobal || misSucursales.some(s => s.id === id)
 
   useEffect(() => {
     if (!isOpen) return
@@ -48,12 +55,15 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
       // Cargar precios existentes
       const p: Record<string, string> = {}
       const c: Record<string, string> = {}
+      const v: Record<string, boolean> = {}
       producto.producto_precios?.forEach((pp: any) => {
         p[pp.sucursal_id] = pp.precio_venta?.toString() || ''
         c[pp.sucursal_id] = pp.costo_total?.toString() || ''
+        v[pp.sucursal_id] = pp.activo !== false
       })
       setPrecios(p)
       setCostos(c)
+      setVendeEn(v)
       // Cargar receta existente
       setReceta(producto.receta_ingredientes?.map((ri: any) => ({
         insumo_id: ri.insumo_id,
@@ -90,14 +100,26 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
     }))
   }
 
-  const handleGuardar = async () => {
-    if (!nombre || !categoria) return
+  const [nombreRepetido, setNombreRepetido] = useState<string | null>(null)   // aviso de nombre ya existente
+
+  const handleGuardar = async (forzar = false) => {
+    const nombreLimpio = limpiarNombre(nombre)          // sin espacios al inicio, al final ni dobles
+    if (!nombreLimpio || !categoria) return
     setGuardando(true)
+
+    // Aviso (no bloquea) si ya hay otro producto con el mismo nombre
+    const { data: existentes } = await supabase.from('productos').select('id, nombre')
+    const repetido = (existentes || []).some(p => p.id !== producto?.id && normalizar(p.nombre) === normalizar(nombreLimpio))
+    if (repetido && !forzar) {
+      setNombreRepetido(nombreLimpio)
+      setGuardando(false)
+      return
+    }
 
     if (esNuevo) {
       // Crear producto
       const { data: prod } = await supabase.from('productos').insert({
-        nombre, categoria, tipo, descripcion, activo
+        nombre: nombreLimpio, categoria, tipo, descripcion, activo
       }).select().single()
 
       if (!prod) { setGuardando(false); return }
@@ -117,7 +139,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
 
       // Insertar precios
       const preciosInsert = sucursales
-        .filter(s => precios[s.id])
+        .filter(s => precios[s.id] && vendeEn[s.id] && puedeEnSucursal(s.id))
         .map(s => ({
           producto_id:  prod.id,
           sucursal_id:  s.id,
@@ -129,7 +151,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
 
     } else {
       // Actualizar producto
-      await supabase.from('productos').update({ nombre, categoria, tipo, descripcion, activo }).eq('id', producto.id)
+      await supabase.from('productos').update({ nombre: nombreLimpio, categoria, tipo, descripcion, activo }).eq('id', producto.id)
 
       // Actualizar receta — borrar y reinsertar
       if (tipo === 'con_receta') {
@@ -148,26 +170,35 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
       }
 
       // Actualizar precios — upsert
+      // "Se vende aquí" apagado = activo:false (no se borra, para conservar el precio)
       for (const s of sucursales) {
-        if (!precios[s.id]) continue
-        await supabase.from('producto_precios').upsert({
-          producto_id:  producto.id,
-          sucursal_id:  s.id,
-          precio_venta: parseFloat(precios[s.id]),
-          costo_total:  parseFloat(costos[s.id] || '0'),
-          activo:       true,
-        }, { onConflict: 'producto_id,sucursal_id' })
+        if (!puedeEnSucursal(s.id)) continue              // no se tocan los precios de otras sucursales
+        const existe = producto.producto_precios?.some((pp: any) => pp.sucursal_id === s.id)
+        const vende  = !!vendeEn[s.id]
+        if (!existe && !(vende && precios[s.id])) continue
+        if (precios[s.id]) {
+          await supabase.from('producto_precios').upsert({
+            producto_id:  producto.id,
+            sucursal_id:  s.id,
+            precio_venta: parseFloat(precios[s.id]),
+            costo_total:  parseFloat(costos[s.id] || '0'),
+            activo:       vende,
+          }, { onConflict: 'producto_id,sucursal_id' })
+        } else if (existe && !vende) {
+          await supabase.from('producto_precios').update({ activo: false })
+            .eq('producto_id', producto.id).eq('sucursal_id', s.id)
+        }
       }
     }
 
     await logActividad({
       tipo:        producto ? 'producto_editado' : 'producto_creado',
-      descripcion: `${staff?.nombre} ${staff?.primer_apellido} ${producto ? 'editó' : 'creó'} el producto "${nombre}"`,
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} ${producto ? 'editó' : 'creó'} el producto "${nombreLimpio}"`,
       tabla:       'productos',
       accion:      producto ? 'UPDATE' : 'INSERT',
       metadata:    { 
         producto_id: producto?.id ?? null,
-        nombre,
+        nombre: nombreLimpio,
         categoria,
         tipo,
       },
@@ -336,18 +367,33 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
           {activeTab === 'precios' && (
             <div className="space-y-3">
               {sucursales.map(s => (
-                <div key={s.id} className="border border-gray-200 rounded-xl p-4">
-                  <p className="text-sm font-black text-gray-900 mb-3">{s.nombre}</p>
+                <div key={s.id} className={`border border-gray-200 rounded-xl p-4 ${puedeEnSucursal(s.id) ? '' : 'opacity-50'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-black text-gray-900">{s.nombre}</p>
+                    {!puedeEnSucursal(s.id) && <span className="text-[10px] font-bold text-gray-400 mr-auto ml-2">Solo lectura · no es tu sucursal</span>}
+                    <button type="button" disabled={!puedeEnSucursal(s.id)}
+                      onClick={() => setVendeEn(prev => ({ ...prev, [s.id]: !prev[s.id] }))}
+                      className="flex items-center gap-2 text-xs font-bold text-gray-500">
+                      {vendeEn[s.id] ? 'Se vende aquí' : 'No se vende aquí'}
+                      <span className={`w-9 h-5 rounded-full transition-colors relative ${vendeEn[s.id] ? 'bg-emerald-500' : 'bg-gray-200'}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${vendeEn[s.id] ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </span>
+                    </button>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-xs font-bold text-gray-400">Precio venta</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
                         <input
-                          type="number" min="0" placeholder="0"
+                          type="number" min="0" placeholder="0" disabled={!puedeEnSucursal(s.id)}
                           className="w-full pl-7 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400"
                           value={precios[s.id] || ''}
-                          onChange={e => setPrecios(prev => ({ ...prev, [s.id]: e.target.value }))}
+                          onChange={e => {
+                            const v = e.target.value
+                            setPrecios(prev => ({ ...prev, [s.id]: v }))
+                            if (v && vendeEn[s.id] === undefined) setVendeEn(prev => ({ ...prev, [s.id]: true }))
+                          }}
                         />
                       </div>
                     </div>
@@ -356,7 +402,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
                         <input
-                          type="number" min="0" placeholder="0"
+                          type="number" min="0" placeholder="0" disabled={!puedeEnSucursal(s.id)}
                           className="w-full pl-7 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400"
                           value={costos[s.id] || ''}
                           onChange={e => setCostos(prev => ({ ...prev, [s.id]: e.target.value }))}
@@ -378,7 +424,7 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100">
           <button
-            onClick={handleGuardar}
+            onClick={() => handleGuardar()}
             disabled={!nombre || guardando}
             className="w-full py-3 rounded-xl text-sm font-black text-white disabled:opacity-40 transition"
             style={{ backgroundColor: '#171B24' }}>
@@ -386,6 +432,15 @@ export default function DrawerProducto({ producto, sucursalId, isOpen, onClose, 
           </button>
         </div>
       </div>
+      <ModalConfirmacion
+        isOpen={!!nombreRepetido}
+        titulo="Ya existe un producto con ese nombre"
+        subtitulo="Puede ser un duplicado"
+        mensaje={<>Ya hay un producto llamado <b className="text-gray-900">"{nombreRepetido}"</b>. Si es el mismo, conviene editar el existente en lugar de crear otro.</>}
+        textoConfirmar="Guardar de todos modos"
+        onClose={() => setNombreRepetido(null)}
+        onConfirm={() => { setNombreRepetido(null); handleGuardar(true) }}
+      />
     </>
   )
 }

@@ -1,60 +1,50 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useState } from 'react'
 import { useSucursal } from '@/context/SucursalContext'
 import PuntoDeVenta    from '@/components/degali/PuntoDeVenta'
 import VentasHistorial from '@/components/degali/VentasHistorial'
 import InventarioTabla from '@/components/degali/InventarioTabla'
 import ProductosTabla  from '@/components/degali/ProductosTabla'
+import ConteoFisico    from '@/components/degali/ConteoFisico'
+import MermaHistorial  from '@/components/degali/MermaHistorial'
+import GalleyGlobal    from '@/components/degali/GalleyGlobal'
 
-type Tab = 'ventas' | 'historial' | 'inventario' | 'productos'
+type Tab = 'ventas' | 'historial' | 'inventario' | 'conteo' | 'merma' | 'productos'
 
 const TABS = [
   { key: 'ventas',     label: '🛒 Punto de venta' },
   { key: 'historial',  label: '📋 Historial' },
   { key: 'inventario', label: '📦 Inventario' },
+  { key: 'conteo',     label: '✅ Conteo' },
+  { key: 'merma',      label: '🗑️ Merma' },
   { key: 'productos',  label: '🧃 Productos' },
 ]
 
 export default function DegaliPage() {
+  // La sucursal se elige arriba, en el selector del CRM. Quien tiene sucursal fija ve solo la suya;
+  // Dirección puede elegir "Global" (resumen de todas) o una sucursal (para operar).
   const { sucursalId, sucursalActiva } = useSucursal()
-  const [tab,            setTab]            = useState<Tab>('ventas')
-  const [sucursales,     setSucursales]     = useState<any[]>([])
-  const [sucursalLocal,  setSucursalLocal]  = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>('ventas')
 
-  useEffect(() => {
-    supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre')
-      .then(({ data }) => {
-        setSucursales(data || [])
-        if (!sucursalId && data && data.length > 0) {
-          setSucursalLocal(data[0].id)
-        }
-      })
-  }, [])
+  const encabezado = (
+    <div>
+      <h1 className="text-2xl font-black text-gray-900">The Galley</h1>
+      <p className="text-gray-400 text-sm mt-0.5">Smoothie Bar · {sucursalActiva ? sucursalActiva.nombre : 'Global'}</p>
+    </div>
+  )
 
-  const sucursalEfectiva = sucursalId || sucursalLocal
-  const nombreSucursal   = sucursalActiva?.nombre || sucursales.find(s => s.id === sucursalLocal)?.nombre || ''
+  if (!sucursalId) {
+    return (
+      <div className="space-y-5">
+        {encabezado}
+        <GalleyGlobal />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900">The Galley</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Smoothie Bar · {nombreSucursal}</p>
-        </div>
-
-        {/* Selector sucursal cuando está en Global */}
-        {!sucursalId && sucursales.length > 0 && (
-          <select
-            className="border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold text-gray-700 outline-none focus:border-gray-400 bg-white"
-            value={sucursalLocal || ''}
-            onChange={e => setSucursalLocal(e.target.value)}>
-            {sucursales.map(s => (
-              <option key={s.id} value={s.id}>{s.nombre}</option>
-            ))}
-          </select>
-        )}
-      </div>
+      {encabezado}
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 gap-1">
@@ -70,10 +60,12 @@ export default function DegaliPage() {
         ))}
       </div>
 
-      {tab === 'ventas'     && <PuntoDeVenta   sucursalId={sucursalEfectiva} />}
-      {tab === 'historial'  && <VentasHistorial sucursalId={sucursalEfectiva} />}
-      {tab === 'inventario' && <InventarioTabla sucursalId={sucursalEfectiva} />}
-      {tab === 'productos'  && <ProductosTabla  sucursalId={sucursalEfectiva} />}
+      {tab === 'ventas'     && <PuntoDeVenta   sucursalId={sucursalId} />}
+      {tab === 'historial'  && <VentasHistorial sucursalId={sucursalId} />}
+      {tab === 'inventario' && <InventarioTabla sucursalId={sucursalId} />}
+      {tab === 'conteo'     && <ConteoFisico    sucursalId={sucursalId} />}
+      {tab === 'merma'      && <MermaHistorial  sucursalId={sucursalId} />}
+      {tab === 'productos'  && <ProductosTabla  sucursalId={sucursalId} />}
     </div>
   )
 }

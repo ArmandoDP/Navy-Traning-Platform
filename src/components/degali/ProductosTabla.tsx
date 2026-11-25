@@ -1,8 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { RefreshCw, Plus } from 'lucide-react'
+import { RefreshCw, Plus, Copy } from 'lucide-react'
 import DrawerProducto from './DrawerProducto'
+import { useAuth } from '@/context/AuthContext'
+import { logActividad } from '@/lib/log-actividad'
+import { coincide } from '@/lib/buscar'
+import ModalConfirmacion from './ModalConfirmacion'
 
 interface Props { sucursalId: string | null }
 
@@ -15,6 +19,19 @@ export default function ProductosTabla({ sucursalId }: Props) {
   const [drawerProducto, setDrawerProducto] = useState<any>(null)
   const [nuevoDrawer,    setNuevoDrawer]    = useState(false)
   const [capacidad,      setCapacidad]      = useState<Record<string, number>>({})
+  const { staff, puedeEditar } = useAuth()
+  const [verTodo,        setVerTodo]        = useState(false)          // false = solo lo que se vende en esta sucursal
+  const [sucursales,     setSucursales]     = useState<any[]>([])
+  const [origenCopia,    setOrigenCopia]    = useState('')
+  const [copiando,       setCopiando]       = useState(false)
+  const [aviso,          setAviso]          = useState('')
+  const [busqueda,       setBusqueda]       = useState('')
+  const [confirmarCopia, setConfirmarCopia] = useState(false)
+
+  useEffect(() => {
+    supabase.from('sucursales').select('id, nombre').eq('estatus', 'Activa').order('nombre')
+      .then(({ data }) => setSucursales(data || []))
+  }, [])
 
   useEffect(() => {
     if (!sucursalId) return
@@ -68,9 +85,44 @@ export default function ProductosTabla({ sucursalId }: Props) {
     setCapacidad(caps)
   }
 
+  // Un producto se vende en la sucursal si tiene precio activo aquí
+  const vendeAqui = (p: any) => p.producto_precios?.some((pp: any) =>
+    pp.sucursal_id === sucursalId && pp.activo !== false && Number(pp.precio_venta) > 0)
+
   const filtrados = productos.filter(p =>
-    categoria === 'Todas' || p.categoria === categoria
+    (categoria === 'Todas' || p.categoria === categoria) && (verTodo || vendeAqui(p)) &&
+    coincide(`${p.nombre} ${p.descripcion || ''}`, busqueda)
   )
+
+  // Copia el menú de otra sucursal a esta: solo agrega los productos que aún no tiene (no cambia precios existentes)
+  const origenNombre  = sucursales.find(s => s.id === origenCopia)?.nombre
+  const destinoNombre = sucursales.find(s => s.id === sucursalId)?.nombre
+
+  const copiarMenu = async () => {
+    if (!sucursalId || !origenCopia) return
+    const origen = sucursales.find(s => s.id === origenCopia)
+    const destino = sucursales.find(s => s.id === sucursalId)
+    setConfirmarCopia(false)
+    setCopiando(true); setAviso('')
+    const { data: filas, error } = await supabase.from('producto_precios')
+      .select('producto_id, precio_venta, costo_total').eq('sucursal_id', origenCopia).eq('activo', true)
+    if (error || !filas) { setAviso('No se pudo leer el menú de origen'); setCopiando(false); return }
+    const nuevas = filas.map(f => ({ producto_id: f.producto_id, sucursal_id: sucursalId,
+      precio_venta: f.precio_venta, costo_total: f.costo_total, activo: true }))
+    const { error: err2 } = await supabase.from('producto_precios')
+      .upsert(nuevas, { onConflict: 'producto_id,sucursal_id', ignoreDuplicates: true })
+    if (err2) { setAviso('No se pudo copiar el menú: ' + err2.message); setCopiando(false); return }
+    await logActividad({
+      tipo: 'menu_copiado',
+      descripcion: `${staff?.nombre} ${staff?.primer_apellido} copió el menú de ${origen?.nombre} a ${destino?.nombre}`,
+      tabla: 'producto_precios', accion: 'INSERT',
+      metadata: { origen: origenCopia, destino: sucursalId, productos: nuevas.length },
+      sucursal_id: sucursalId, staff_id: staff?.id,
+    })
+    setAviso(`Listo: se revisaron ${nuevas.length} productos de ${origen?.nombre}`)
+    setOrigenCopia(''); setCopiando(false)
+    fetchProductos()
+  }
 
   return (
     <div className="space-y-4">
@@ -88,6 +140,10 @@ export default function ProductosTabla({ sucursalId }: Props) {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setVerTodo(v => !v)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${verTodo ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+            {verTodo ? 'Viendo todo el catálogo' : 'Ver todo el catálogo'}
+          </button>
           <button onClick={fetchProductos} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400">
             <RefreshCw size={14} />
           </button>
@@ -99,6 +155,26 @@ export default function ProductosTabla({ sucursalId }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Buscador: ignora mayúsculas, acentos y espacios de más, y perdona errores leves de ortografía */}
+      <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar producto…"
+        className="w-full md:w-72 border border-gray-200 rounded-xl px-4 py-2 text-sm outline-none focus:border-gray-400 bg-white" />
+
+      {/* Copiar menú de otra sucursal */}
+      {puedeEditar('galley') && sucursales.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={origenCopia} onChange={e => setOrigenCopia(e.target.value)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-600 outline-none bg-white">
+            <option value="">Copiar menú desde…</option>
+            {sucursales.filter(s => s.id !== sucursalId).map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
+          <button onClick={() => setConfirmarCopia(true)} disabled={!origenCopia || copiando}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-40">
+            <Copy size={12} /> {copiando ? 'Copiando…' : 'Copiar'}
+          </button>
+          {aviso && <span className="text-xs font-bold text-gray-500">{aviso}</span>}
+        </div>
+      )}
 
       {/* Tabla */}
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -128,6 +204,7 @@ export default function ProductosTabla({ sucursalId }: Props) {
                   <tr key={p.id} className="hover:bg-gray-50 transition">
                     <td className="px-5 py-3.5">
                       <p className="text-sm font-bold text-gray-900">{p.nombre}</p>
+                      {!vendeAqui(p) && <span className="inline-block mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600">No se vende aquí</span>}
                       {p.descripcion && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[200px]">{p.descripcion}</p>
                       )}
@@ -182,6 +259,17 @@ export default function ProductosTabla({ sucursalId }: Props) {
           </table>
         )}
       </div>
+
+      <ModalConfirmacion
+        isOpen={confirmarCopia}
+        icono={<Copy size={18} />}
+        titulo="Copiar menú"
+        subtitulo={`${origenNombre || ''} → ${destinoNombre || 'esta sucursal'}`}
+        mensaje={<>Se copiarán a <b className="text-gray-900">{destinoNombre || 'esta sucursal'}</b> los productos y precios de <b className="text-gray-900">{origenNombre}</b>. Solo se agregan los que todavía no tiene; <b className="text-gray-900">no se cambia ningún precio existente</b>.</>}
+        textoConfirmar="Copiar menú"
+        onClose={() => setConfirmarCopia(false)}
+        onConfirm={copiarMenu}
+      />
 
       {(drawerProducto || nuevoDrawer) && (
         <DrawerProducto

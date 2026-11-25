@@ -101,6 +101,7 @@ export default function ModalNuevaVenta({ carrito, total, sucursalId, onClose, o
   }
 
   const handleCobrar = async () => {
+    if (!sucursalId) { setError('Elige una sucursal antes de cobrar: toda venta de The Galley se guarda en una sucursal.'); return }
     if (metodoPago === 'terminal' && !numeroOperacion) return
     if (metodoPago === 'tarjeta' && (!clienteSel || !tarjeta)) return
     setProcesando(true); setError('')
