@@ -301,8 +301,18 @@ export async function POST(req: NextRequest) {
 
           if (clase) {
             if (booking.reserva_id) {
-              // Nunca pisa una asistencia ya registrada ('Asistió'): solo cancela reservas que siguen abiertas
-              await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', booking.reserva_id).neq('estatus', 'Asistió')
+              // Hay clientes con DOS bookings de Wellhub apuntando a la misma reserva (reservaron dos veces la misma clase).
+              // Si cancela solo uno, el otro sigue vigente en Wellhub: la reserva se queda hasta que se cancele el último.
+              const { data: otras } = await supabase.from('wellhub_bookings').select('id')
+                .eq('reserva_id', booking.reserva_id).neq('id', booking.id)
+                .in('estatus', ['Confirmado', 'Pendiente', 'Procesando']).limit(1)
+
+              if (!otras?.length) {
+                // Nunca pisa una asistencia ya registrada ('Asistió'): solo cancela reservas que siguen abiertas
+                await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', booking.reserva_id).neq('estatus', 'Asistió')
+              } else {
+                console.log(`Wellhub cancelado ${bookingNumber}: la reserva sigue porque tiene otro booking vigente`)
+              }
             } else if (booking.cliente_id) {
               // Bookings viejos sin reserva_id: solo la reserva Wellhub de ese cliente en esa clase
               const { data: r } = await supabase.from('reservas').select('id')
