@@ -150,8 +150,10 @@ export default function TabMembresia({ cliente, reservas, onRefresh }: Props) {
         : dias(actual.fecha_fin))      
     : null
 
-  const usadas   = actual ? reservas.filter(r => r.membresia_id === actual.id && r.estatus !== 'Cancelada').length : 0
-  const total    = paq.clases_incluidas || null
+  // Igual que la app: cancelar tarde también cuenta como clase usada
+  const usadas   = actual ? reservas.filter(r => r.membresia_id === actual.id && (!['Cancelada', 'Cancelado'].includes(r.estatus) || r.clase_consumida)).length : 0
+  // Igual que la app: si la membresía trae `clases_restantes` (planes Legacy migrados con su saldo real), ese es el total; si no, las clases del paquete
+  const total    = actual?.clases_restantes != null ? Number(actual.clases_restantes) : (paq.clases_incluidas || null)
   const pctTiempo = actual && !actual.activacion_pendiente && actual.fecha_inicio && actual.fecha_fin
     ? Math.min(100, Math.max(0, Math.round((Date.now() - new Date(`${actual.fecha_inicio}T00:00:00`).getTime()) /
         (new Date(`${actual.fecha_fin}T23:59:59`).getTime() - new Date(`${actual.fecha_inicio}T00:00:00`).getTime()) * 100)))

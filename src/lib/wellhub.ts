@@ -56,9 +56,17 @@ function wellhubHeaders() {
   }
 }
 
+// Wellhub pide la hora en la hora local del gimnasio con su offset (México: UTC-6, sin horario de verano).
+// Antes unas rutas mandaban UTC con "Z", otras la hora local SIN offset y otras con "-06:00": la clase
+// podía llegar con 6 horas de diferencia según desde dónde se creaba o se editaba. Todo sale por aquí.
+export function aHoraCDMX(fecha: string | Date): string {
+  const d = new Date(new Date(fecha).getTime() - 6 * 60 * 60 * 1000)
+  return d.toISOString().slice(0, 19) + '-06:00'
+}
+
 // Fecha límite para cancelar: X minutos antes del inicio
 export function limiteCancelacion(fechaInicio: string, minutos = WELLHUB_CANCELACION_MIN): string {
-  return new Date(new Date(fechaInicio).getTime() - minutos * 60 * 1000).toISOString()
+  return aHoraCDMX(new Date(new Date(fechaInicio).getTime() - minutos * 60 * 1000))
 }
 
 export async function validarAccesoWellhub(gympassId: string, sucursalId?: string) {
@@ -109,7 +117,7 @@ export async function crearSlotWellhub(classId: string, sucursalId: string, para
   const url = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/classes/${classId}/slots`
 
   const payload: any = {
-    occur_date:        new Date(params.fechaInicio).toISOString(),
+    occur_date:        aHoraCDMX(params.fechaInicio),
     cancellable_until: limiteCancelacion(params.fechaInicio),
     status:            1,
     room:              params.room || 'Sala Principal',
@@ -169,10 +177,7 @@ export async function actualizarHorarioSlotWellhub(slotId: string, fechaInicio: 
   const gymId = await getGymId(sucursalId)
   const url   = `${WELLHUB_BASE_URL}/booking/v1/gyms/${gymId}/slots/${slotId}`
 
-  // Convertir UTC a CDMX (UTC-6)
-  const fechaUTC  = new Date(fechaInicio)
-  const fechaCDMX = new Date(fechaUTC.getTime() - 6 * 60 * 60 * 1000)
-  const occurDate = fechaCDMX.toISOString().slice(0, 19)
+  const occurDate = aHoraCDMX(fechaInicio)
 
   const res = await fetch(url, {
     method:  'PATCH',

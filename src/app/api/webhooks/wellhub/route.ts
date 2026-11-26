@@ -276,7 +276,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── BOOKING CANCELATION ───────────────────────────────────────────────────
-    if (body.event_type === 'booking-cancelation' || body.event_type === 'booking-late-cancelation') {
+    // Wellhub manda "booking-canceled" y "booking-late-canceled" (su documentación también escribe "cancelled").
+    // Antes solo se aceptaba "booking-cancelation" / "booking-late-cancelation", que Wellhub no envía:
+    // las cancelaciones llegaban y se ignoraban, y el lugar nunca se liberaba. Se aceptan todas las variantes.
+    if (/^booking-(late-)?cancel/i.test(String(body.event_type || ''))) {
       const bookingNumber = body.event_data?.booking?.booking_number || body.event_data?.slot?.booking_number
 
       if (bookingNumber) {
@@ -298,13 +301,14 @@ export async function POST(req: NextRequest) {
 
           if (clase) {
             if (booking.reserva_id) {
-              await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', booking.reserva_id)
+              // Nunca pisa una asistencia ya registrada ('Asistió'): solo cancela reservas que siguen abiertas
+              await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', booking.reserva_id).neq('estatus', 'Asistió')
             } else if (booking.cliente_id) {
               // Bookings viejos sin reserva_id: solo la reserva Wellhub de ese cliente en esa clase
               const { data: r } = await supabase.from('reservas').select('id')
                 .eq('clase_id', clase.id).eq('cliente_id', booking.cliente_id)
                 .eq('origen', 'Wellhub').neq('estatus', 'Cancelada').limit(1)
-              if (r?.[0]) await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', r[0].id)
+              if (r?.[0]) await supabase.from('reservas').update({ estatus: 'Cancelada' }).eq('id', r[0].id).neq('estatus', 'Asistió')
             }
 
             await sincronizarCupos(clase.id)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWellhubConfig }          from '@/lib/wellhub'
+import { getWellhubConfig, aHoraCDMX, limiteCancelacion } from '@/lib/wellhub'
 
 export async function POST(req: NextRequest) {
   const { slotId, totalCapacity, totalBooked, horario, sucursalId } = await req.json()
@@ -10,9 +10,8 @@ export async function POST(req: NextRequest) {
   if (totalCapacity !== undefined) body.total_capacity = totalCapacity
   if (totalBooked   !== undefined) body.total_booked   = totalBooked
   if (horario) {
-    const fechaUTC  = new Date(horario)
-    const fechaCDMX = new Date(fechaUTC.getTime() - 6 * 60 * 60 * 1000)
-    body.occur_date = fechaCDMX.toISOString().slice(0, 19)
+    body.occur_date        = aHoraCDMX(horario)
+    body.cancellable_until = limiteCancelacion(horario)
   }
 
   const res = await fetch(
