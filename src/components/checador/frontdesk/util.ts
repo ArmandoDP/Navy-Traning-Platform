@@ -12,6 +12,7 @@ export const horaCorta = (iso?: string | null) =>
 
 export const MOTIVOS_SISTEMA: Record<string, string> = {
   sin_clases:       'sin clases hoy',
+  sin_turno:        'sin turno hoy',
   fuera_de_ventana: 'fuera de su horario',
   lejos:            'lejos de la sucursal',
   sin_ubicacion:    'sin ubicación',

@@ -90,7 +90,9 @@ export default function PerfilStaff({ staffId, isOpen, onClose, onEditar, onCamb
     ? [['Clases', `${r.clases_impartidas ?? 0} de ${r.clases_programadas ?? 0}`], ['Asistentes prom.', r.asistentes_promedio != null ? String(r.asistentes_promedio) : '—'],
        ['Por revisar', String(r.sin_checar ?? 0)], ['Días checados', String(r.dias ?? 0)]]
     : [['Días', String(r.dias ?? 0)], ['Horas', `${r.horas ?? 0} h`],
-       ['Turno hoy', datos?.horario?.hoy?.[0] ? `${datos.horario.hoy[0].entrada}–${datos.horario.hoy[0].salida}` : 'Sin turno'],
+       ['Turno hoy', datos?.horario?.hoy?.length
+          ? `${horaCorta12(datos.horario.hoy[0].entrada)} – ${horaCorta12(datos.horario.hoy[0].salida)}${datos.horario.hoy.length > 1 ? ` +${datos.horario.hoy.length - 1}` : ''}`
+          : 'Sin turno'],
        ['Antigüedad', antiguedad(emp?.fecha_ingreso)]]
 
   return (
@@ -235,19 +237,7 @@ function Resumen({ emp, datos, esCoach }: { emp: any; datos: any; esCoach: boole
             <Dato t="Días trabajados" v={String(datos.resumen?.dias ?? 0)} />
             <Dato t="Horas" v={`${datos.resumen?.horas ?? 0} h`} />
           </div>
-          <div>
-            <p className="mb-2 text-xs font-bold text-gray-500">Horario de la semana{datos.horario ? '' : ' (sin capturar)'}</p>
-            <div className="flex gap-1.5">
-              {[1, 2, 3, 4, 5, 6, 0].map(d => {
-                const on = (datos.horario?.dias || []).includes(d)
-                const hoy = datos.horario?.hoy_idx === d
-                return (
-                  <span key={d} className={`grid h-10 w-10 place-items-center rounded-xl text-[13px] font-extrabold ${on ? 'text-white' : 'bg-[#F4F5F7] text-gray-400'} ${hoy ? 'outline outline-2 outline-offset-2 outline-emerald-500' : ''}`}
-                    style={on ? { background: NEGRO } : undefined}>{DIAS[d]}</span>
-                )
-              })}
-            </div>
-          </div>
+          <TurnosQuincena horario={datos.horario} />
         </div>
       )}
     </div>
@@ -404,6 +394,84 @@ function Fila({ t, v, mono }: { t: string; v: string; mono?: boolean }) {
     <div className="flex items-center justify-between gap-4">
       <span className="text-gray-500">{t}</span>
       <span className={`text-right font-semibold text-gray-900 ${mono ? 'font-mono tracking-wider' : ''}`}>{v}</span>
+    </div>
+  )
+}
+
+
+// ── Turnos de la quincena: una lista por semana, fácil de leer ──────────────────
+const DIAS_LARGO = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+/** "07:00" → "7:00 a.m." · "15:30" → "3:30 p.m." */
+export function hora12(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number)
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'a.m.' : 'p.m.'}`
+}
+/** "07:00" → "7 am" · "15:30" → "3:30 pm" (para espacios chicos) */
+export function horaCorta12(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number)
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`
+}
+
+function TurnosQuincena({ horario }: { horario: any }) {
+  const dias: any[] = horario?.dias || []
+  if (!dias.length) return null
+  // Semanas de lunes a domingo
+  const semanas: any[][] = []
+  for (const x of dias) {
+    if (!semanas.length || x.dia_semana === 1) semanas.push([])
+    semanas[semanas.length - 1].push(x)
+  }
+  const fechaTxt = (f: string) => { const d = new Date(f + 'T12:00:00'); return `${DIAS_LARGO[d.getDay()].toLowerCase()} ${d.getDate()}` }
+  const mesDe = (f: string) => MESES[new Date(f + 'T12:00:00').getMonth()]
+
+  return (
+    <div className="space-y-4">
+      {!horario?.con_horario && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          No tiene horario capturado: el checador no lo deja entrar. Captúralo en Staff → Horarios.
+        </p>
+      )}
+      {semanas.map((sem, i) => (
+        <div key={i}>
+          <p className="mb-1.5 text-sm font-black text-gray-900">
+            Semana {i + 1}
+            <span className="ml-2 text-xs font-semibold text-gray-500">
+              {sem.length === 1 ? `solo el ${fechaTxt(sem[0].fecha)} de ${mesDe(sem[0].fecha)}`
+                : `del ${fechaTxt(sem[0].fecha)}${mesDe(sem[0].fecha) !== mesDe(sem[sem.length - 1].fecha) ? ` de ${mesDe(sem[0].fecha)}` : ''} al ${fechaTxt(sem[sem.length - 1].fecha)} de ${mesDe(sem[sem.length - 1].fecha)}`}
+            </span>
+          </p>
+          <div className="overflow-hidden rounded-2xl border border-gray-200">
+            {sem.map((x: any) => {
+              const d = new Date(x.fecha + 'T12:00:00')
+              const hoy = x.fecha === horario?.hoy_fecha
+              const turnos: any[] = x.turnos || []
+              return (
+                <div key={x.fecha}
+                  className={`flex items-center gap-3 border-t border-gray-100 px-4 py-2.5 first:border-t-0 ${hoy ? 'bg-emerald-50' : turnos.length ? 'bg-white' : 'bg-gray-50'}`}
+                  style={hoy ? { boxShadow: 'inset 4px 0 0 #10B981' } : undefined}>
+                  <div className="w-36 shrink-0">
+                    <p className={`text-sm font-black ${turnos.length || hoy ? 'text-gray-900' : 'text-gray-400'}`}>{DIAS_LARGO[d.getDay()]} {d.getDate()}</p>
+                    <p className="text-[11px] text-gray-400">de {MESES[d.getMonth()]}</p>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {turnos.length === 0
+                      ? <p className="text-sm font-semibold text-gray-400">Descansa</p>
+                      : turnos.map((t: any, j: number) => (
+                          <p key={j} className="text-sm text-gray-900">
+                            <b>{hora12(t.entrada)}</b> <span className="text-gray-400">a</span> <b>{hora12(t.salida)}</b>
+                            {t.sucursal && <span className="ml-2 text-xs text-gray-500">· {t.sucursal}</span>}
+                          </p>
+                        ))}
+                  </div>
+                  {hoy && <span className="shrink-0 rounded-lg bg-emerald-500 px-2.5 py-1 text-xs font-black text-white">HOY</span>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

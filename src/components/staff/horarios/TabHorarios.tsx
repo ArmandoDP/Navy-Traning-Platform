@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Plus, Trash2, Copy, RefreshCw, Search } from 'lucide-react'
 import { backend } from '@/lib/backend'
 import Modal, { inputCls, BotonNegro, BotonBlanco } from '@/components/staff/equipo/Modal'
+import HorarioQuincena from './HorarioQuincena'
 import { NEGRO, grupo, puesto, nombreCompleto, iniciales, quitarAcentos } from '@/components/staff/equipo/util'
 
 type Bloque = { dia: number; entrada: string; salida: string }
@@ -14,9 +15,33 @@ const horas = (bs: Bloque[]) => bs.reduce((a, b) => {
   const [h1, m1] = b.entrada.split(':').map(Number), [h2, m2] = b.salida.split(':').map(Number)
   return a + (h2 * 60 + m2 - h1 * 60 - m1) / 60
 }, 0)
-const corta = (h: string) => h.replace(/^0/, '').replace(':00', '')
+const corta = (h: string) => { const [H, M] = h.split(':').map(Number); return `${H % 12 || 12}${M ? `:${String(M).padStart(2, '0')}` : ''}${H < 12 ? 'am' : 'pm'}` }   // "07:00" → "7am", "15:30" → "3:30pm"
 
 export default function TabHorarios({ staff, sucursalId, sucursalNombre }:
+  { staff: any[]; sucursalId: string | null; sucursalNombre?: string }) {
+  const [modo, setModo] = useState<'quincena' | 'fijo'>('quincena')
+  if (!sucursalId) return <Vacio texto="Elige una sucursal en el selector de arriba para ver y capturar horarios." />
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <div className="flex rounded-xl border border-gray-200 bg-white p-0.5">
+          {([['quincena', 'Por quincena'], ['fijo', 'Horario fijo']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setModo(v)}
+              className={`rounded-lg px-3 py-1.5 text-[13px] font-bold transition ${modo === v ? 'bg-[#171B24] text-white' : 'text-gray-500 hover:text-gray-800'}`}>{l}</button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500">{modo === 'quincena'
+          ? 'El horario de cada quincena, día por día. Si se captura, manda sobre el horario fijo.'
+          : 'La semana que se repite siempre. Se usa en las quincenas que no se capturaron por fechas.'}</p>
+      </div>
+      {modo === 'quincena'
+        ? <HorarioQuincena staff={staff} sucursalId={sucursalId} sucursalNombre={sucursalNombre} />
+        : <HorarioFijo staff={staff} sucursalId={sucursalId} sucursalNombre={sucursalNombre} />}
+    </div>
+  )
+}
+
+function HorarioFijo({ staff, sucursalId, sucursalNombre }:
   { staff: any[]; sucursalId: string | null; sucursalNombre?: string }) {
   const [horarios, setHorarios] = useState<Record<string, Bloque[]>>({})
   const [cargando, setCargando] = useState(true)
